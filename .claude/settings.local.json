@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:hono.dev)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(bun add:*)",
+      "Bash(timeout 10 bun run dev:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)"
+    ]
+  }
+}

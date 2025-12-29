@@ -1,0 +1,29 @@
+import { Hono } from 'hono'
+import { logger } from 'hono/logger'
+import { helloRoutes } from './routes/hello'
+
+const app = new Hono()
+
+app.use('*', logger())
+app.route('/api/hello', helloRoutes)
+app.get('/api', (c) => c.json({ message: 'Jukebox API' }))
+
+export function setupViteProxy(vitePort: number) {
+  app.all('*', async (c) => {
+    const viteUrl = `http://localhost:${vitePort}${c.req.path}`
+    const response = await fetch(viteUrl, {
+      method: c.req.method,
+      headers: c.req.raw.headers,
+      body:
+        c.req.method !== 'GET' && c.req.method !== 'HEAD'
+          ? c.req.raw.body
+          : undefined
+    })
+    return new Response(response.body, {
+      status: response.status,
+      headers: response.headers
+    })
+  })
+}
+
+export { app }
