@@ -45,10 +45,22 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
     }
   }, [src, poster, onReady])
 
+  const handleClick = () => {
+    if (!playerRef.current) {
+      return
+    }
+    if (playerRef.current.paused()) {
+      playerRef.current.play()
+    } else {
+      playerRef.current.pause()
+    }
+  }
+
   return (
     <div
       ref={videoRef}
-      className="w-full"
+      className="w-full cursor-pointer"
+      onClick={handleClick}
     />
   )
 }
