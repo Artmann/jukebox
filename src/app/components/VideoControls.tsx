@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import type Player from 'video.js/dist/types/player'
+import { VideoTrackBar } from './VideoTrackBar'
 
 interface VideoControlsProps {
   title: string
@@ -69,6 +70,12 @@ export function VideoControls({ title, player }: VideoControlsProps) {
 
   return (
     <div className="px-6">
+      <div>
+        <VideoTrackBar
+          buffered={0.6}
+          progress={0.3}
+        />
+      </div>
       <div className="flex justify-between items-center py-4">
         <div className="flex gap-2">
           <IconButton onClick={handlePlayPause}>
