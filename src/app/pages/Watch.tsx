@@ -1,16 +1,10 @@
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import {
-  ArrowLeft,
-  Loader2,
-  Maximize,
-  PlayIcon,
-  RotateCcw,
-  RotateCw
-} from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { VideoPlayer } from '../components/VideoPlayer'
+import { VideoControls } from '../components/VideoControls'
 import type { Movie } from '../hooks/useMovies'
-import type { ReactElement, ReactNode } from 'react'
 
 async function fetchMovie(id: string): Promise<Movie> {
   const response = await fetch(`/api/library/movies/${id}`)
@@ -35,6 +29,8 @@ export function Watch() {
     enabled: !!id
   })
 
+  console.log(movie)
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -58,38 +54,14 @@ export function Watch() {
   }
 
   return (
-    <div className="bg-black w-full h-screen">
-      <div className="fixed bottom-0 left-0 right-0 px-6">
-        <div className="flex justify-between items-center py-4">
-          <div className="flex gap-2">
-            <IconButton>
-              <PlayIcon className="size-7 hover:scale-125 text-white" />
-            </IconButton>
-
-            <IconButton>
-              <RotateCcw className="size-7 hover:scale-125 text-white" />
-            </IconButton>
-
-            <IconButton>
-              <RotateCw className="size-7 hover:scale-125 text-white" />
-            </IconButton>
-          </div>
-
-          <div className="text-white text-lg">{movie.title}</div>
-
-          <div>
-            <IconButton>
-              <Maximize className="size-7 hover:scale-125 text-white" />
-            </IconButton>
-          </div>
+    <div className="bg-black w-full h-screen flex flex-col">
+      <main className="flex-1 flex items-center justify-center">
+        <div className="w-full h-full">
+          <VideoPlayer src={`/api/stream/${movie.id}`} />
         </div>
-      </div>
-    </div>
-  )
-}
+      </main>
 
-function IconButton({ children }: { children: ReactNode }): ReactElement {
-  return (
-    <button className="p-2 flex justify-center items-center">{children}</button>
+      <VideoControls title={movie.title} />
+    </div>
   )
 }

@@ -16,7 +16,8 @@
       "mcp__web-developer-mcp__browser-reload",
       "Bash(bun run dev)",
       "mcp__web-developer-mcp__extract-html",
-      "mcp__web-developer-mcp__click-element"
+      "mcp__web-developer-mcp__click-element",
+      "Bash(mkdir:*)"
     ]
   }
 }
