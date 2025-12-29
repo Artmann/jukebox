@@ -18,6 +18,8 @@ const SKIP_SECONDS = 10
 
 export function VideoControls({ title, player }: VideoControlsProps) {
   const [isPlaying, setIsPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [buffered, setBuffered] = useState(0)
 
   useEffect(() => {
     if (!player) return
@@ -25,8 +27,28 @@ export function VideoControls({ title, player }: VideoControlsProps) {
     const onPlay = () => setIsPlaying(true)
     const onPause = () => setIsPlaying(false)
 
+    const onTimeUpdate = () => {
+      const currentTime = player.currentTime() ?? 0
+      const duration = player.duration() ?? 0
+      if (duration > 0) {
+        setProgress(currentTime / duration)
+      }
+    }
+
+    const onProgress = () => {
+      const bufferedRanges = player.buffered()
+      const duration = player.duration() ?? 0
+      if (bufferedRanges && bufferedRanges.length > 0 && duration > 0) {
+        // Get the end of the last buffered range
+        const bufferedEnd = bufferedRanges.end(bufferedRanges.length - 1)
+        setBuffered(bufferedEnd / duration)
+      }
+    }
+
     player.on('play', onPlay)
     player.on('pause', onPause)
+    player.on('timeupdate', onTimeUpdate)
+    player.on('progress', onProgress)
 
     // Set initial state
     setIsPlaying(!player.paused())
@@ -34,6 +56,8 @@ export function VideoControls({ title, player }: VideoControlsProps) {
     return () => {
       player.off('play', onPlay)
       player.off('pause', onPause)
+      player.off('timeupdate', onTimeUpdate)
+      player.off('progress', onProgress)
     }
   }, [player])
 
@@ -68,12 +92,19 @@ export function VideoControls({ title, player }: VideoControlsProps) {
     }
   }
 
+  const handleSeek = (position: number) => {
+    if (!player) return
+    const duration = player.duration() ?? 0
+    player.currentTime(position * duration)
+  }
+
   return (
     <div className="px-6">
       <div>
         <VideoTrackBar
-          buffered={0.6}
-          progress={0.3}
+          buffered={buffered}
+          progress={progress}
+          onSeek={handleSeek}
         />
       </div>
       <div className="flex justify-between items-center py-4">
