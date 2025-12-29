@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { VideoControls } from '../components/VideoControls'
 import type { Movie } from '../hooks/useMovies'
+import type Player from 'video.js/dist/types/player'
 
 async function fetchMovie(id: string): Promise<Movie> {
   const response = await fetch(`/api/library/movies/${id}`)
@@ -18,6 +20,7 @@ async function fetchMovie(id: string): Promise<Movie> {
 
 export function Watch() {
   const { id } = useParams<{ id: string }>()
+  const [player, setPlayer] = useState<Player | null>(null)
 
   const {
     data: movie,
@@ -28,8 +31,6 @@ export function Watch() {
     queryFn: () => fetchMovie(id!),
     enabled: !!id
   })
-
-  console.log(movie)
 
   if (isLoading) {
     return (
@@ -57,11 +58,11 @@ export function Watch() {
     <div className="bg-black w-full h-screen flex flex-col">
       <main className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-7xl">
-          <VideoPlayer src={`/api/stream/${movie.id}`} />
+          <VideoPlayer src={`/api/stream/${movie.id}`} onReady={setPlayer} />
         </div>
       </main>
 
-      <VideoControls title={movie.title} />
+      <VideoControls title={movie.title} player={player} />
     </div>
   )
 }
