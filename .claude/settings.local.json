@@ -17,7 +17,8 @@
       "Bash(bun run dev)",
       "mcp__web-developer-mcp__extract-html",
       "mcp__web-developer-mcp__click-element",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(findstr:*)"
     ]
   }
 }

@@ -56,7 +56,7 @@ export function Watch() {
   return (
     <div className="bg-black w-full h-screen flex flex-col">
       <main className="flex-1 flex items-center justify-center">
-        <div className="w-full h-full">
+        <div className="w-full max-w-7xl">
           <VideoPlayer src={`/api/stream/${movie.id}`} />
         </div>
       </main>

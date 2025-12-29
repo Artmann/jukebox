@@ -16,13 +16,15 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
   useEffect(() => {
     if (!playerRef.current && videoRef.current) {
       const videoElement = document.createElement('video-js')
+
       videoElement.classList.add('vjs-big-play-centered')
+
       videoRef.current.appendChild(videoElement)
 
       playerRef.current = videojs(
         videoElement,
         {
-          controls: true,
+          controls: false,
           autoplay: true,
           fluid: true,
           aspectRatio: '16:9',
@@ -43,5 +45,10 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
     }
   }, [src, poster, onReady])
 
-  return <div ref={videoRef} className="w-full" />
+  return (
+    <div
+      ref={videoRef}
+      className="w-full"
+    />
+  )
 }

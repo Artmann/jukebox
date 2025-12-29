@@ -2,12 +2,14 @@ import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { helloRoutes } from './routes/hello'
 import { libraryRoutes } from './routes/library'
+import { streamRoutes } from './routes/stream'
 
 const app = new Hono()
 
 app.use('*', logger())
 app.route('/api/hello', helloRoutes)
 app.route('/api/library', libraryRoutes)
+app.route('/api/stream', streamRoutes)
 app.get('/api', (c) => c.json({ message: 'Jukebox API' }))
 
 export function setupViteProxy(vitePort: number) {
