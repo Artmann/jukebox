@@ -11,7 +11,12 @@ app.route('/api/library', libraryRoutes)
 app.get('/api', (c) => c.json({ message: 'Jukebox API' }))
 
 export function setupViteProxy(vitePort: number) {
-  app.all('*', async (c) => {
+  app.all('*', async (c, next) => {
+    // Skip API routes - let them be handled by Hono
+    if (c.req.path.startsWith('/api')) {
+      return next()
+    }
+
     const viteUrl = `http://localhost:${vitePort}${c.req.path}`
     const response = await fetch(viteUrl, {
       method: c.req.method,

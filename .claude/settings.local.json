@@ -8,7 +8,15 @@
       "Bash(timeout 10 bun run dev:*)",
       "Bash(netstat:*)",
       "Bash(taskkill:*)",
-      "Bash(bun run scan:*)"
+      "Bash(bun run scan:*)",
+      "mcp__web-developer-mcp__browser-navigate",
+      "mcp__web-developer-mcp__browser-console",
+      "mcp__web-developer-mcp__network-requests",
+      "mcp__web-developer-mcp__network-inspect",
+      "mcp__web-developer-mcp__browser-reload",
+      "Bash(bun run dev)",
+      "mcp__web-developer-mcp__extract-html",
+      "mcp__web-developer-mcp__click-element"
     ]
   }
 }

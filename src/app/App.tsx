@@ -1,46 +1,80 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card'
-import { APITester } from './APITester'
+import { Link } from 'react-router-dom'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useMovies } from './hooks/useMovies'
+import { Film, Loader2 } from 'lucide-react'
 import './index.css'
 
-import logo from './logo.svg'
-import reactLogo from './react.svg'
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return 'Unknown'
+  const gb = bytes / (1024 * 1024 * 1024)
+  if (gb >= 1) return `${gb.toFixed(2)} GB`
+  const mb = bytes / (1024 * 1024)
+  return `${mb.toFixed(0)} MB`
+}
 
 export function App() {
+  const { data: movies, isLoading, error } = useMovies()
+
   return (
-    <div className="container mx-auto p-8 text-center relative z-10">
-      <div className="flex justify-center items-center gap-8 mb-8">
-        <img
-          src={logo}
-          alt="Bun Logo"
-          className="h-36 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#646cffaa] scale-120"
-        />
-        <img
-          src={reactLogo}
-          alt="React Logo"
-          className="h-36 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#61dafbaa] [animation:spin_20s_linear_infinite]"
-        />
-      </div>
-      <Card>
-        <CardHeader className="gap-4">
-          <CardTitle className="text-3xl font-bold">Bun + React</CardTitle>
-          <CardDescription>
-            Edit{' '}
-            <code className="rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono">
-              src/App.tsx
-            </code>{' '}
-            and save to test HMR
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <APITester />
-        </CardContent>
-      </Card>
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border py-6">
+        <div className="container mx-auto px-4">
+          <h1 className="text-3xl font-bold">Jukebox</h1>
+          <p className="text-muted-foreground">Your movie library</p>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {error && (
+          <div className="text-center py-20 text-destructive">
+            Failed to load movies. Make sure to run `bun run scan` first.
+          </div>
+        )}
+
+        {movies && movies.length === 0 && (
+          <div className="text-center py-20 text-muted-foreground">
+            No movies found. Run `bun run scan` to scan your library.
+          </div>
+        )}
+
+        {movies && movies.length > 0 && (
+          <>
+            <p className="text-muted-foreground mb-6">
+              {movies.length} movies in library
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {movies.map((movie) => (
+                <Link key={movie.id} to={`/watch/${movie.id}`}>
+                  <Card className="overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer h-full">
+                    <div className="aspect-[2/3] bg-muted flex items-center justify-center">
+                      <Film className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                    <CardHeader className="p-3">
+                      <CardTitle className="text-sm font-medium line-clamp-2">
+                        {movie.title}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(movie.fileSize)}
+                      </p>
+                      <p className="text-xs text-muted-foreground uppercase">
+                        {movie.extension?.replace('.', '')}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
+      </main>
     </div>
   )
 }
