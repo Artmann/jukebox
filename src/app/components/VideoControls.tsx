@@ -5,24 +5,29 @@ import {
   RotateCcw,
   RotateCw
 } from 'lucide-react'
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import type Player from 'video.js/dist/types/player'
 import { VideoTrackBar } from './VideoTrackBar'
 
 interface VideoControlsProps {
   title: string
   player: Player | null
+  movieId: number
 }
 
 const SKIP_SECONDS = 10
+const SAVE_INTERVAL_MS = 10000
 
-export function VideoControls({ title, player }: VideoControlsProps) {
+export function VideoControls({ title, player, movieId }: VideoControlsProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [buffered, setBuffered] = useState(0)
+  const lastSavedTimeRef = useRef<number>(0)
 
   useEffect(() => {
-    if (!player) return
+    if (!player) {
+      return
+    }
 
     const onPlay = () => setIsPlaying(true)
     const onPause = () => setIsPlaying(false)
@@ -39,7 +44,6 @@ export function VideoControls({ title, player }: VideoControlsProps) {
       const bufferedRanges = player.buffered()
       const duration = player.duration() ?? 0
       if (bufferedRanges && bufferedRanges.length > 0 && duration > 0) {
-        // Get the end of the last buffered range
         const bufferedEnd = bufferedRanges.end(bufferedRanges.length - 1)
         setBuffered(bufferedEnd / duration)
       }
@@ -50,7 +54,6 @@ export function VideoControls({ title, player }: VideoControlsProps) {
     player.on('timeupdate', onTimeUpdate)
     player.on('progress', onProgress)
 
-    // Set initial state
     setIsPlaying(!player.paused())
 
     return () => {
@@ -60,6 +63,37 @@ export function VideoControls({ title, player }: VideoControlsProps) {
       player.off('progress', onProgress)
     }
   }, [player])
+
+  // Save progress at intervals
+  useEffect(() => {
+    if (!player) {
+      return
+    }
+
+    const saveProgress = async () => {
+      const currentTime = player.currentTime() ?? 0
+      const duration = player.duration() ?? 0
+
+      if (currentTime === lastSavedTimeRef.current) {
+        return
+      }
+
+      lastSavedTimeRef.current = currentTime
+
+      await fetch(`/api/progress/${movieId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentTime, duration })
+      })
+    }
+
+    const interval = setInterval(saveProgress, SAVE_INTERVAL_MS)
+
+    return () => {
+      clearInterval(interval)
+      saveProgress()
+    }
+  }, [player, movieId])
 
   const handlePlayPause = () => {
     if (!player) return

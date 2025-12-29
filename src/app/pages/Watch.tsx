@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
@@ -18,9 +18,20 @@ async function fetchMovie(id: string): Promise<Movie> {
   return response.json()
 }
 
+interface WatchProgress {
+  currentTime: number
+  duration: number | null
+}
+
+async function fetchProgress(movieId: number): Promise<WatchProgress> {
+  const response = await fetch(`/api/progress/${movieId}`)
+  return response.json()
+}
+
 export function Watch() {
   const { id } = useParams<{ id: string }>()
   const [player, setPlayer] = useState<Player | null>(null)
+  const hasRestoredProgress = useRef(false)
 
   const {
     data: movie,
@@ -31,6 +42,20 @@ export function Watch() {
     queryFn: () => fetchMovie(id!),
     enabled: !!id
   })
+
+  const { data: savedProgress } = useQuery({
+    queryKey: ['progress', movie?.id],
+    queryFn: () => fetchProgress(movie!.id),
+    enabled: !!movie
+  })
+
+  // Restore progress when both player and savedProgress are available
+  useEffect(() => {
+    if (player && savedProgress && savedProgress.currentTime > 0 && !hasRestoredProgress.current) {
+      hasRestoredProgress.current = true
+      player.currentTime(savedProgress.currentTime)
+    }
+  }, [player, savedProgress])
 
   if (isLoading) {
     return (
@@ -62,7 +87,7 @@ export function Watch() {
         </div>
       </main>
 
-      <VideoControls title={movie.title} player={player} />
+      <VideoControls title={movie.title} player={player} movieId={movie.id} />
     </div>
   )
 }

@@ -18,5 +18,15 @@ sqlite.exec(`
   )
 `)
 
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS watch_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    movie_id INTEGER NOT NULL REFERENCES movies(id),
+    current_time INTEGER NOT NULL,
+    duration INTEGER,
+    updated_at INTEGER NOT NULL
+  )
+`)
+
 export const db = drizzle(sqlite, { schema })
 export { schema }

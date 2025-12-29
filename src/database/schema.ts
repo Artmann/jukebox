@@ -11,5 +11,15 @@ export const movies = sqliteTable('movies', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
 })
 
+export const watchProgress = sqliteTable('watch_progress', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  movieId: integer('movie_id').notNull().references(() => movies.id),
+  currentTime: integer('current_time').notNull(),
+  duration: integer('duration'),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
+})
+
 export type Movie = typeof movies.$inferSelect
 export type NewMovie = typeof movies.$inferInsert
+export type WatchProgress = typeof watchProgress.$inferSelect
+export type NewWatchProgress = typeof watchProgress.$inferInsert
