@@ -7,7 +7,8 @@
       "Bash(bun add:*)",
       "Bash(timeout 10 bun run dev:*)",
       "Bash(netstat:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(bun run scan:*)"
     ]
   }
 }
