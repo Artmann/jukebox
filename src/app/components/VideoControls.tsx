@@ -18,10 +18,21 @@ interface VideoControlsProps {
 const SKIP_SECONDS = 10
 const SAVE_INTERVAL_MS = 10000
 
+function formatTime(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+
+  return [hrs, mins, secs]
+    .map((v) => v.toString().padStart(2, '0'))
+    .join(':')
+}
+
 export function VideoControls({ title, player, movieId }: VideoControlsProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [buffered, setBuffered] = useState(0)
+  const [remainingTime, setRemainingTime] = useState(0)
   const lastSavedTimeRef = useRef<number>(0)
 
   useEffect(() => {
@@ -37,6 +48,7 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
       const duration = player.duration() ?? 0
       if (duration > 0) {
         setProgress(currentTime / duration)
+        setRemainingTime(duration - currentTime)
       }
     }
 
@@ -134,12 +146,17 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
 
   return (
     <div className="px-6">
-      <div>
-        <VideoTrackBar
-          buffered={buffered}
-          progress={progress}
-          onSeek={handleSeek}
-        />
+      <div className="flex items-center gap-4">
+        <div className="flex-1">
+          <VideoTrackBar
+            buffered={buffered}
+            progress={progress}
+            onSeek={handleSeek}
+          />
+        </div>
+        <span className="text-white text-xs font-mono whitespace-nowrap">
+          {formatTime(remainingTime)}
+        </span>
       </div>
       <div className="flex justify-between items-center py-4">
         <div className="flex gap-2">
