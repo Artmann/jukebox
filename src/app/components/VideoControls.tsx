@@ -8,6 +8,7 @@ import {
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import type Player from 'video.js/dist/types/player'
 import { VideoTrackBar } from './VideoTrackBar'
+import { VolumeControl } from './VolumeControl'
 
 interface VideoControlsProps {
   title: string
@@ -145,7 +146,7 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
   }
 
   return (
-    <div className="px-6">
+    <div className="px-6 overflow-visible">
       <div className="flex items-center gap-4">
         <div className="flex-1">
           <VideoTrackBar
@@ -158,8 +159,8 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
           {formatTime(remainingTime)}
         </span>
       </div>
-      <div className="flex justify-between items-center py-4">
-        <div className="flex gap-2">
+      <div className="flex justify-between items-center py-4 relative z-10">
+        <div className="flex gap-2 items-center">
           <IconButton onClick={handlePlayPause}>
             {isPlaying ? (
               <PauseIcon className="size-7 hover:scale-125 text-white" />
@@ -175,6 +176,8 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
           <IconButton onClick={handleSkipForward}>
             <RotateCw className="size-7 hover:scale-125 text-white" />
           </IconButton>
+
+          <VolumeControl player={player} />
         </div>
 
         <div className="text-white text-sm truncate">{title}</div>
