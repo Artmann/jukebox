@@ -3,6 +3,7 @@ import { join, extname, basename } from 'path'
 import { db, schema } from '../database'
 import { eq } from 'drizzle-orm'
 import type { NewMovie } from '../database/schema'
+import { fetchMovieMetadata } from './tmdb'
 
 const VIDEO_EXTENSIONS = new Set([
   '.mp4',
@@ -16,6 +17,31 @@ const VIDEO_EXTENSIONS = new Set([
   '.mpeg',
   '.mpg'
 ])
+
+/**
+ * Extract year from a filename if present
+ */
+export function extractYear(fileName: string): number | null {
+  // Match year in parentheses or brackets: (2024), [2024]
+  const bracketMatch = fileName.match(/[\(\[](\d{4})[\)\]]/)
+  if (bracketMatch?.[1]) {
+    const year = parseInt(bracketMatch[1], 10)
+    if (year >= 1900 && year <= new Date().getFullYear() + 1) {
+      return year
+    }
+  }
+
+  // Match standalone year: 2024, 2023, etc.
+  const standaloneMatch = fileName.match(/\b(19|20)\d{2}\b/)
+  if (standaloneMatch) {
+    const year = parseInt(standaloneMatch[0], 10)
+    if (year >= 1900 && year <= new Date().getFullYear() + 1) {
+      return year
+    }
+  }
+
+  return null
+}
 
 /**
  * Clean a movie filename to extract a readable title
@@ -117,6 +143,7 @@ export async function scanLibrary(libraryPath: string): Promise<{
     const fileName = basename(filePath)
     const ext = extname(fileName).toLowerCase()
     const title = cleanTitle(fileName)
+    const year = extractYear(fileName)
 
     let fileSize: number | null = null
     try {
@@ -135,29 +162,61 @@ export async function scanLibrary(libraryPath: string): Promise<{
       .where(eq(schema.movies.filePath, filePath))
       .limit(1)
 
-    if (existing.length > 0) {
-      // Update existing movie
+    if (existing.length > 0 && existing[0]) {
+      // Update existing movie - fetch TMDB data if not already present
+      const movie = existing[0]
+      let tmdbData: Partial<NewMovie> = {}
+
+      if (!movie.tmdbId) {
+        console.log(`  Fetching TMDB metadata for: ${title}`)
+        const metadata = await fetchMovieMetadata(title, year ?? undefined)
+        if (metadata) {
+          tmdbData = {
+            tmdbId: metadata.tmdbId,
+            year: metadata.year,
+            overview: metadata.overview,
+            runtime: metadata.runtime,
+            genres: metadata.genres,
+            rating: metadata.rating,
+            posterPath: metadata.posterPath,
+            backdropPath: metadata.backdropPath
+          }
+        }
+      }
+
       await db
         .update(schema.movies)
         .set({
-          title,
+          title: movie.tmdbId ? movie.title : title,
           fileName,
           fileSize,
           extension: ext,
-          updatedAt: now
+          updatedAt: now,
+          ...tmdbData
         })
         .where(eq(schema.movies.filePath, filePath))
       updated++
     } else {
-      // Insert new movie
+      // Insert new movie - fetch TMDB metadata
+      console.log(`  Fetching TMDB metadata for: ${title}`)
+      const metadata = await fetchMovieMetadata(title, year ?? undefined)
+
       const newMovie: NewMovie = {
-        title,
+        title: metadata?.title ?? title,
         filePath,
         fileName,
         fileSize,
         extension: ext,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        tmdbId: metadata?.tmdbId ?? null,
+        year: metadata?.year ?? year,
+        overview: metadata?.overview ?? null,
+        runtime: metadata?.runtime ?? null,
+        genres: metadata?.genres ?? null,
+        rating: metadata?.rating ?? null,
+        posterPath: metadata?.posterPath ?? null,
+        backdropPath: metadata?.backdropPath ?? null
       }
       await db.insert(schema.movies).values(newMovie)
       added++

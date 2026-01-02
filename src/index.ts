@@ -1,7 +1,7 @@
 import { createServer } from 'vite'
 import { app, setupViteProxy } from './api'
 
-const port = process.env.PORT ? Number(process.env.PORT) : 3000
+const port = process.env.PORT ? Number(process.env.PORT) : 1990
 const vitePort = 5173
 const isDevelopment = process.env.NODE_ENV !== 'production'
 

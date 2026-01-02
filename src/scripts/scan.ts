@@ -1,4 +1,8 @@
+import { config } from 'dotenv'
+
 import { scanLibrary } from '../services/scanner'
+
+config()
 
 const libraryPath = process.argv[2] || 'D:\\Downloads\\Movies'
 
