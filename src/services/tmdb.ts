@@ -24,6 +24,14 @@ export interface TMDBMovieDetails {
   backdrop_path: string | null
 }
 
+export interface TMDBVideo {
+  id: string
+  key: string
+  name: string
+  site: string
+  type: string
+}
+
 export interface MovieMetadata {
   tmdbId: number
   title: string
@@ -34,6 +42,7 @@ export interface MovieMetadata {
   rating: number
   posterPath: string | null
   backdropPath: string | null
+  trailerUrl: string | null
 }
 
 function checkApiKey(): void {
@@ -89,6 +98,46 @@ export async function getMovieDetails(
   return response.json()
 }
 
+export async function getMovieVideos(tmdbId: number): Promise<TMDBVideo[]> {
+  checkApiKey()
+
+  const params = new URLSearchParams({
+    api_key: TMDB_API_KEY!
+  })
+
+  const response = await fetch(
+    `${TMDB_BASE_URL}/movie/${tmdbId}/videos?${params.toString()}`
+  )
+
+  if (!response.ok) {
+    throw new Error(`TMDB movie videos failed: ${response.statusText}`)
+  }
+
+  const data = await response.json()
+  return data.results as TMDBVideo[]
+}
+
+export function getTrailerUrl(videos: TMDBVideo[]): string | null {
+  const youtubeVideos = videos.filter((v) => v.site === 'YouTube')
+
+  // Priority: Trailer > Teaser > Clip > any other
+  const priorities = ['Trailer', 'Teaser', 'Clip']
+
+  for (const type of priorities) {
+    const video = youtubeVideos.find((v) => v.type === type)
+    if (video) {
+      return `https://www.youtube.com/watch?v=${video.key}`
+    }
+  }
+
+  // Fallback to any YouTube video
+  if (youtubeVideos.length > 0 && youtubeVideos[0]) {
+    return `https://www.youtube.com/watch?v=${youtubeVideos[0].key}`
+  }
+
+  return null
+}
+
 export function getPosterUrl(
   posterPath: string | null,
   size: 'w92' | 'w154' | 'w185' | 'w342' | 'w500' | 'w780' | 'original' = 'w500'
@@ -123,7 +172,10 @@ export async function fetchMovieMetadata(
 
   // Get the first (best) match
   const bestMatch = results[0]
-  const details = await getMovieDetails(bestMatch.id)
+  const [details, videos] = await Promise.all([
+    getMovieDetails(bestMatch.id),
+    getMovieVideos(bestMatch.id)
+  ])
 
   const releaseYear = details.release_date
     ? parseInt(details.release_date.split('-')[0] ?? '0', 10) || null
@@ -138,6 +190,7 @@ export async function fetchMovieMetadata(
     genres: JSON.stringify(details.genres.map((g) => g.name)),
     rating: details.vote_average,
     posterPath: details.poster_path,
-    backdropPath: details.backdrop_path
+    backdropPath: details.backdrop_path,
+    trailerUrl: getTrailerUrl(videos)
   }
 }

@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useMovies } from './hooks/useMovies'
 import { Film, Loader2 } from 'lucide-react'
-import './index.css'
+import { Link } from 'react-router-dom'
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useMovies } from '../hooks/useMovies'
+import { LibraryGrid } from '../components/LibraryGrid'
 
 function formatFileSize(bytes: number | null): string {
   if (!bytes) return 'Unknown'
@@ -12,8 +13,10 @@ function formatFileSize(bytes: number | null): string {
   return `${mb.toFixed(0)} MB`
 }
 
-export function App() {
+export function Home() {
   const { data: movies, isLoading, error } = useMovies()
+
+  return <LibraryGrid items={movies || []} />
 
   return (
     <div className="min-h-screen bg-background">
@@ -50,7 +53,10 @@ export function App() {
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               {movies.map((movie) => (
-                <Link key={movie.id} to={`/watch/${movie.id}`}>
+                <Link
+                  key={movie.id}
+                  to={`/watch/${movie.id}`}
+                >
                   <Card className="overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer h-full">
                     <div className="aspect-[2/3] bg-muted flex items-center justify-center">
                       {movie.posterPath ? (
@@ -95,4 +101,4 @@ export function App() {
   )
 }
 
-export default App
+export default Home

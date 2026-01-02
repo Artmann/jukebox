@@ -3,7 +3,7 @@ import { join, extname, basename } from 'path'
 import { db, schema } from '../database'
 import { eq } from 'drizzle-orm'
 import type { NewMovie } from '../database/schema'
-import { fetchMovieMetadata } from './tmdb'
+import { fetchMovieMetadata, getMovieVideos, getTrailerUrl } from './tmdb'
 import { cleanTitle, extractYear } from './filename-parser'
 
 const VIDEO_EXTENSIONS = new Set([
@@ -94,8 +94,21 @@ export async function scanLibrary(libraryPath: string): Promise<{
             genres: metadata.genres,
             rating: metadata.rating,
             posterPath: metadata.posterPath,
-            backdropPath: metadata.backdropPath
+            backdropPath: metadata.backdropPath,
+            trailerUrl: metadata.trailerUrl
           }
+        }
+      } else if (!movie.trailerUrl && movie.tmdbId) {
+        // Fetch trailer for movies that have TMDB data but no trailer
+        console.log(`  Fetching trailer for: ${movie.title}`)
+        try {
+          const videos = await getMovieVideos(movie.tmdbId)
+          const trailerUrl = getTrailerUrl(videos)
+          if (trailerUrl) {
+            tmdbData = { trailerUrl }
+          }
+        } catch {
+          // Ignore errors fetching trailer
         }
       }
 
@@ -131,7 +144,8 @@ export async function scanLibrary(libraryPath: string): Promise<{
         genres: metadata?.genres ?? null,
         rating: metadata?.rating ?? null,
         posterPath: metadata?.posterPath ?? null,
-        backdropPath: metadata?.backdropPath ?? null
+        backdropPath: metadata?.backdropPath ?? null,
+        trailerUrl: metadata?.trailerUrl ?? null
       }
       await db.insert(schema.movies).values(newMovie)
       added++

@@ -17,7 +17,8 @@ export const movies = sqliteTable('movies', {
   genres: text('genres'),
   rating: real('rating'),
   posterPath: text('poster_path'),
-  backdropPath: text('backdrop_path')
+  backdropPath: text('backdrop_path'),
+  trailerUrl: text('trailer_url')
 })
 
 export const watchProgress = sqliteTable('watch_progress', {

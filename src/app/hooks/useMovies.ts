@@ -1,14 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
 
 export interface Movie {
-  id: number
-  title: string
-  filePath: string
-  fileName: string
-  fileSize: number | null
-  extension: string | null
+  backdropPath: string | null
   createdAt: string
+  extension: string | null
+  fileName: string
+  filePath: string
+  fileSize: number | null
+  id: number
+  overview: string | null
+  posterPath: string | null
+  rating: number | null
+  title: string
+  trailerUrl: string | null
   updatedAt: string
+  year: number | null
 }
 
 async function fetchMovies(): Promise<Movie[]> {
