@@ -68,6 +68,7 @@ src/
    ```
 
 3. Start development server:
+
    ```bash
    bun dev
    ```

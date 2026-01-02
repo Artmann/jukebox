@@ -37,7 +37,9 @@ export function parseFilename(fileName: string): ParsedFilename {
   let bestMatch: { year: number; index: number } | null = null
 
   while ((match = yearPattern.exec(name)) !== null) {
-    const year = parseInt(match[1], 10)
+    const yearStr = match[1]
+    if (!yearStr) continue
+    const year = parseInt(yearStr, 10)
     // Check what comes after the year - if it looks like technical info, this is likely the release year
     const afterYear = name.substring(match.index + match[0].length)
     const looksLikeTechInfo =
