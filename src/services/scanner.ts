@@ -4,6 +4,7 @@ import { db, schema } from '../database'
 import { eq } from 'drizzle-orm'
 import type { NewMovie } from '../database/schema'
 import { fetchMovieMetadata } from './tmdb'
+import { cleanTitle, extractYear } from './filename-parser'
 
 const VIDEO_EXTENSIONS = new Set([
   '.mp4',
@@ -17,92 +18,6 @@ const VIDEO_EXTENSIONS = new Set([
   '.mpeg',
   '.mpg'
 ])
-
-/**
- * Extract year from a filename if present
- */
-export function extractYear(fileName: string): number | null {
-  // Match year in parentheses or brackets: (2024), [2024]
-  const bracketMatch = fileName.match(/[\(\[](\d{4})[\)\]]/)
-  if (bracketMatch?.[1]) {
-    const year = parseInt(bracketMatch[1], 10)
-    if (year >= 1900 && year <= new Date().getFullYear() + 1) {
-      return year
-    }
-  }
-
-  // Match standalone year: 2024, 2023, etc.
-  const standaloneMatch = fileName.match(/\b(19|20)\d{2}\b/)
-  if (standaloneMatch) {
-    const year = parseInt(standaloneMatch[0], 10)
-    if (year >= 1900 && year <= new Date().getFullYear() + 1) {
-      return year
-    }
-  }
-
-  return null
-}
-
-/**
- * Clean a movie filename to extract a readable title
- * Removes: year, quality, codec, release group, etc.
- */
-export function cleanTitle(fileName: string): string {
-  let title = fileName
-
-  // Remove file extension
-  title = title.replace(/\.[^.]+$/, '')
-
-  // Replace dots and underscores with spaces
-  title = title.replace(/[._]/g, ' ')
-
-  // Remove year in parentheses or brackets: (2024), [2024]
-  title = title.replace(/[\(\[]\d{4}[\)\]]/g, '')
-
-  // Remove standalone year: 2024, 2023, etc. (but keep if part of title)
-  title = title.replace(/\s(19|20)\d{2}(\s|$)/g, ' ')
-
-  // Remove quality indicators
-  title = title.replace(
-    /\b(2160p|1080p|720p|480p|4K|UHD|HD|SD|BluRay|Blu-Ray|BRRip|BDRip|DVDRip|HDRip|WEBRip|WEB-DL|HDTV|CAM|TS|TC|SCR|R5|DVDScr)\b/gi,
-    ''
-  )
-
-  // Remove codec info
-  title = title.replace(
-    /\b(x264|x265|H\.?264|H\.?265|HEVC|AVC|XviD|DivX|VP9|AV1|10bit|HDR|HDR10|DV|Dolby Vision)\b/gi,
-    ''
-  )
-
-  // Remove audio info
-  title = title.replace(
-    /\b(AAC|AC3|DTS|DTS-HD|TrueHD|Atmos|FLAC|MP3|5\.1|7\.1|2\.0)\b/gi,
-    ''
-  )
-
-  // Remove common release group patterns (at end, often in brackets)
-  title = title.replace(/[\[\(][A-Za-z0-9]+[\]\)]$/g, '')
-
-  // Remove common release group prefixes
-  title = title.replace(
-    /\b(YIFY|YTS|RARBG|EVO|SPARKS|GECKOS|FGT|NTb|AMZN|NF|DSNP|HMAX|ATVP)\b/gi,
-    ''
-  )
-
-  // Remove "EXTENDED", "REMASTERED", "UNRATED", etc.
-  title = title.replace(
-    /\b(EXTENDED|REMASTERED|UNRATED|DIRECTORS CUT|THEATRICAL|IMAX|PROPER|REPACK)\b/gi,
-    ''
-  )
-
-  // Remove extra whitespace
-  title = title.replace(/\s+/g, ' ').trim()
-
-  // Remove trailing dashes or other punctuation
-  title = title.replace(/[-–—]+$/, '').trim()
-
-  return title || fileName
-}
 
 /**
  * Recursively scan a directory for video files
