@@ -1,5 +1,5 @@
 import { ChevronDown, PlayIcon, X } from 'lucide-react'
-import { memo, useState, type ReactElement } from 'react'
+import { memo, useRef, useState, type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { Movie } from '../hooks/useMovies'
@@ -101,14 +101,21 @@ function GridItem({
   onShowMoreInformation: () => void
 }): ReactElement {
   const [isBeingHovered, setIsBeingHovered] = useState(false)
+  const hoverTimeoutRef = useRef<number | null>(null)
 
   return (
     <div
       className="relative"
       onMouseEnter={() => {
-        setIsBeingHovered(true)
+        hoverTimeoutRef.current = window.setTimeout(() => {
+          setIsBeingHovered(true)
+        }, 250)
       }}
       onMouseLeave={() => {
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current)
+          hoverTimeoutRef.current = null
+        }
         setIsBeingHovered(false)
       }}
     >
