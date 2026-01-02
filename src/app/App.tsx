@@ -53,20 +53,36 @@ export function App() {
                 <Link key={movie.id} to={`/watch/${movie.id}`}>
                   <Card className="overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer h-full">
                     <div className="aspect-[2/3] bg-muted flex items-center justify-center">
-                      <Film className="h-12 w-12 text-muted-foreground" />
+                      {movie.posterPath ? (
+                        <img
+                          src={`https://image.tmdb.org/t/p/w342${movie.posterPath}`}
+                          alt={movie.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Film className="h-12 w-12 text-muted-foreground" />
+                      )}
                     </div>
                     <CardHeader className="p-3">
                       <CardTitle className="text-sm font-medium line-clamp-2">
                         {movie.title}
+                        {movie.year && (
+                          <span className="text-muted-foreground font-normal ml-1">
+                            ({movie.year})
+                          </span>
+                        )}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-3 pt-0">
-                      <p className="text-xs text-muted-foreground">
-                        {formatFileSize(movie.fileSize)}
-                      </p>
-                      <p className="text-xs text-muted-foreground uppercase">
-                        {movie.extension?.replace('.', '')}
-                      </p>
+                      {movie.rating ? (
+                        <p className="text-xs text-muted-foreground">
+                          ★ {movie.rating.toFixed(1)}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {formatFileSize(movie.fileSize)}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 </Link>
