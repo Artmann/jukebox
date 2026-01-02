@@ -7,7 +7,6 @@ export function PageHeader(): ReactElement {
 
   useEffect(function updateScrollPosition() {
     function onScroll() {
-      console.log('scrollY', window.scrollY)
       setScrollY(window.scrollY)
     }
 
