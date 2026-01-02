@@ -9,9 +9,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { Home } from './pages/Home'
-import { Watch } from './pages/Watch'
+
+import { HomePage } from './pages/Home'
+import { WatchPage } from './pages/Watch'
 import './index.css'
+import { MoviesPage } from './pages/Movies'
 
 const queryClient = new QueryClient()
 
@@ -21,8 +23,18 @@ const app = (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/watch/:id" element={<Watch />} />
+          <Route
+            path="/"
+            element={<HomePage />}
+          />
+          <Route
+            path="/movies"
+            element={<MoviesPage />}
+          />
+          <Route
+            path="/watch/:id"
+            element={<WatchPage />}
+          />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

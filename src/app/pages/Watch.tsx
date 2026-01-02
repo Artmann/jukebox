@@ -28,7 +28,7 @@ async function fetchProgress(movieId: number): Promise<WatchProgress> {
   return response.json()
 }
 
-export function Watch() {
+export function WatchPage() {
   const { id } = useParams<{ id: string }>()
   const [player, setPlayer] = useState<Player | null>(null)
   const hasRestoredProgress = useRef(false)
@@ -51,7 +51,12 @@ export function Watch() {
 
   // Restore progress when both player and savedProgress are available
   useEffect(() => {
-    if (player && savedProgress && savedProgress.currentTime > 0 && !hasRestoredProgress.current) {
+    if (
+      player &&
+      savedProgress &&
+      savedProgress.currentTime > 0 &&
+      !hasRestoredProgress.current
+    ) {
       hasRestoredProgress.current = true
       player.currentTime(savedProgress.currentTime)
     }
@@ -83,11 +88,18 @@ export function Watch() {
     <div className="bg-black w-full h-screen flex flex-col">
       <main className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-7xl">
-          <VideoPlayer src={`/api/stream/${movie.id}`} onReady={setPlayer} />
+          <VideoPlayer
+            src={`/api/stream/${movie.id}`}
+            onReady={setPlayer}
+          />
         </div>
       </main>
 
-      <VideoControls title={movie.title} player={player} movieId={movie.id} />
+      <VideoControls
+        title={movie.title}
+        player={player}
+        movieId={movie.id}
+      />
     </div>
   )
 }
