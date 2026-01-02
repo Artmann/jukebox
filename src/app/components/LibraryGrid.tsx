@@ -11,7 +11,7 @@ export const LibraryGrid = memo(function LibraryGrid({
 }: {
   items: Movie[]
 }): ReactElement {
-  const [showMoreItemId, setShowMoreItemId] = useState<number | null>(3)
+  const [showMoreItemId, setShowMoreItemId] = useState<number | null>(null)
 
   const showMoreItem = items.find((item) => item.id === showMoreItemId) || null
 
