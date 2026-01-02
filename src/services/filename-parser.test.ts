@@ -3,10 +3,12 @@ import { parseFilename, cleanTitle, extractYear } from './filename-parser'
 
 describe('parseFilename', () => {
   it('parses standard dot-separated filenames', () => {
-    expect(parseFilename('Jurassic.Park.1993.720p.BrRip.264.YIFY.mp4')).toEqual({
-      title: 'Jurassic Park',
-      year: 1993
-    })
+    expect(parseFilename('Jurassic.Park.1993.720p.BrRip.264.YIFY.mp4')).toEqual(
+      {
+        title: 'Jurassic Park',
+        year: 1993
+      }
+    )
   })
 
   it('handles Roman numerals in titles', () => {
@@ -18,7 +20,9 @@ describe('parseFilename', () => {
     })
 
     expect(
-      parseFilename('Jurassic.Park.II.The.Lost.World.1997.720p.BrRip.264.YIFY.mp4')
+      parseFilename(
+        'Jurassic.Park.II.The.Lost.World.1997.720p.BrRip.264.YIFY.mp4'
+      )
     ).toEqual({
       title: 'Jurassic Park II The Lost World',
       year: 1997
@@ -63,7 +67,9 @@ describe('parseFilename', () => {
 
   it('parses year in parentheses with spaces', () => {
     expect(
-      parseFilename('The Social Network (2010) 1080p BrRip x264 - 1.2GB - YIFY.mp4')
+      parseFilename(
+        'The Social Network (2010) 1080p BrRip x264 - 1.2GB - YIFY.mp4'
+      )
     ).toEqual({
       title: 'The Social Network',
       year: 2010

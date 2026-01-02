@@ -6,7 +6,10 @@ const libraryRoutes = new Hono()
 
 // GET /api/library/movies - List all movies
 libraryRoutes.get('/movies', async (c) => {
-  const movies = await db.select().from(schema.movies).orderBy(schema.movies.title)
+  const movies = await db
+    .select()
+    .from(schema.movies)
+    .orderBy(schema.movies.title)
   return c.json(movies)
 })
 

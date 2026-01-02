@@ -1,5 +1,11 @@
 import { Volume, Volume1, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef, useState, type MouseEvent, type ReactElement } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactElement
+} from 'react'
 import type Player from 'video.js/dist/types/player'
 
 interface VolumeControlProps {

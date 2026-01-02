@@ -23,7 +23,9 @@ export const movies = sqliteTable('movies', {
 
 export const watchProgress = sqliteTable('watch_progress', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  movieId: integer('movie_id').notNull().references(() => movies.id),
+  movieId: integer('movie_id')
+    .notNull()
+    .references(() => movies.id),
   currentTime: integer('current_time').notNull(),
   duration: integer('duration'),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()

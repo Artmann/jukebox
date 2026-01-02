@@ -5,11 +5,13 @@ This guide covers everything developers need to know to work on this project.
 ## Tech Stack
 
 **Backend:**
+
 - Hono - Web framework
 - Drizzle ORM - Database layer
 - SQLite - Database (via better-sqlite3)
 
 **Frontend:**
+
 - React 19
 - React Router v7
 - TanStack React Query
@@ -18,6 +20,7 @@ This guide covers everything developers need to know to work on this project.
 - Radix UI - Component primitives
 
 **Tooling:**
+
 - Bun - Runtime and package manager
 - Vite - Frontend bundler
 - TypeScript
@@ -53,11 +56,13 @@ src/
 ## Development Setup
 
 1. Install dependencies:
+
    ```bash
    bun install
    ```
 
 2. Create `.env` file:
+
    ```
    TMDB_API_KEY=your_api_key
    ```
@@ -66,19 +71,20 @@ src/
    ```bash
    bun dev
    ```
+
    - Backend runs on port 1990
    - Vite dev server runs on port 5173
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `bun dev` | Start development server with HMR |
-| `bun start` | Run production server |
-| `bun run build` | Build frontend assets |
-| `bun run scan <path>` | Scan movie library |
-| `bun run format` | Format code with Prettier |
-| `bun test` | Run tests |
+| Command               | Description                       |
+| --------------------- | --------------------------------- |
+| `bun dev`             | Start development server with HMR |
+| `bun start`           | Run production server             |
+| `bun run build`       | Build frontend assets             |
+| `bun run scan <path>` | Scan movie library                |
+| `bun run format`      | Format code with Prettier         |
+| `bun test`            | Run tests                         |
 
 ## Code Style
 
@@ -93,6 +99,7 @@ See `CODE_STYLE.md` for full guidelines. Key points:
 - Always await or handle promises
 
 **Formatting:**
+
 - Use whitespace to improve readability
 - Blank line after const groups and before returns
 - Order items alphabetically
@@ -102,10 +109,12 @@ See `CODE_STYLE.md` for full guidelines. Key points:
 **Schema:** Defined in `src/database/schema.ts`
 
 **Tables:**
+
 - `movies` - Movie metadata and file info
 - `watchProgress` - Playback position tracking
 
 **Migrations:**
+
 ```bash
 # Generate migration after schema changes
 bunx drizzle-kit generate
@@ -117,13 +126,16 @@ bunx drizzle-kit push
 ## API Endpoints
 
 **Library:**
+
 - `GET /api/library/movies` - List all movies
 - `GET /api/library/movies/:id` - Get movie details
 
 **Streaming:**
+
 - `GET /api/stream/:id` - Stream video (supports range requests)
 
 **Progress:**
+
 - `GET /api/progress/:movieId` - Get watch progress
 - `PUT /api/progress/:movieId` - Save watch progress
 
@@ -143,4 +155,5 @@ bun test
 bun run build
 ```
 
-This builds frontend assets to `dist/` using Bun's bundler with Tailwind CSS support.
+This builds frontend assets to `dist/` using Bun's bundler with Tailwind CSS
+support.

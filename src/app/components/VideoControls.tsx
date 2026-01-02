@@ -5,7 +5,13 @@ import {
   RotateCcw,
   RotateCw
 } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode
+} from 'react'
 import type Player from 'video.js/dist/types/player'
 import { VideoTrackBar } from './VideoTrackBar'
 import { VolumeControl } from './VolumeControl'
@@ -24,9 +30,7 @@ function formatTime(seconds: number): string {
   const mins = Math.floor((seconds % 3600) / 60)
   const secs = Math.floor(seconds % 60)
 
-  return [hrs, mins, secs]
-    .map((v) => v.toString().padStart(2, '0'))
-    .join(':')
+  return [hrs, mins, secs].map((v) => v.toString().padStart(2, '0')).join(':')
 }
 
 export function VideoControls({ title, player, movieId }: VideoControlsProps) {

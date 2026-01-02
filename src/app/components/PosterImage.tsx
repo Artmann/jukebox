@@ -5,7 +5,14 @@ import { cn } from '@/lib/utils'
 
 const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p'
 
-type PosterSize = 'w92' | 'w154' | 'w185' | 'w342' | 'w500' | 'w780' | 'original'
+type PosterSize =
+  | 'w92'
+  | 'w154'
+  | 'w185'
+  | 'w342'
+  | 'w500'
+  | 'w780'
+  | 'original'
 
 interface PosterImageProps {
   path: string | null

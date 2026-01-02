@@ -123,9 +123,7 @@
       "indexes": {
         "movies_file_path_unique": {
           "name": "movies_file_path_unique",
-          "columns": [
-            "file_path"
-          ],
+          "columns": ["file_path"],
           "isUnique": true
         }
       },
@@ -179,12 +177,8 @@
           "name": "watch_progress_movie_id_movies_id_fk",
           "tableFrom": "watch_progress",
           "tableTo": "movies",
-          "columnsFrom": [
-            "movie_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["movie_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
