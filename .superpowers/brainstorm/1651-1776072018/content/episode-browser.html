@@ -1,0 +1,395 @@
+<h2>Episode Browser in the Player</h2>
+<p class="subtitle">
+  How should the user browse and switch episodes while watching?
+</p>
+
+<div class="cards">
+  <div
+    class="card"
+    data-choice="a"
+    onclick="toggleSelect(this)"
+  >
+    <div class="card-image">
+      <div
+        style="
+          background: #111;
+          border-radius: 8px;
+          overflow: hidden;
+          aspect-ratio: 16/9;
+          position: relative;
+        "
+      >
+        <!-- Simulated player with right sidebar -->
+        <div style="position: absolute; inset: 0; display: flex">
+          <div
+            style="
+              flex: 1;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: #000;
+            "
+          >
+            <div style="color: #444; font-size: 14px">▶ Video Playing</div>
+          </div>
+          <div
+            style="
+              width: 35%;
+              background: #1a1a1a;
+              border-left: 1px solid #333;
+              padding: 10px;
+              overflow: hidden;
+            "
+          >
+            <div
+              style="
+                font-size: 9px;
+                color: #aaa;
+                margin-bottom: 6px;
+                font-weight: 600;
+              "
+            >
+              Season 1 ▾
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <div
+                style="
+                  background: #e50914;
+                  border-radius: 4px;
+                  padding: 4px 6px;
+                  font-size: 7px;
+                  color: white;
+                "
+              >
+                E1 · Pilot
+              </div>
+              <div
+                style="
+                  background: #252525;
+                  border-radius: 4px;
+                  padding: 4px 6px;
+                  font-size: 7px;
+                  color: #ccc;
+                "
+              >
+                E2 · The Harvest
+              </div>
+              <div
+                style="
+                  background: #252525;
+                  border-radius: 4px;
+                  padding: 4px 6px;
+                  font-size: 7px;
+                  color: #ccc;
+                "
+              >
+                E3 · The Witch
+              </div>
+              <div
+                style="
+                  background: #252525;
+                  border-radius: 4px;
+                  padding: 4px 6px;
+                  font-size: 7px;
+                  color: #ccc;
+                "
+              >
+                E4 · Teacher's Pet
+              </div>
+              <div
+                style="
+                  background: #252525;
+                  border-radius: 4px;
+                  padding: 4px 6px;
+                  font-size: 7px;
+                  color: #ccc;
+                "
+              >
+                E5 · Never Kill a Boy
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · Side Panel</h3>
+      <p>
+        Slides in from the right. Video keeps playing (shrinks). Season dropdown
+        + episode list. Always visible until dismissed.
+      </p>
+    </div>
+  </div>
+
+  <div
+    class="card"
+    data-choice="b"
+    onclick="toggleSelect(this)"
+  >
+    <div class="card-image">
+      <div
+        style="
+          background: #111;
+          border-radius: 8px;
+          overflow: hidden;
+          aspect-ratio: 16/9;
+          position: relative;
+        "
+      >
+        <!-- Simulated player with bottom drawer -->
+        <div
+          style="
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+          "
+        >
+          <div
+            style="
+              flex: 1;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: #000;
+            "
+          >
+            <div style="color: #444; font-size: 14px">▶ Video Playing</div>
+          </div>
+          <div
+            style="
+              height: 45%;
+              background: #1a1a1a;
+              border-top: 1px solid #333;
+              padding: 10px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 6px;
+              "
+            >
+              <div style="font-size: 9px; color: #aaa; font-weight: 600">
+                Season 1 ▾
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; overflow: hidden">
+              <div
+                style="min-width: 80px; border-radius: 4px; overflow: hidden"
+              >
+                <div
+                  style="
+                    background: #e50914;
+                    height: 45px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 7px;
+                    color: white;
+                  "
+                >
+                  ▶
+                </div>
+                <div
+                  style="
+                    background: #252525;
+                    padding: 3px;
+                    font-size: 6px;
+                    color: #ccc;
+                  "
+                >
+                  E1 · Pilot
+                </div>
+              </div>
+              <div
+                style="min-width: 80px; border-radius: 4px; overflow: hidden"
+              >
+                <div
+                  style="
+                    background: #333;
+                    height: 45px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 7px;
+                    color: #888;
+                  "
+                >
+                  ▶
+                </div>
+                <div
+                  style="
+                    background: #252525;
+                    padding: 3px;
+                    font-size: 6px;
+                    color: #ccc;
+                  "
+                >
+                  E2 · The Harvest
+                </div>
+              </div>
+              <div
+                style="min-width: 80px; border-radius: 4px; overflow: hidden"
+              >
+                <div
+                  style="
+                    background: #333;
+                    height: 45px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 7px;
+                    color: #888;
+                  "
+                >
+                  ▶
+                </div>
+                <div
+                  style="
+                    background: #252525;
+                    padding: 3px;
+                    font-size: 6px;
+                    color: #ccc;
+                  "
+                >
+                  E3 · The Witch
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · Bottom Drawer</h3>
+      <p>
+        Slides up from below the video. Horizontal scrolling episode cards with
+        thumbnails. Video shrinks upward. Netflix-style.
+      </p>
+    </div>
+  </div>
+
+  <div
+    class="card"
+    data-choice="c"
+    onclick="toggleSelect(this)"
+  >
+    <div class="card-image">
+      <div
+        style="
+          background: #111;
+          border-radius: 8px;
+          overflow: hidden;
+          aspect-ratio: 16/9;
+          position: relative;
+        "
+      >
+        <!-- Simulated full overlay -->
+        <div
+          style="
+            position: absolute;
+            inset: 0;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          "
+        >
+          <div style="color: #222; font-size: 14px">▶ Video Paused</div>
+        </div>
+        <div
+          style="
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+          "
+        >
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 8px;
+            "
+          >
+            <div style="font-size: 10px; color: white; font-weight: 600">
+              Buffy the Vampire Slayer
+            </div>
+            <div style="font-size: 8px; color: #888; cursor: pointer">✕</div>
+          </div>
+          <div style="font-size: 9px; color: #aaa; margin-bottom: 8px">
+            Season 1 ▾
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                background: #252525;
+                border-radius: 4px;
+                padding: 6px;
+                border-left: 2px solid #e50914;
+              "
+            >
+              <div style="font-size: 7px; color: white; min-width: 20px">
+                E1
+              </div>
+              <div style="font-size: 7px; color: #ccc; flex: 1">
+                Welcome to the Hellmouth
+              </div>
+              <div style="font-size: 6px; color: #666">44m</div>
+            </div>
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                background: #1a1a1a;
+                border-radius: 4px;
+                padding: 6px;
+              "
+            >
+              <div style="font-size: 7px; color: white; min-width: 20px">
+                E2
+              </div>
+              <div style="font-size: 7px; color: #ccc; flex: 1">
+                The Harvest
+              </div>
+              <div style="font-size: 6px; color: #666">44m</div>
+            </div>
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                background: #1a1a1a;
+                border-radius: 4px;
+                padding: 6px;
+              "
+            >
+              <div style="font-size: 7px; color: white; min-width: 20px">
+                E3
+              </div>
+              <div style="font-size: 7px; color: #ccc; flex: 1">The Witch</div>
+              <div style="font-size: 6px; color: #666">44m</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · Full Overlay</h3>
+      <p>
+        Pauses video and shows a full-screen overlay with show info, season
+        picker, and episode list. Dismisses back to playback.
+      </p>
+    </div>
+  </div>
+</div>
