@@ -45,6 +45,73 @@ export interface MovieMetadata {
   trailerUrl: string | null
 }
 
+export interface TMDBShowSearchResult {
+  id: number
+  name: string
+  first_air_date: string
+  overview: string
+  poster_path: string | null
+  backdrop_path: string | null
+  vote_average: number
+}
+
+export interface TMDBShowDetails {
+  id: number
+  name: string
+  first_air_date: string
+  overview: string
+  genres: { id: number; name: string }[]
+  vote_average: number
+  poster_path: string | null
+  backdrop_path: string | null
+  number_of_seasons: number
+}
+
+export interface TMDBSeasonDetails {
+  season_number: number
+  name: string
+  overview: string
+  poster_path: string | null
+  episodes: TMDBEpisodeDetails[]
+}
+
+export interface TMDBEpisodeDetails {
+  episode_number: number
+  name: string
+  overview: string
+  runtime: number | null
+  still_path: string | null
+  air_date: string | null
+}
+
+export interface ShowMetadata {
+  tmdbId: number
+  title: string
+  year: number | null
+  overview: string
+  genres: string
+  rating: number
+  posterPath: string | null
+  backdropPath: string | null
+  numberOfSeasons: number
+}
+
+export interface SeasonMetadata {
+  seasonNumber: number
+  name: string
+  overview: string
+  posterPath: string | null
+  episodes: EpisodeMetadata[]
+}
+
+export interface EpisodeMetadata {
+  episodeNumber: number
+  title: string
+  overview: string
+  runtime: number | null
+  stillPath: string | null
+}
+
 function getApiKey(): string {
   if (!TMDB_API_KEY) {
     throw new Error('TMDB_API_KEY environment variable is not set')
@@ -196,5 +263,137 @@ export async function fetchMovieMetadata(
     posterPath: details.poster_path,
     backdropPath: details.backdrop_path,
     trailerUrl: getTrailerUrl(videos)
+  }
+}
+
+export async function searchShow(
+  title: string,
+  year?: number
+): Promise<TMDBShowSearchResult[]> {
+  const apiKey = getApiKey()
+
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    query: title
+  })
+
+  if (year) {
+    params.set('first_air_date_year', year.toString())
+  }
+
+  const response = await fetch(
+    `${TMDB_BASE_URL}/search/tv?${params.toString()}`
+  )
+
+  if (!response.ok) {
+    throw new Error(`TMDB TV search failed: ${response.statusText}`)
+  }
+
+  const data = (await response.json()) as { results: TMDBShowSearchResult[] }
+
+  return data.results
+}
+
+export async function getShowDetails(
+  tmdbId: number
+): Promise<TMDBShowDetails> {
+  const apiKey = getApiKey()
+
+  const params = new URLSearchParams({
+    api_key: apiKey
+  })
+
+  const response = await fetch(
+    `${TMDB_BASE_URL}/tv/${tmdbId}?${params.toString()}`
+  )
+
+  if (!response.ok) {
+    throw new Error(`TMDB show details failed: ${response.statusText}`)
+  }
+
+  return (await response.json()) as TMDBShowDetails
+}
+
+export async function getSeasonDetails(
+  tmdbId: number,
+  seasonNumber: number
+): Promise<TMDBSeasonDetails> {
+  const apiKey = getApiKey()
+
+  const params = new URLSearchParams({
+    api_key: apiKey
+  })
+
+  const response = await fetch(
+    `${TMDB_BASE_URL}/tv/${tmdbId}/season/${seasonNumber}?${params.toString()}`
+  )
+
+  if (!response.ok) {
+    throw new Error(`TMDB season details failed: ${response.statusText}`)
+  }
+
+  return (await response.json()) as TMDBSeasonDetails
+}
+
+export async function fetchShowMetadata(
+  title: string,
+  year?: number
+): Promise<ShowMetadata | null> {
+  try {
+    getApiKey()
+  } catch {
+    return null
+  }
+
+  const results = await searchShow(title, year)
+
+  if (results.length === 0 || !results[0]) {
+    return null
+  }
+
+  const bestMatch = results[0]
+  const details = await getShowDetails(bestMatch.id)
+
+  const firstAirYear = details.first_air_date
+    ? parseInt(details.first_air_date.split('-')[0] ?? '0', 10) || null
+    : null
+
+  return {
+    tmdbId: details.id,
+    title: details.name,
+    year: firstAirYear,
+    overview: details.overview,
+    genres: JSON.stringify(details.genres.map((g) => g.name)),
+    rating: details.vote_average,
+    posterPath: details.poster_path,
+    backdropPath: details.backdrop_path,
+    numberOfSeasons: details.number_of_seasons
+  }
+}
+
+export async function fetchSeasonMetadata(
+  tmdbId: number,
+  seasonNumber: number
+): Promise<SeasonMetadata | null> {
+  try {
+    getApiKey()
+  } catch {
+    return null
+  }
+
+  const details = await getSeasonDetails(tmdbId, seasonNumber)
+
+  return {
+    seasonNumber: details.season_number,
+    name: details.name,
+    overview: details.overview,
+    posterPath: details.poster_path,
+    episodes: details.episodes.map((episode) => ({
+      episodeNumber: episode.episode_number,
+      title: episode.name,
+      overview: episode.overview,
+      runtime: episode.runtime,
+      stillPath: episode.still_path
+    }))
   }
 }
