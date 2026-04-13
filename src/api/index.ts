@@ -13,12 +13,12 @@ const app = new Hono()
 
 app.use('*', logger())
 app.route('/api/hello', helloRoutes)
-app.route('/api/library', libraryRoutes)
 app.route('/api/library/shows', showRoutes)
-app.route('/api/progress', progressRoutes)
+app.route('/api/library', libraryRoutes)
 app.route('/api/progress/episode', episodeProgressRoutes)
-app.route('/api/stream', streamRoutes)
+app.route('/api/progress', progressRoutes)
 app.route('/api/stream/episode', episodeStreamRoutes)
+app.route('/api/stream', streamRoutes)
 app.get('/api', (c) => c.json({ message: 'Jukebox API' }))
 
 export function setupViteProxy(vitePort: number) {
