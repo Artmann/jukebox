@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { VideoControls } from '../components/VideoControls'
+import { EpisodePanel } from '../components/EpisodePanel'
 import type { Movie } from '../hooks/useMovies'
+import type { Episode, Show, ShowWithSeasons } from '../lib/media'
 import type Player from 'video.js/dist/types/player'
 
 async function fetchMovie(id: string): Promise<Movie> {
@@ -23,8 +25,35 @@ interface WatchProgress {
   duration: number | null
 }
 
-async function fetchProgress(movieId: number): Promise<WatchProgress> {
+async function fetchMovieProgress(movieId: number): Promise<WatchProgress> {
   const response = await fetch(`/api/progress/${movieId}`)
+
+  return (await response.json()) as WatchProgress
+}
+
+interface EpisodeWithShow {
+  episode: Episode
+  show: Show
+}
+
+async function fetchEpisodeWithShow(id: string): Promise<EpisodeWithShow> {
+  const response = await fetch(`/api/library/shows/episodes/${id}`)
+
+  if (!response.ok) throw new Error('Failed to fetch episode')
+
+  return (await response.json()) as EpisodeWithShow
+}
+
+async function fetchShowForEpisode(showId: number): Promise<ShowWithSeasons> {
+  const response = await fetch(`/api/library/shows/${showId}`)
+
+  if (!response.ok) throw new Error('Failed to fetch show')
+
+  return (await response.json()) as ShowWithSeasons
+}
+
+async function fetchEpisodeProgress(episodeId: number): Promise<WatchProgress> {
+  const response = await fetch(`/api/progress/episode/${episodeId}`)
 
   return (await response.json()) as WatchProgress
 }
@@ -33,9 +62,14 @@ const hideDelayMs = 3000
 
 export function WatchPage() {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const isEpisode = location.pathname.startsWith('/watch/episode/')
+
   const [controlsVisible, setControlsVisible] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
   const [player, setPlayer] = useState<Player | null>(null)
+  const [episodePanelOpen, setEpisodePanelOpen] = useState(false)
+  const [selectedSeason, setSelectedSeason] = useState(1)
   const hasRestoredProgress = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -91,23 +125,55 @@ export function WatchPage() {
     }
   }, [isPlaying, resetHideTimer])
 
+  // Movie queries (only when !isEpisode)
   const {
     data: movie,
-    isLoading,
-    error
+    isLoading: isLoadingMovie,
+    error: movieError
   } = useQuery({
     queryKey: ['movie', id],
     queryFn: () => fetchMovie(id ?? ''),
-    enabled: !!id
+    enabled: !!id && !isEpisode
   })
 
+  // Episode queries (only when isEpisode)
+  const {
+    data: episodeData,
+    isLoading: isLoadingEpisode,
+    error: episodeError
+  } = useQuery({
+    queryKey: ['episode', id],
+    queryFn: () => fetchEpisodeWithShow(id ?? ''),
+    enabled: !!id && isEpisode
+  })
+
+  const episode = episodeData?.episode
+  const episodeShow = episodeData?.show
+
+  const { data: show } = useQuery({
+    queryKey: ['show-for-episode', episodeShow?.id],
+    queryFn: () => fetchShowForEpisode(episodeShow?.id ?? 0),
+    enabled: !!episodeShow
+  })
+
+  // Progress (conditional)
   const { data: savedProgress } = useQuery({
-    queryKey: ['progress', movie?.id],
-    queryFn: () => fetchProgress(movie?.id ?? 0),
-    enabled: !!movie
+    queryKey: ['progress', isEpisode ? 'episode' : 'movie', isEpisode ? episode?.id : movie?.id],
+    queryFn: () =>
+      isEpisode
+        ? fetchEpisodeProgress(episode?.id ?? 0)
+        : fetchMovieProgress(movie?.id ?? 0),
+    enabled: isEpisode ? !!episode : !!movie
   })
 
-  // Restore progress when both player and savedProgress are available
+  // Set initial selected season when episode data loads.
+  useEffect(() => {
+    if (episode) {
+      setSelectedSeason(episode.seasonNumber)
+    }
+  }, [episode])
+
+  // Restore progress when both player and savedProgress are available.
   useEffect(() => {
     if (
       player &&
@@ -120,6 +186,57 @@ export function WatchPage() {
     }
   }, [player, savedProgress])
 
+  // Auto-advance to next episode when current one ends.
+  useEffect(() => {
+    if (!player || !isEpisode || !show || !episode) return
+
+    const onEnded = () => {
+      const currentSeason = show.seasons.find((season) => season.seasonNumber === episode.seasonNumber)
+
+      if (!currentSeason) return
+
+      const currentIndex = currentSeason.episodes.findIndex((episodeItem) => episodeItem.id === episode.id)
+      let nextEpisode: Episode | undefined
+
+      if (currentIndex < currentSeason.episodes.length - 1) {
+        nextEpisode = currentSeason.episodes[currentIndex + 1]
+      } else {
+        const nextSeason = show.seasons.find((season) => season.seasonNumber === episode.seasonNumber + 1)
+        nextEpisode = nextSeason?.episodes[0]
+      }
+
+      if (nextEpisode) {
+        window.location.href = `/watch/episode/${nextEpisode.id}`
+      }
+    }
+
+    player.on('ended', onEnded)
+
+    return () => {
+      player.off('ended', onEnded)
+    }
+  }, [player, isEpisode, show, episode])
+
+  const handleSelectEpisode = useCallback((selectedEpisode: Episode) => {
+    if (selectedEpisode.id === episode?.id) return
+
+    if (player && episode) {
+      const currentTime = player.currentTime() ?? 0
+      const duration = player.duration() ?? 0
+
+      void fetch(`/api/progress/episode/${episode.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentTime, duration })
+      })
+    }
+
+    window.location.href = `/watch/episode/${selectedEpisode.id}`
+  }, [player, episode])
+
+  const isLoading = isEpisode ? isLoadingEpisode : isLoadingMovie
+  const error = isEpisode ? episodeError : movieError
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -128,41 +245,62 @@ export function WatchPage() {
     )
   }
 
-  if (error || !movie) {
+  if (error || (isEpisode ? !episode : !movie)) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
-        <p className="text-white">Movie not found</p>
-        <Button
-          asChild
-          variant="outline"
-        >
+        <p className="text-white">{isEpisode ? 'Episode not found' : 'Movie not found'}</p>
+        <Button asChild variant="outline">
           <Link to="/">Back to Library</Link>
         </Button>
       </div>
     )
   }
 
+  const streamUrl = isEpisode
+    ? `/api/stream/episode/${episode?.id}`
+    : `/api/stream/${movie?.id}`
+
+  const title = isEpisode && episode && episodeShow
+    ? `${episodeShow.title} — S${episode.seasonNumber} E${episode.episodeNumber} · ${episode.title}`
+    : (movie?.title ?? '')
+
   return (
     <div
       className={`bg-black w-full h-screen flex flex-col ${controlsVisible ? '' : 'cursor-none'}`}
       onMouseMove={resetHideTimer}
     >
-      <main className="flex-1 flex items-center justify-center">
-        <div className="w-full max-w-7xl">
-          <VideoPlayer
-            src={`/api/stream/${movie.id}`}
-            onReady={setPlayer}
-          />
-        </div>
-      </main>
+      <div className="flex-1 flex overflow-hidden">
+        <main className="flex-1 flex items-center justify-center">
+          <div className="w-full max-w-7xl">
+            <VideoPlayer src={streamUrl} onReady={setPlayer} />
+          </div>
+        </main>
+
+        {isEpisode && episodePanelOpen && show && episode && (
+          <div className="w-80 flex-shrink-0">
+            <EpisodePanel
+              currentEpisodeId={episode.id}
+              onClose={() => setEpisodePanelOpen(false)}
+              onSelectEpisode={handleSelectEpisode}
+              onSelectSeason={setSelectedSeason}
+              seasons={show.seasons}
+              selectedSeason={selectedSeason}
+              showTitle={show.title}
+            />
+          </div>
+        )}
+      </div>
 
       <div
         className={`transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         <VideoControls
-          title={movie.title}
+          title={title}
           player={player}
-          movieId={movie.id}
+          movieId={isEpisode ? undefined : movie?.id}
+          episodeId={isEpisode ? episode?.id : undefined}
+          showEpisodesButton={isEpisode}
+          onToggleEpisodes={() => setEpisodePanelOpen((open) => !open)}
         />
       </div>
     </div>
