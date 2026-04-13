@@ -8,6 +8,13 @@
       "when": 1767381734633,
       "tag": "0000_minor_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1776075541910,
+      "tag": "0001_steady_puma",
+      "breakpoints": true
     }
   ]
 }
