@@ -147,7 +147,10 @@ export function ShowDetailPage(): ReactElement {
         <PageHeader />
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <p className="text-foreground">Show not found</p>
-          <Button asChild variant="outline">
+          <Button
+            asChild
+            variant="outline"
+          >
             <Link to="/shows">Back to Shows</Link>
           </Button>
         </div>
@@ -159,7 +162,9 @@ export function ShowDetailPage(): ReactElement {
     show.seasons.find((season) => season.seasonNumber === selectedSeason) ??
     show.seasons[0]
 
-  const genres = show.genres ? show.genres.split(',').map((genre) => genre.trim()) : []
+  const genres = show.genres
+    ? show.genres.split(',').map((genre) => genre.trim())
+    : []
   const seasonCount = show.seasons.length
 
   return (
@@ -183,17 +188,13 @@ export function ShowDetailPage(): ReactElement {
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               {show.year && <span>{show.year}</span>}
 
-              {show.rating && (
-                <span>{show.rating.toFixed(1)} rating</span>
-              )}
+              {show.rating && <span>{show.rating.toFixed(1)} rating</span>}
 
               <span>
                 {seasonCount} {seasonCount === 1 ? 'season' : 'seasons'}
               </span>
 
-              {genres.length > 0 && (
-                <span>{genres.join(', ')}</span>
-              )}
+              {genres.length > 0 && <span>{genres.join(', ')}</span>}
             </div>
 
             {show.overview && (
@@ -242,7 +243,9 @@ export function ShowDetailPage(): ReactElement {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className={`font-medium ${watched ? 'text-muted-foreground' : 'text-foreground'}`}>
+                      <span
+                        className={`font-medium ${watched ? 'text-muted-foreground' : 'text-foreground'}`}
+                      >
                         {episode.title}
                       </span>
 

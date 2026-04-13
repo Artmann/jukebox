@@ -20,7 +20,8 @@ export function HomePage() {
   const { data: continueWatchingItems, isLoading: isLoadingContinueWatching } =
     useContinueWatching()
 
-  const isLoading = isLoadingMovies || isLoadingShows || isLoadingContinueWatching
+  const isLoading =
+    isLoadingMovies || isLoadingShows || isLoadingContinueWatching
 
   const allMedia = useMemo(
     () => mergeMedia(movies ?? [], shows ?? []),
@@ -43,7 +44,8 @@ export function HomePage() {
     return [...allMedia]
       .sort(
         (a, b) =>
-          new Date(b.item.createdAt).getTime() - new Date(a.item.createdAt).getTime()
+          new Date(b.item.createdAt).getTime() -
+          new Date(a.item.createdAt).getTime()
       )
       .slice(0, recentlyAddedLimit)
   }, [allMedia])
@@ -96,10 +98,17 @@ export function HomePage() {
         )}
 
         {genreRows.map(({ genre, items }) => (
-          <MediaRow key={genre} items={items} title={genre} />
+          <MediaRow
+            key={genre}
+            items={items}
+            title={genre}
+          />
         ))}
 
-        <MediaRow items={recentlyAdded} title="Recently Added" />
+        <MediaRow
+          items={recentlyAdded}
+          title="Recently Added"
+        />
       </div>
     </>
   )

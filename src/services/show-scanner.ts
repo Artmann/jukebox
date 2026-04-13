@@ -13,7 +13,16 @@ export type { NormalizedShow } from './show-parser'
 export { normalizeShowName } from './show-parser'
 
 const videoExtensions = new Set([
-  '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.m4v', '.webm', '.flv', '.mpeg', '.mpg'
+  '.mp4',
+  '.mkv',
+  '.avi',
+  '.mov',
+  '.wmv',
+  '.m4v',
+  '.webm',
+  '.flv',
+  '.mpeg',
+  '.mpg'
 ])
 
 export interface ScannedEpisode {
@@ -33,7 +42,9 @@ export interface ScannedShow {
   episodes: ScannedEpisode[]
 }
 
-async function scanEpisodesInDirectory(directory: string): Promise<ScannedEpisode[]> {
+async function scanEpisodesInDirectory(
+  directory: string
+): Promise<ScannedEpisode[]> {
   let entries: string[]
 
   try {
@@ -109,7 +120,9 @@ async function scanShowFolder(folderPath: string): Promise<ScannedEpisode[]> {
   }
 
   // Check for season subfolders
-  const seasonFolders = subdirectories.filter(name => parseSeasonFolder(name) !== null)
+  const seasonFolders = subdirectories.filter(
+    (name) => parseSeasonFolder(name) !== null
+  )
 
   if (seasonFolders.length > 0) {
     for (const seasonFolder of seasonFolders) {
@@ -133,7 +146,9 @@ async function scanShowFolder(folderPath: string): Promise<ScannedEpisode[]> {
   return episodes
 }
 
-export async function discoverShows(libraryPath: string): Promise<ScannedShow[]> {
+export async function discoverShows(
+  libraryPath: string
+): Promise<ScannedShow[]> {
   let entries: string[]
 
   try {
@@ -209,7 +224,9 @@ export async function discoverShows(libraryPath: string): Promise<ScannedShow[]>
   return shows
 }
 
-export async function scanShowLibrary(libraryPath: string): Promise<{ added: number; updated: number; total: number }> {
+export async function scanShowLibrary(
+  libraryPath: string
+): Promise<{ added: number; updated: number; total: number }> {
   let added = 0
   let updated = 0
   let total = 0
@@ -274,7 +291,13 @@ export async function scanShowLibrary(libraryPath: string): Promise<{ added: num
 
     for (const [seasonNumber, seasonEpisodes] of seasonMap) {
       // Fetch TMDB season metadata once per season
-      let tmdbEpisodes: { episodeNumber: number; title: string; overview: string; runtime: number | null; stillPath: string | null }[] = []
+      let tmdbEpisodes: {
+        episodeNumber: number
+        title: string
+        overview: string
+        runtime: number | null
+        stillPath: string | null
+      }[] = []
 
       // Find or create the season record
       const existingSeasons = await db
@@ -301,7 +324,9 @@ export async function scanShowLibrary(libraryPath: string): Promise<{ added: num
         let seasonMetadata = null
 
         if (tmdbId !== null) {
-          console.log(`  Fetching TMDB metadata for season ${seasonNumber} of: ${name}`)
+          console.log(
+            `  Fetching TMDB metadata for season ${seasonNumber} of: ${name}`
+          )
           seasonMetadata = await fetchSeasonMetadata(tmdbId, seasonNumber)
           tmdbEpisodes = seasonMetadata?.episodes ?? []
         }

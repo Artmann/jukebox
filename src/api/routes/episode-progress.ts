@@ -39,7 +39,10 @@ episodeProgressRoutes.get('/show/:showId', async (context) => {
       )
     )
 
-  const progressMap: Record<number, { currentTime: number; duration: number | null; updatedAt: Date }> = {}
+  const progressMap: Record<
+    number,
+    { currentTime: number; duration: number | null; updatedAt: Date }
+  > = {}
 
   for (const row of progressRows) {
     if (row.episodeId !== null) {
@@ -72,7 +75,10 @@ episodeProgressRoutes.get('/:episodeId', async (context) => {
     return context.json({ currentTime: 0, duration: null })
   }
 
-  return context.json({ currentTime: progress.currentTime, duration: progress.duration })
+  return context.json({
+    currentTime: progress.currentTime,
+    duration: progress.duration
+  })
 })
 
 // PUT /:episodeId
@@ -83,7 +89,10 @@ episodeProgressRoutes.put('/:episodeId', async (context) => {
     return context.json({ error: 'Invalid episode ID' }, 400)
   }
 
-  const body = await context.req.json<{ currentTime: number; duration?: number }>()
+  const body = await context.req.json<{
+    currentTime: number
+    duration?: number
+  }>()
 
   if (typeof body.currentTime !== 'number') {
     return context.json({ error: 'currentTime is required' }, 400)

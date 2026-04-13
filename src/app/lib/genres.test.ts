@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { buildGenreRows, parseGenres } from './genres'
 import type { MediaItem } from './media'
 
-function makeMovie(id: number, title: string, genres: string | null): MediaItem {
+function makeMovie(
+  id: number,
+  title: string,
+  genres: string | null
+): MediaItem {
   return {
     type: 'movie',
     item: {
@@ -93,9 +97,7 @@ describe('buildGenreRows', () => {
 
     const rows = buildGenreRows(items)
 
-    expect(rows).toEqual([
-      { genre: 'Comedy', items: [items[1], items[2]] }
-    ])
+    expect(rows).toEqual([{ genre: 'Comedy', items: [items[1], items[2]] }])
   })
 
   it('respects limit parameter', () => {

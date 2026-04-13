@@ -1,7 +1,16 @@
 import { extname } from 'path'
 
 const videoExtensions = new Set([
-  '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.m4v', '.webm', '.flv', '.mpeg', '.mpg'
+  '.mp4',
+  '.mkv',
+  '.avi',
+  '.mov',
+  '.wmv',
+  '.m4v',
+  '.webm',
+  '.flv',
+  '.mpeg',
+  '.mpg'
 ])
 
 const episodePattern = /S(\d+)[Ee](\d+)/
@@ -41,10 +50,7 @@ export function parseEpisodeFilename(fileName: string): ParsedEpisode | null {
   // Extract title: everything after the SxxExx pattern
   const matchIndex = match.index ?? 0
   const afterPattern = name.substring(matchIndex + match[0].length)
-  let title = afterPattern
-    .replace(/[._]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  let title = afterPattern.replace(/[._]/g, ' ').replace(/\s+/g, ' ').trim()
 
   // Strip technical info from the end
   const techMatch = title.search(technicalPatterns)
