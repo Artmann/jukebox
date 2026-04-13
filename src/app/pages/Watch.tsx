@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
@@ -138,15 +139,20 @@ export function WatchPage() {
   }, [isPlaying, resetHideTimer])
 
   // Show controls on any keypress.
-  useEffect(() => {
-    const onKeyDown = () => resetHideTimer()
+  useHotkeys('*', () => resetHideTimer())
 
-    window.addEventListener('keydown', onKeyDown)
+  // Play/pause with space.
+  useHotkeys('space', (event) => {
+    event.preventDefault()
 
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
+    if (!player) return
+
+    if (player.paused()) {
+      void player.play()
+    } else {
+      player.pause()
     }
-  }, [resetHideTimer])
+  }, [player])
 
   // Movie queries (only when !isEpisode)
   const {
