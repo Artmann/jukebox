@@ -34,7 +34,9 @@ function formatTime(seconds: number): string {
   const mins = Math.floor((seconds % 3600) / 60)
   const secs = Math.floor(seconds % 60)
 
-  return [hrs, mins, secs].map((v) => v.toString().padStart(2, '0')).join(':')
+  const parts = hrs > 0 ? [hrs, mins, secs] : [mins, secs]
+
+  return parts.map((v) => v.toString().padStart(2, '0')).join(':')
 }
 
 export function VideoControls({
