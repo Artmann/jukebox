@@ -146,7 +146,7 @@ async function scanEpisodesInDirectory(directory: string): Promise<ScannedEpisod
       const fileStat = await stat(filePath)
       fileSize = fileStat.size
     } catch {
-      fileSize = null
+      // Ignore stat errors
     }
 
     episodes.push({
