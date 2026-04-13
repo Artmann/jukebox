@@ -2,43 +2,51 @@ import { Film } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { ContinueWatchingRow } from '../components/ContinueWatchingRow'
-import { MovieRow } from '../components/MovieRow'
+import { MediaRow } from '../components/MediaRow'
 import { PageHeader } from '../components/PageHeader'
 import { SkeletonRow } from '../components/SkeletonRow'
 import { useContinueWatching } from '../hooks/useContinueWatching'
 import { useMovies } from '../hooks/useMovies'
+import { useShows } from '../hooks/useShows'
 import { buildGenreRows } from '../lib/genres'
+import { mergeMedia, type MediaItem } from '../lib/media'
 
 const maxGenreRows = 6
 const recentlyAddedLimit = 20
 
 export function HomePage() {
   const { data: movies, isLoading: isLoadingMovies } = useMovies()
+  const { data: shows, isLoading: isLoadingShows } = useShows()
   const { data: continueWatchingItems, isLoading: isLoadingContinueWatching } =
     useContinueWatching()
 
-  const isLoading = isLoadingMovies || isLoadingContinueWatching
+  const isLoading = isLoadingMovies || isLoadingShows || isLoadingContinueWatching
+
+  const allMedia = useMemo(
+    () => mergeMedia(movies ?? [], shows ?? []),
+    [movies, shows]
+  )
 
   const genreRows = useMemo(() => {
-    if (!movies) {
+    if (allMedia.length === 0) {
       return []
     }
 
-    return buildGenreRows(movies, maxGenreRows)
-  }, [movies])
+    return buildGenreRows(allMedia, maxGenreRows)
+  }, [allMedia])
 
-  const recentlyAdded = useMemo(() => {
-    if (!movies) {
+  const recentlyAdded: MediaItem[] = useMemo(() => {
+    if (allMedia.length === 0) {
       return []
     }
 
-    return [...movies]
+    return [...allMedia]
       .sort(
         (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          new Date(b.item.createdAt).getTime() - new Date(a.item.createdAt).getTime()
       )
       .slice(0, recentlyAddedLimit)
-  }, [movies])
+  }, [allMedia])
 
   if (isLoading) {
     return (
@@ -54,7 +62,7 @@ export function HomePage() {
     )
   }
 
-  if (!movies || movies.length === 0) {
+  if (allMedia.length === 0) {
     return (
       <>
         <PageHeader />
@@ -63,7 +71,7 @@ export function HomePage() {
           <Film className="size-16 text-muted-foreground" />
 
           <h2 className="text-xl font-semibold text-foreground">
-            No movies in your library
+            No media in your library
           </h2>
 
           <p className="text-sm text-muted-foreground max-w-md">
@@ -87,18 +95,11 @@ export function HomePage() {
           <ContinueWatchingRow items={continueWatchingItems} />
         )}
 
-        {genreRows.map(({ genre, movies: genreMovies }) => (
-          <MovieRow
-            key={genre}
-            movies={genreMovies}
-            title={genre}
-          />
+        {genreRows.map(({ genre, items }) => (
+          <MediaRow key={genre} items={items} title={genre} />
         ))}
 
-        <MovieRow
-          movies={recentlyAdded}
-          title="Recently Added"
-        />
+        <MediaRow items={recentlyAdded} title="Recently Added" />
       </div>
     </>
   )
