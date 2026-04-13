@@ -5,9 +5,14 @@ import { db, schema } from '../../database'
 
 const progressRoutes = new Hono()
 
-// GET /api/progress/continue-watching - Get movies in progress
+// GET /api/progress/continue-watching - Get movies and episodes in progress
 progressRoutes.get('/continue-watching', async (context) => {
-  const results = await db
+  const inProgressFilter = and(
+    gt(schema.watchProgress.currentTime, 0),
+    sql`(${schema.watchProgress.duration} IS NULL OR ${schema.watchProgress.currentTime} < ${schema.watchProgress.duration} * 0.9)`
+  )
+
+  const movieResults = await db
     .select({
       currentTime: schema.watchProgress.currentTime,
       duration: schema.watchProgress.duration,
@@ -19,16 +24,35 @@ progressRoutes.get('/continue-watching', async (context) => {
       schema.movies,
       eq(schema.watchProgress.movieId, schema.movies.id)
     )
-    .where(
-      and(
-        gt(schema.watchProgress.currentTime, 0),
-        sql`(${schema.watchProgress.duration} IS NULL OR ${schema.watchProgress.currentTime} < ${schema.watchProgress.duration} * 0.9)`
-      )
-    )
-    .orderBy(desc(schema.watchProgress.updatedAt))
-    .limit(20)
+    .where(inProgressFilter)
 
-  return context.json(results)
+  const episodeResults = await db
+    .select({
+      currentTime: schema.watchProgress.currentTime,
+      duration: schema.watchProgress.duration,
+      episode: schema.episodes,
+      show: schema.shows,
+      updatedAt: schema.watchProgress.updatedAt
+    })
+    .from(schema.watchProgress)
+    .innerJoin(
+      schema.episodes,
+      eq(schema.watchProgress.episodeId, schema.episodes.id)
+    )
+    .innerJoin(
+      schema.shows,
+      eq(schema.episodes.showId, schema.shows.id)
+    )
+    .where(inProgressFilter)
+
+  const movies = movieResults.map((result) => ({ ...result, type: 'movie' as const }))
+  const episodes = episodeResults.map((result) => ({ ...result, type: 'episode' as const }))
+
+  const combined = [...movies, ...episodes]
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 20)
+
+  return context.json(combined)
 })
 
 // GET /api/progress/:movieId - Get saved progress for a movie
