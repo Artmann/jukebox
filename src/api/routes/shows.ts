@@ -21,7 +21,11 @@ showRoutes.get('/', async (context) => {
         .from(schema.episodes)
         .where(eq(schema.episodes.showId, show.id))
 
-      return { ...show, seasonCount: seasonRows.length, episodeCount: episodeRows.length }
+      return {
+        ...show,
+        seasonCount: seasonRows.length,
+        episodeCount: episodeRows.length
+      }
     })
   )
 
@@ -109,7 +113,9 @@ showRoutes.get('/:id/seasons/:seasonNumber', async (context) => {
     .where(eq(schema.episodes.showId, showId))
     .orderBy(schema.episodes.episodeNumber)
 
-  const filtered = episodes.filter((episode) => episode.seasonNumber === seasonNumber)
+  const filtered = episodes.filter(
+    (episode) => episode.seasonNumber === seasonNumber
+  )
 
   return context.json(filtered)
 })

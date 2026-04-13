@@ -24,17 +24,29 @@ export function ContinueWatchingRow({
       <div className="flex gap-2 overflow-x-auto scroll-smooth pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {items.map((item) => {
           const isMovie = item.type === 'movie'
-          const key = isMovie ? `movie-${item.movie.id}` : `episode-${item.episode.id}`
-          const link = isMovie ? `/watch/${item.movie.id}` : `/watch/episode/${item.episode.id}`
+          const key = isMovie
+            ? `movie-${item.movie.id}`
+            : `episode-${item.episode.id}`
+          const link = isMovie
+            ? `/watch/${item.movie.id}`
+            : `/watch/episode/${item.episode.id}`
           const title = isMovie ? item.movie.title : item.show.title
-          const subtitle = isMovie ? null : `S${item.episode.seasonNumber} E${item.episode.episodeNumber}`
-          const posterPath = isMovie ? item.movie.posterPath : item.show.posterPath
+          const subtitle = isMovie
+            ? null
+            : `S${item.episode.seasonNumber} E${item.episode.episodeNumber}`
+          const posterPath = isMovie
+            ? item.movie.posterPath
+            : item.show.posterPath
           const progress = item.duration
             ? Math.min((item.currentTime / item.duration) * 100, 100)
             : 0
 
           return (
-            <Link className="flex-shrink-0 w-32 md:w-40 group" key={key} to={link}>
+            <Link
+              className="flex-shrink-0 w-32 md:w-40 group"
+              key={key}
+              to={link}
+            >
               <div className="relative w-full overflow-hidden rounded-sm">
                 <PosterImage
                   alt={title}

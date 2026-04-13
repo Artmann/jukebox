@@ -39,14 +39,17 @@ progressRoutes.get('/continue-watching', async (context) => {
       schema.episodes,
       eq(schema.watchProgress.episodeId, schema.episodes.id)
     )
-    .innerJoin(
-      schema.shows,
-      eq(schema.episodes.showId, schema.shows.id)
-    )
+    .innerJoin(schema.shows, eq(schema.episodes.showId, schema.shows.id))
     .where(inProgressFilter)
 
-  const movies = movieResults.map((result) => ({ ...result, type: 'movie' as const }))
-  const episodes = episodeResults.map((result) => ({ ...result, type: 'episode' as const }))
+  const movies = movieResults.map((result) => ({
+    ...result,
+    type: 'movie' as const
+  }))
+  const episodes = episodeResults.map((result) => ({
+    ...result,
+    type: 'episode' as const
+  }))
 
   const combined = [...movies, ...episodes]
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())

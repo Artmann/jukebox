@@ -59,7 +59,10 @@ async function fetchEpisodeProgress(episodeId: number): Promise<WatchProgress> {
   return (await response.json()) as WatchProgress
 }
 
-type EpisodeProgressMap = Record<number, { currentTime: number; duration: number | null }>
+type EpisodeProgressMap = Record<
+  number,
+  { currentTime: number; duration: number | null }
+>
 
 async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
   const response = await fetch(`/api/progress/episode/show/${showId}`)
@@ -142,31 +145,43 @@ export function WatchPage() {
   useHotkeys('*', () => resetHideTimer())
 
   // Play/pause with space.
-  useHotkeys('space', (event) => {
-    event.preventDefault()
+  useHotkeys(
+    'space',
+    (event) => {
+      event.preventDefault()
 
-    if (!player) return
+      if (!player) return
 
-    if (player.paused()) {
-      void player.play()
-    } else {
-      player.pause()
-    }
-  }, [player])
+      if (player.paused()) {
+        void player.play()
+      } else {
+        player.pause()
+      }
+    },
+    [player]
+  )
 
   // Skip backward/forward with arrow keys.
-  useHotkeys('left', () => {
-    if (!player) return
-    const currentTime = player.currentTime() ?? 0
-    player.currentTime(Math.max(0, currentTime - 10))
-  }, [player])
+  useHotkeys(
+    'left',
+    () => {
+      if (!player) return
+      const currentTime = player.currentTime() ?? 0
+      player.currentTime(Math.max(0, currentTime - 10))
+    },
+    [player]
+  )
 
-  useHotkeys('right', () => {
-    if (!player) return
-    const currentTime = player.currentTime() ?? 0
-    const duration = player.duration() ?? 0
-    player.currentTime(Math.min(duration, currentTime + 10))
-  }, [player])
+  useHotkeys(
+    'right',
+    () => {
+      if (!player) return
+      const currentTime = player.currentTime() ?? 0
+      const duration = player.duration() ?? 0
+      player.currentTime(Math.min(duration, currentTime + 10))
+    },
+    [player]
+  )
 
   // Movie queries (only when !isEpisode)
   const {
@@ -207,7 +222,11 @@ export function WatchPage() {
 
   // Progress (conditional)
   const { data: savedProgress } = useQuery({
-    queryKey: ['progress', isEpisode ? 'episode' : 'movie', isEpisode ? episode?.id : movie?.id],
+    queryKey: [
+      'progress',
+      isEpisode ? 'episode' : 'movie',
+      isEpisode ? episode?.id : movie?.id
+    ],
     queryFn: () =>
       isEpisode
         ? fetchEpisodeProgress(episode?.id ?? 0)
@@ -240,17 +259,23 @@ export function WatchPage() {
     if (!player || !isEpisode || !show || !episode) return
 
     const onEnded = () => {
-      const currentSeason = show.seasons.find((season) => season.seasonNumber === episode.seasonNumber)
+      const currentSeason = show.seasons.find(
+        (season) => season.seasonNumber === episode.seasonNumber
+      )
 
       if (!currentSeason) return
 
-      const currentIndex = currentSeason.episodes.findIndex((episodeItem) => episodeItem.id === episode.id)
+      const currentIndex = currentSeason.episodes.findIndex(
+        (episodeItem) => episodeItem.id === episode.id
+      )
       let nextEpisode: Episode | undefined
 
       if (currentIndex < currentSeason.episodes.length - 1) {
         nextEpisode = currentSeason.episodes[currentIndex + 1]
       } else {
-        const nextSeason = show.seasons.find((season) => season.seasonNumber === episode.seasonNumber + 1)
+        const nextSeason = show.seasons.find(
+          (season) => season.seasonNumber === episode.seasonNumber + 1
+        )
         nextEpisode = nextSeason?.episodes[0]
       }
 
@@ -266,22 +291,25 @@ export function WatchPage() {
     }
   }, [player, isEpisode, show, episode])
 
-  const handleSelectEpisode = useCallback((selectedEpisode: Episode) => {
-    if (selectedEpisode.id === episode?.id) return
+  const handleSelectEpisode = useCallback(
+    (selectedEpisode: Episode) => {
+      if (selectedEpisode.id === episode?.id) return
 
-    if (player && episode) {
-      const currentTime = player.currentTime() ?? 0
-      const duration = player.duration() ?? 0
+      if (player && episode) {
+        const currentTime = player.currentTime() ?? 0
+        const duration = player.duration() ?? 0
 
-      void fetch(`/api/progress/episode/${episode.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentTime, duration })
-      })
-    }
+        void fetch(`/api/progress/episode/${episode.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentTime, duration })
+        })
+      }
 
-    window.location.href = `/watch/episode/${selectedEpisode.id}`
-  }, [player, episode])
+      window.location.href = `/watch/episode/${selectedEpisode.id}`
+    },
+    [player, episode]
+  )
 
   const isLoading = isEpisode ? isLoadingEpisode : isLoadingMovie
   const error = isEpisode ? episodeError : movieError
@@ -297,8 +325,13 @@ export function WatchPage() {
   if (error || (isEpisode ? !episode : !movie)) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
-        <p className="text-white">{isEpisode ? 'Episode not found' : 'Movie not found'}</p>
-        <Button asChild variant="outline">
+        <p className="text-white">
+          {isEpisode ? 'Episode not found' : 'Movie not found'}
+        </p>
+        <Button
+          asChild
+          variant="outline"
+        >
           <Link to="/">Back to Library</Link>
         </Button>
       </div>
@@ -309,9 +342,10 @@ export function WatchPage() {
     ? `/api/stream/episode/${episode?.id}`
     : `/api/stream/${movie?.id}`
 
-  const title = isEpisode && episode && episodeShow
-    ? `${episodeShow.title} — S${episode.seasonNumber} E${episode.episodeNumber} · ${episode.title}`
-    : (movie?.title ?? '')
+  const title =
+    isEpisode && episode && episodeShow
+      ? `${episodeShow.title} — S${episode.seasonNumber} E${episode.episodeNumber} · ${episode.title}`
+      : (movie?.title ?? '')
 
   return (
     <div
@@ -319,7 +353,10 @@ export function WatchPage() {
       onMouseMove={resetHideTimer}
     >
       <div className="absolute inset-0">
-        <VideoPlayer src={streamUrl} onReady={setPlayer} />
+        <VideoPlayer
+          src={streamUrl}
+          onReady={setPlayer}
+        />
       </div>
 
       {isEpisode && episodePanelOpen && show && episode && (

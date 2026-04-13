@@ -1,7 +1,10 @@
 import { X } from 'lucide-react'
 import type { Episode, SeasonWithEpisodes } from '../lib/media'
 
-type EpisodeProgressMap = Record<number, { currentTime: number; duration: number | null }>
+type EpisodeProgressMap = Record<
+  number,
+  { currentTime: number; duration: number | null }
+>
 
 interface EpisodePanelProps {
   currentEpisodeId: number
@@ -24,12 +27,16 @@ export function EpisodePanel({
   selectedSeason,
   showTitle
 }: EpisodePanelProps) {
-  const activeSeason = seasons.find((season) => season.seasonNumber === selectedSeason)
+  const activeSeason = seasons.find(
+    (season) => season.seasonNumber === selectedSeason
+  )
 
   return (
     <div className="bg-black/95 border-l border-white/10 h-full flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-        <span className="text-white text-sm font-medium truncate">{showTitle}</span>
+        <span className="text-white text-sm font-medium truncate">
+          {showTitle}
+        </span>
         <button
           aria-label="Close episode panel"
           className="p-1 text-white/60 hover:text-white cursor-pointer flex-shrink-0 ml-2"
@@ -82,7 +89,9 @@ export function EpisodePanel({
                 {watched && <span className="ml-2 text-white/30">Watched</span>}
               </div>
 
-              <div className={`text-sm leading-snug ${watched ? 'text-white/40' : 'text-white'}`}>
+              <div
+                className={`text-sm leading-snug ${watched ? 'text-white/40' : 'text-white'}`}
+              >
                 {episode.title}
               </div>
 

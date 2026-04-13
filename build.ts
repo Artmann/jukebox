@@ -134,6 +134,25 @@ console.log(
   `📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? 'file' : 'files'} to process\n`
 )
 
+// Bun's HTML bundler resolves all href/src in HTML. Static assets served
+// from public/ at runtime aren't available during build. We preprocess
+// the HTML to strip those links, build, then restore them in the output.
+const { readFile, writeFile, cp } = await import('fs/promises')
+
+const staticLinkPattern = /<link[^>]+href="\/images\/[^"]*"[^>]*\/?>/gi
+const preprocessed = new Map<string, string>()
+
+for (const entry of entrypoints) {
+  const original = await readFile(entry, 'utf-8')
+  const links = original.match(staticLinkPattern)
+
+  if (links) {
+    preprocessed.set(entry, original)
+    const stripped = original.replace(staticLinkPattern, '<!-- static-asset -->')
+    await writeFile(entry, stripped)
+  }
+}
+
 const result = await Bun.build({
   entrypoints,
   outdir,
@@ -146,6 +165,39 @@ const result = await Bun.build({
   },
   ...cliConfig
 })
+
+// Restore original HTML source files.
+for (const [entry, original] of preprocessed) {
+  await writeFile(entry, original)
+}
+
+// Restore static asset links in output HTML and copy public/ assets.
+const publicDir = path.join(process.cwd(), 'public')
+
+for (const output of result.outputs) {
+  if (output.path.endsWith('.html')) {
+    const entry = entrypoints.find((e) =>
+      path.basename(e) === path.basename(output.path).replace(/-.+\.html/, '.html')
+    ) ?? entrypoints[0]
+
+    if (entry && preprocessed.has(entry)) {
+      const originalHtml = preprocessed.get(entry) ?? ''
+      const links = originalHtml.match(staticLinkPattern) ?? []
+      let outputHtml = await readFile(output.path, 'utf-8')
+
+      for (const link of links) {
+        outputHtml = outputHtml.replace('<!-- static-asset -->', link)
+      }
+
+      await writeFile(output.path, outputHtml)
+    }
+  }
+}
+
+if (existsSync(publicDir)) {
+  await cp(publicDir, outdir, { recursive: true })
+  console.log('📁 Copied public/ assets to output\n')
+}
 
 const end = performance.now()
 

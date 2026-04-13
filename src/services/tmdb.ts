@@ -294,9 +294,7 @@ export async function searchShow(
   return data.results
 }
 
-export async function getShowDetails(
-  tmdbId: number
-): Promise<TMDBShowDetails> {
+export async function getShowDetails(tmdbId: number): Promise<TMDBShowDetails> {
   const apiKey = getApiKey()
 
   const params = new URLSearchParams({

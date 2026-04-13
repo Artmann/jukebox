@@ -17,7 +17,10 @@ export interface Show {
   episodeCount: number
 }
 
-export interface ShowWithSeasons extends Omit<Show, 'seasonCount' | 'episodeCount'> {
+export interface ShowWithSeasons extends Omit<
+  Show,
+  'seasonCount' | 'episodeCount'
+> {
   seasons: SeasonWithEpisodes[]
 }
 

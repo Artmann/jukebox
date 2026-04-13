@@ -210,11 +210,17 @@ export function VideoControls({
 
         <div className="flex gap-2 items-center">
           {showEpisodesButton && onToggleEpisodes && (
-            <IconButton aria-label="Browse episodes" onClick={onToggleEpisodes}>
+            <IconButton
+              aria-label="Browse episodes"
+              onClick={onToggleEpisodes}
+            >
               <List className="size-7 hover:scale-125 text-white" />
             </IconButton>
           )}
-          <IconButton aria-label="Toggle fullscreen" onClick={handleFullscreen}>
+          <IconButton
+            aria-label="Toggle fullscreen"
+            onClick={handleFullscreen}
+          >
             <Maximize className="size-7 hover:scale-125 text-white" />
           </IconButton>
         </div>

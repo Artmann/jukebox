@@ -72,7 +72,11 @@ export function ShowsPage() {
 
       <div className="pt-2 pb-8">
         {genreRows.map(({ genre, items }) => (
-          <MediaRow key={genre} items={items} title={genre} />
+          <MediaRow
+            key={genre}
+            items={items}
+            title={genre}
+          />
         ))}
       </div>
     </>

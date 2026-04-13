@@ -25,11 +25,11 @@ describe('parseEpisodeFilename', () => {
 
   it('parses lowercase SxxExx', () => {
     expect(
-      parseEpisodeFilename('Relic Hunter S01e01 Buddha\'s Bowl.mkv')
+      parseEpisodeFilename("Relic Hunter S01e01 Buddha's Bowl.mkv")
     ).toEqual({
       seasonNumber: 1,
       episodeNumber: 1,
-      title: 'Buddha\'s Bowl'
+      title: "Buddha's Bowl"
     })
   })
 
@@ -38,7 +38,9 @@ describe('parseEpisodeFilename', () => {
   })
 
   it('returns null for image files', () => {
-    expect(parseEpisodeFilename('Buffy_the_Vampire_Slayer_(logo).jpg')).toEqual(null)
+    expect(parseEpisodeFilename('Buffy_the_Vampire_Slayer_(logo).jpg')).toEqual(
+      null
+    )
   })
 
   it('returns null for text files', () => {
@@ -94,7 +96,9 @@ describe('parseEpisodeFilename', () => {
   })
 
   it('returns null for files without SxxExx pattern', () => {
-    expect(parseEpisodeFilename('Some.Random.Movie.2020.1080p.mkv')).toEqual(null)
+    expect(parseEpisodeFilename('Some.Random.Movie.2020.1080p.mkv')).toEqual(
+      null
+    )
   })
 
   it('strips BluRay and x265 from title', () => {

@@ -53,10 +53,33 @@ export function normalizeShowName(folderName: string): NormalizedShow {
 
   // Remove technical/quality tags
   const technicalTags = [
-    'Complete', 'Series', 'DVDRip', 'BDRip', 'BRRip', 'BluRay', 'WEB-DL', 'WEB',
-    'HDTV', 'TVRip', '2160p', '1080p', '720p', '576p', '480p', '4K',
-    'x265', 'x264', 'H264', 'HEVC', '10bit', 'AAC', 'AC3', 'DD5',
-    'Mp4', 'MKV', 'MkvCage'
+    'Complete',
+    'Series',
+    'DVDRip',
+    'BDRip',
+    'BRRip',
+    'BluRay',
+    'WEB-DL',
+    'WEB',
+    'HDTV',
+    'TVRip',
+    '2160p',
+    '1080p',
+    '720p',
+    '576p',
+    '480p',
+    '4K',
+    'x265',
+    'x264',
+    'H264',
+    'HEVC',
+    '10bit',
+    'AAC',
+    'AC3',
+    'DD5',
+    'Mp4',
+    'MKV',
+    'MkvCage'
   ]
 
   for (const tag of technicalTags) {

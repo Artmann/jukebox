@@ -20,15 +20,21 @@ export function MediaRow({ items, title }: MediaRowProps): ReactElement | null {
 
       <div className="flex gap-2 overflow-x-auto scroll-smooth pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {items.map((mediaItem) => {
-          const id = mediaItem.type === 'movie'
-            ? `movie-${mediaItem.item.id}`
-            : `show-${mediaItem.item.id}`
-          const link = mediaItem.type === 'movie'
-            ? `/watch/${mediaItem.item.id}`
-            : `/shows/${mediaItem.item.id}`
+          const id =
+            mediaItem.type === 'movie'
+              ? `movie-${mediaItem.item.id}`
+              : `show-${mediaItem.item.id}`
+          const link =
+            mediaItem.type === 'movie'
+              ? `/watch/${mediaItem.item.id}`
+              : `/shows/${mediaItem.item.id}`
 
           return (
-            <Link className="flex-shrink-0 w-32 md:w-40 group" key={id} to={link}>
+            <Link
+              className="flex-shrink-0 w-32 md:w-40 group"
+              key={id}
+              to={link}
+            >
               <div className="w-full overflow-hidden rounded-sm">
                 <PosterImage
                   alt={mediaItem.item.title}
