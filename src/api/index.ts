@@ -65,27 +65,50 @@ export function setupStaticServing() {
   })
 }
 
+const hopByHopHeaders = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+])
+
 export function setupViteProxy(vitePort: number) {
   app.all('*', async (c, next) => {
-    // Skip API routes - let them be handled by Hono
     if (c.req.path.startsWith('/api')) {
       return next()
     }
 
     const viteUrl = `http://localhost:${vitePort}${c.req.path}`
-    const response = await fetch(viteUrl, {
-      method: c.req.method,
-      headers: c.req.raw.headers,
-      body:
-        c.req.method !== 'GET' && c.req.method !== 'HEAD'
-          ? c.req.raw.body
-          : undefined,
-    })
 
-    return new Response(response.body, {
-      status: response.status,
-      headers: response.headers,
-    })
+    const headers = new Headers()
+
+    for (const [key, value] of c.req.raw.headers.entries()) {
+      if (!hopByHopHeaders.has(key.toLowerCase())) {
+        headers.set(key, value)
+      }
+    }
+
+    try {
+      const response = await fetch(viteUrl, {
+        method: c.req.method,
+        headers,
+        body:
+          c.req.method !== 'GET' && c.req.method !== 'HEAD'
+            ? c.req.raw.body
+            : undefined,
+      })
+
+      return new Response(response.body, {
+        status: response.status,
+        headers: response.headers,
+      })
+    } catch {
+      return next()
+    }
   })
 }
 
