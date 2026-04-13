@@ -1,6 +1,8 @@
 import { Film } from 'lucide-react'
 import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 
+import { Button } from '@/components/ui/button'
 import { ContinueWatchingRow } from '../components/ContinueWatchingRow'
 import { MediaRow } from '../components/MediaRow'
 import { PageHeader } from '../components/PageHeader'
@@ -77,12 +79,13 @@ export function HomePage() {
           </h2>
 
           <p className="text-sm text-muted-foreground max-w-md">
-            Run{' '}
-            <code className="bg-muted px-2 py-1 rounded text-xs font-mono">
-              bun run scan /path/to/movies
-            </code>{' '}
-            to add your collection.
+            Your libraries are configured but no media was found.
+            Check that your library paths are correct, or run a scan.
           </p>
+
+          <Button asChild variant="outline">
+            <Link to="/setup">Go to Setup</Link>
+          </Button>
         </div>
       </>
     )

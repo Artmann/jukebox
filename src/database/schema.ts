@@ -1,5 +1,13 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
 
+export const libraries = sqliteTable('libraries', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  path: text('path').notNull().unique(),
+  type: text('type').notNull(), // 'movies' | 'shows'
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
+})
+
 export const movies = sqliteTable('movies', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   title: text('title').notNull(),
@@ -80,6 +88,8 @@ export const watchProgress = sqliteTable('watch_progress', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
 })
 
+export type Library = typeof libraries.$inferSelect
+export type NewLibrary = typeof libraries.$inferInsert
 export type Movie = typeof movies.$inferSelect
 export type NewMovie = typeof movies.$inferInsert
 export type Episode = typeof episodes.$inferSelect
