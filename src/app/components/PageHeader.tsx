@@ -30,7 +30,7 @@ export function PageHeader(): ReactElement {
           : 'bg-transparent'
       )}
     >
-      <nav className="flex items-center gap-6 px-4 py-3 sm:px-9 sm:py-4">
+      <nav className="flex items-center gap-6 px-6 py-3 sm:py-4">
         <Link
           className="flex items-center gap-2 text-xl font-bold tracking-tight text-primary"
           to="/"
