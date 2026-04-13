@@ -58,6 +58,18 @@ async function fetchEpisodeProgress(episodeId: number): Promise<WatchProgress> {
   return (await response.json()) as WatchProgress
 }
 
+type EpisodeProgressMap = Record<number, { currentTime: number; duration: number | null }>
+
+async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
+  const response = await fetch(`/api/progress/episode/show/${showId}`)
+
+  if (!response.ok) {
+    return {}
+  }
+
+  return (await response.json()) as EpisodeProgressMap
+}
+
 const hideDelayMs = 3000
 
 export function WatchPage() {
@@ -153,6 +165,12 @@ export function WatchPage() {
   const { data: show } = useQuery({
     queryKey: ['show-for-episode', episodeShow?.id],
     queryFn: () => fetchShowForEpisode(episodeShow?.id ?? 0),
+    enabled: !!episodeShow
+  })
+
+  const { data: episodeProgressMap } = useQuery({
+    queryKey: ['show-progress', episodeShow?.id],
+    queryFn: () => fetchShowProgress(episodeShow?.id ?? 0),
     enabled: !!episodeShow
   })
 
@@ -283,6 +301,7 @@ export function WatchPage() {
               onClose={() => setEpisodePanelOpen(false)}
               onSelectEpisode={handleSelectEpisode}
               onSelectSeason={setSelectedSeason}
+              progressMap={episodeProgressMap}
               seasons={show.seasons}
               selectedSeason={selectedSeason}
               showTitle={show.title}
