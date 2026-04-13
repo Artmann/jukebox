@@ -31,6 +31,11 @@
       href="./images/site.webmanifest"
     />
     <title>Jukebox</title>
+    <script>
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark')
+      }
+    </script>
     <script
       type="module"
       src="./frontend.tsx"

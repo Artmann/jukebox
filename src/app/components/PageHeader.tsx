@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import { useEffect, useState, type ReactElement } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 
 export function PageHeader(): ReactElement {
   const [scrollY, setScrollY] = useState(0)
@@ -22,32 +22,38 @@ export function PageHeader(): ReactElement {
   const hasScrolledDown = scrollY >= 16
 
   return (
-    <div
+    <header
       className={cn(
-        'sticky top-0 z-10 w-full h-auto transition-all',
-        hasScrolledDown ? 'bg-zinc-900 text-white' : 'bg-transparent'
+        'sticky top-0 z-10 w-full transition-all duration-300',
+        hasScrolledDown
+          ? 'bg-background/80 backdrop-blur-md shadow-sm'
+          : 'bg-transparent'
       )}
     >
-      <div className="px-9 py-3 flex justify-between items-center ">
-        <div className="flex items-center gap-2">
-          <Link
-            className="font-semibold"
-            to="/"
-          >
-            Jukebox
-          </Link>
+      <nav className="flex items-center gap-6 px-4 py-3 sm:px-9 sm:py-4">
+        <Link
+          className="text-xl font-bold tracking-tight text-primary"
+          to="/"
+        >
+          <span className="text-red-500">▶</span> Jukebox
+        </Link>
 
-          <div className="flex items-center gap-2 text-sm pt-1">
-            <Link
-              className="block px-2 hover:underline"
-              to="/movies"
-            >
-              Movies
-            </Link>
-          </div>
+        <div className="flex items-center gap-1 text-sm">
+          <NavLink
+            className={({ isActive }) =>
+              cn(
+                'rounded-md px-3 py-1.5 transition-colors',
+                isActive
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )
+            }
+            to="/movies"
+          >
+            Movies
+          </NavLink>
         </div>
-        <div></div>
-      </div>
-    </div>
+      </nav>
+    </header>
   )
 }
