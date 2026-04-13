@@ -7,10 +7,12 @@ export interface Movie {
   fileName: string
   filePath: string
   fileSize: number | null
+  genres: string | null
   id: number
   overview: string | null
   posterPath: string | null
   rating: number | null
+  runtime: number | null
   title: string
   trailerUrl: string | null
   updatedAt: string

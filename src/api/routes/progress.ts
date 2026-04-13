@@ -1,9 +1,32 @@
-import { eq } from 'drizzle-orm'
+import { and, desc, eq, gt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
 
 const progressRoutes = new Hono()
+
+// GET /api/progress/continue-watching - Get movies in progress
+progressRoutes.get('/continue-watching', async (context) => {
+  const results = await db
+    .select({
+      currentTime: schema.watchProgress.currentTime,
+      duration: schema.watchProgress.duration,
+      movie: schema.movies,
+      updatedAt: schema.watchProgress.updatedAt,
+    })
+    .from(schema.watchProgress)
+    .innerJoin(schema.movies, eq(schema.watchProgress.movieId, schema.movies.id))
+    .where(
+      and(
+        gt(schema.watchProgress.currentTime, 0),
+        sql`(${schema.watchProgress.duration} IS NULL OR ${schema.watchProgress.currentTime} < ${schema.watchProgress.duration} * 0.9)`
+      )
+    )
+    .orderBy(desc(schema.watchProgress.updatedAt))
+    .limit(20)
+
+  return context.json(results)
+})
 
 // GET /api/progress/:movieId - Get saved progress for a movie
 progressRoutes.get('/:movieId', async (c) => {
