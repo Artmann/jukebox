@@ -1,4 +1,5 @@
 import {
+  List,
   Maximize,
   PauseIcon,
   PlayIcon,
@@ -19,7 +20,10 @@ import { VolumeControl } from './VolumeControl'
 interface VideoControlsProps {
   title: string
   player: Player | null
-  movieId: number
+  movieId?: number
+  episodeId?: number
+  onToggleEpisodes?: () => void
+  showEpisodesButton?: boolean
 }
 
 const skipSeconds = 10
@@ -33,7 +37,14 @@ function formatTime(seconds: number): string {
   return [hrs, mins, secs].map((v) => v.toString().padStart(2, '0')).join(':')
 }
 
-export function VideoControls({ title, player, movieId }: VideoControlsProps) {
+export function VideoControls({
+  title,
+  player,
+  movieId,
+  episodeId,
+  onToggleEpisodes,
+  showEpisodesButton
+}: VideoControlsProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [buffered, setBuffered] = useState(0)
@@ -98,7 +109,11 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
 
       lastSavedTimeRef.current = currentTime
 
-      await fetch(`/api/progress/${movieId}`, {
+      const progressUrl = episodeId
+        ? `/api/progress/episode/${episodeId}`
+        : `/api/progress/${movieId}`
+
+      await fetch(progressUrl, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentTime, duration })
@@ -111,7 +126,7 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
       clearInterval(interval)
       void saveProgress()
     }
-  }, [player, movieId])
+  }, [player, movieId, episodeId])
 
   const handlePlayPause = () => {
     if (!player) return
@@ -196,11 +211,13 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
 
         <div className="text-white text-sm truncate">{title}</div>
 
-        <div>
-          <IconButton
-            aria-label="Toggle fullscreen"
-            onClick={handleFullscreen}
-          >
+        <div className="flex gap-2 items-center">
+          {showEpisodesButton && onToggleEpisodes && (
+            <IconButton aria-label="Browse episodes" onClick={onToggleEpisodes}>
+              <List className="size-7 hover:scale-125 text-white" />
+            </IconButton>
+          )}
+          <IconButton aria-label="Toggle fullscreen" onClick={handleFullscreen}>
             <Maximize className="size-7 hover:scale-125 text-white" />
           </IconButton>
         </div>
