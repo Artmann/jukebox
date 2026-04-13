@@ -123,9 +123,7 @@
       "indexes": {
         "episodes_file_path_unique": {
           "name": "episodes_file_path_unique",
-          "columns": [
-            "file_path"
-          ],
+          "columns": ["file_path"],
           "isUnique": true
         }
       },
@@ -134,12 +132,8 @@
           "name": "episodes_show_id_shows_id_fk",
           "tableFrom": "episodes",
           "tableTo": "shows",
-          "columnsFrom": [
-            "show_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["show_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -147,12 +141,8 @@
           "name": "episodes_season_id_seasons_id_fk",
           "tableFrom": "episodes",
           "tableTo": "seasons",
-          "columnsFrom": [
-            "season_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["season_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -203,9 +193,7 @@
       "indexes": {
         "libraries_path_unique": {
           "name": "libraries_path_unique",
-          "columns": [
-            "path"
-          ],
+          "columns": ["path"],
           "isUnique": true
         }
       },
@@ -340,9 +328,7 @@
       "indexes": {
         "movies_file_path_unique": {
           "name": "movies_file_path_unique",
-          "columns": [
-            "file_path"
-          ],
+          "columns": ["file_path"],
           "isUnique": true
         }
       },
@@ -410,12 +396,8 @@
           "name": "seasons_show_id_shows_id_fk",
           "tableFrom": "seasons",
           "tableTo": "shows",
-          "columnsFrom": [
-            "show_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["show_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -515,9 +497,7 @@
       "indexes": {
         "shows_folder_path_unique": {
           "name": "shows_folder_path_unique",
-          "columns": [
-            "folder_path"
-          ],
+          "columns": ["folder_path"],
           "isUnique": true
         }
       },
@@ -578,12 +558,8 @@
           "name": "watch_progress_movie_id_movies_id_fk",
           "tableFrom": "watch_progress",
           "tableTo": "movies",
-          "columnsFrom": [
-            "movie_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["movie_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -591,12 +567,8 @@
           "name": "watch_progress_episode_id_episodes_id_fk",
           "tableFrom": "watch_progress",
           "tableTo": "episodes",
-          "columnsFrom": [
-            "episode_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["episode_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

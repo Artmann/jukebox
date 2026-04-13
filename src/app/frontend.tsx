@@ -8,7 +8,14 @@
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Navigate, Outlet, Routes, Route } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Routes,
+  Route
+} from 'react-router-dom'
+import { Toaster } from 'sonner'
 
 import { useSetupStatus } from './hooks/useSetupStatus'
 import { HomePage } from './pages/Home'
@@ -33,7 +40,12 @@ function SetupGuard() {
   }
 
   if (data?.needsSetup) {
-    return <Navigate to="/setup" replace />
+    return (
+      <Navigate
+        to="/setup"
+        replace
+      />
+    )
   }
 
   return <Outlet />
@@ -47,8 +59,14 @@ const app = (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route path="/scan" element={<ScanPage />} />
-          <Route path="/setup" element={<SetupPage />} />
+          <Route
+            path="/scan"
+            element={<ScanPage />}
+          />
+          <Route
+            path="/setup"
+            element={<SetupPage />}
+          />
 
           <Route element={<SetupGuard />}>
             <Route
@@ -69,15 +87,27 @@ const app = (
             />
             <Route
               path="/watch/:id"
-              element={<Suspense><WatchPage /></Suspense>}
+              element={
+                <Suspense>
+                  <WatchPage />
+                </Suspense>
+              }
             />
             <Route
               path="/watch/episode/:id"
-              element={<Suspense><WatchPage /></Suspense>}
+              element={
+                <Suspense>
+                  <WatchPage />
+                </Suspense>
+              }
             />
           </Route>
         </Routes>
       </BrowserRouter>
+      <Toaster
+        position="bottom-right"
+        theme="dark"
+      />
     </QueryClientProvider>
   </StrictMode>
 )

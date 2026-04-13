@@ -285,9 +285,7 @@ export async function searchShow(
     params.set('first_air_date_year', year.toString())
   }
 
-  const response = await fetch(
-    `${tmdbBaseUrl}/search/tv?${params.toString()}`
-  )
+  const response = await fetch(`${tmdbBaseUrl}/search/tv?${params.toString()}`)
 
   if (!response.ok) {
     throw new Error(`TMDB TV search failed: ${response.statusText}`)

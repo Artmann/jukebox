@@ -1,7 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
 @import '../../styles/globals.css';
 
-
 @layer base {
   :root {
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -34,6 +33,34 @@
   .slim-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(255 255 255 / 0.3);
   }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-delay-1 {
+  animation-delay: 100ms;
+}
+.animate-delay-2 {
+  animation-delay: 200ms;
+}
+.animate-delay-3 {
+  animation-delay: 300ms;
+}
+.animate-delay-4 {
+  animation-delay: 400ms;
 }
 
 @media (prefers-reduced-motion) {

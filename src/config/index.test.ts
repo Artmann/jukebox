@@ -1,7 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { join } from 'path'
 
-import { configDirectory, configFilePath, databasePath, ensureConfigDirectory, getConfig } from './index'
+import {
+  configDirectory,
+  configFilePath,
+  databasePath,
+  ensureConfigDirectory,
+  getConfig
+} from './index'
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('os')>()
@@ -45,7 +51,9 @@ describe('config', () => {
     it('creates the config directory recursively', () => {
       ensureConfigDirectory()
 
-      expect(mkdirSync).toHaveBeenCalledWith(configDirectory, { recursive: true })
+      expect(mkdirSync).toHaveBeenCalledWith(configDirectory, {
+        recursive: true
+      })
     })
   })
 

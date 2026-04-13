@@ -40,8 +40,20 @@ describe('scan routes', () => {
 
     it('returns libraries with id, name, path, type', async () => {
       mockFrom.mockResolvedValue([
-        { id: 1, name: 'Movies', path: '/media/movies', type: 'movies', createdAt: new Date() },
-        { id: 2, name: 'Shows', path: '/media/shows', type: 'shows', createdAt: new Date() }
+        {
+          id: 1,
+          name: 'Movies',
+          path: '/media/movies',
+          type: 'movies',
+          createdAt: new Date()
+        },
+        {
+          id: 2,
+          name: 'Shows',
+          path: '/media/shows',
+          type: 'shows',
+          createdAt: new Date()
+        }
       ])
 
       const response = await scanRoutes.request('/libraries')
@@ -63,7 +75,7 @@ describe('scan routes', () => {
       const body = await response.json()
 
       expect(response.status).toEqual(400)
-      expect(body).toEqual({ error: 'No libraries configured' })
+      expect(body).toEqual({ error: { message: 'No libraries configured' } })
     })
   })
 })
