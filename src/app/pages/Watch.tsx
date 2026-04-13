@@ -284,32 +284,30 @@ export function WatchPage() {
 
   return (
     <div
-      className={`bg-black w-full h-screen flex flex-col ${controlsVisible ? '' : 'cursor-none'}`}
+      className={`bg-black w-full h-screen relative ${controlsVisible ? '' : 'cursor-none'}`}
       onMouseMove={resetHideTimer}
     >
-      <div className="flex-1 relative overflow-hidden">
-        <main className="h-full w-full">
-          <VideoPlayer src={streamUrl} onReady={setPlayer} />
-        </main>
-
-        {isEpisode && episodePanelOpen && show && episode && (
-          <div className="absolute top-0 right-0 bottom-0 w-96 z-20">
-            <EpisodePanel
-              currentEpisodeId={episode.id}
-              onClose={() => setEpisodePanelOpen(false)}
-              onSelectEpisode={handleSelectEpisode}
-              onSelectSeason={setSelectedSeason}
-              progressMap={episodeProgressMap}
-              seasons={show.seasons}
-              selectedSeason={selectedSeason}
-              showTitle={show.title}
-            />
-          </div>
-        )}
+      <div className="absolute inset-0">
+        <VideoPlayer src={streamUrl} onReady={setPlayer} />
       </div>
 
+      {isEpisode && episodePanelOpen && show && episode && (
+        <div className="absolute top-0 right-0 bottom-0 w-96 z-20">
+          <EpisodePanel
+            currentEpisodeId={episode.id}
+            onClose={() => setEpisodePanelOpen(false)}
+            onSelectEpisode={handleSelectEpisode}
+            onSelectSeason={setSelectedSeason}
+            progressMap={episodeProgressMap}
+            seasons={show.seasons}
+            selectedSeason={selectedSeason}
+            showTitle={show.title}
+          />
+        </div>
+      )}
+
       <div
-        className={`transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-black/80 to-transparent pt-16 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         <VideoControls
           title={title}
