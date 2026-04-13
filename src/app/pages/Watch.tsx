@@ -288,10 +288,8 @@ export function WatchPage() {
       onMouseMove={resetHideTimer}
     >
       <div className="flex-1 relative overflow-hidden">
-        <main className="h-full flex items-center justify-center">
-          <div className="w-full max-w-7xl">
-            <VideoPlayer src={streamUrl} onReady={setPlayer} />
-          </div>
+        <main className="h-full w-full">
+          <VideoPlayer src={streamUrl} onReady={setPlayer} />
         </main>
 
         {isEpisode && episodePanelOpen && show && episode && (

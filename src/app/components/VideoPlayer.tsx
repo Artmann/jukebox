@@ -26,8 +26,7 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
         {
           controls: false,
           autoplay: true,
-          fluid: true,
-          aspectRatio: '16:9',
+          fill: true,
           sources: [{ src, type: 'video/mp4' }],
           poster
         },
@@ -63,7 +62,7 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
   return (
     <div
       ref={videoRef}
-      className="w-full cursor-pointer"
+      className="w-full h-full cursor-pointer [&_video]:object-contain"
       onClick={handleClick}
     />
   )
