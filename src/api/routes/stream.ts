@@ -1,8 +1,26 @@
+import { createReadStream, existsSync, statSync } from 'fs'
+import path from 'path'
+import { Readable } from 'stream'
+
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import invariant from 'tiny-invariant'
 
 import { db, schema } from '../../database'
+
+const mimeTypes: Record<string, string> = {
+  '.avi': 'video/x-msvideo',
+  '.mkv': 'video/x-matroska',
+  '.mov': 'video/quicktime',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+}
+
+function getMimeType(filePath: string): string {
+  const extension = path.extname(filePath).toLowerCase()
+
+  return mimeTypes[extension] ?? 'video/mp4'
+}
 
 const streamRoutes = new Hono()
 
@@ -25,18 +43,16 @@ streamRoutes.get('/:id', async (context) => {
   }
 
   const filePath = movie.filePath
-  const file = Bun.file(filePath)
 
-  if (!(await file.exists())) {
+  if (!existsSync(filePath)) {
     return context.json({ error: { message: 'Video file not found' } }, 404)
   }
 
-  const fileSize = file.size
-  const mimeType = file.type ?? 'video/mp4'
+  const fileSize = statSync(filePath).size
+  const mimeType = getMimeType(filePath)
   const range = context.req.header('range')
 
   if (range) {
-    // Handle range request for video seeking
     const parts = range.replace(/bytes=/, '').split('-')
 
     invariant(parts[0], 'Invalid Range header')
@@ -45,26 +61,29 @@ streamRoutes.get('/:id', async (context) => {
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
     const chunkSize = end - start + 1
 
-    const stream = file.slice(start, end + 1).stream()
+    const nodeStream = createReadStream(filePath, { start, end })
+    const webStream = Readable.toWeb(nodeStream) as ReadableStream
 
-    return new Response(stream, {
+    return new Response(webStream, {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': String(chunkSize),
-        'Content-Type': mimeType
-      }
+        'Content-Type': mimeType,
+      },
     })
   }
 
-  // No range request - return full file
-  return new Response(file.stream(), {
+  const nodeStream = createReadStream(filePath)
+  const webStream = Readable.toWeb(nodeStream) as ReadableStream
+
+  return new Response(webStream, {
     headers: {
       'Content-Length': String(fileSize),
       'Content-Type': mimeType,
-      'Accept-Ranges': 'bytes'
-    }
+      'Accept-Ranges': 'bytes',
+    },
   })
 })
 

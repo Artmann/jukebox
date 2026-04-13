@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync } from 'fs'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync } from 'fs'
+import { writeFile } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 
@@ -31,5 +31,5 @@ export function getConfig(): JukeboxConfig | null {
 
 export async function saveConfig(config: JukeboxConfig): Promise<void> {
   ensureConfigDirectory()
-  await Bun.write(configFilePath, JSON.stringify(config, null, 2))
+  await writeFile(configFilePath, JSON.stringify(config, null, 2))
 }
