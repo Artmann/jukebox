@@ -13,8 +13,8 @@ export function VideoTrackBar({
   onSeek
 }: VideoTrackBarProps): ReactElement {
   const trackRef = useRef<HTMLDivElement>(null)
-  const bufferedWidth = Math.min(Math.max(buffered, 0), 1) * 100 + '%'
-  const progressWidth = Math.min(Math.max(progress, 0), 1) * 100 + '%'
+  const bufferedPercent = Math.min(Math.max(buffered, 0), 1) * 100 + '%'
+  const progressPercent = Math.min(Math.max(progress, 0), 1) * 100 + '%'
 
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!trackRef.current || !onSeek) return
@@ -26,24 +26,25 @@ export function VideoTrackBar({
   return (
     <div
       ref={trackRef}
-      className="relative w-full cursor-pointer"
+      className="relative w-full h-4 cursor-pointer flex items-center"
       onClick={handleClick}
     >
-      <div className="w-full h-1 rounded overflow-hidden bg-white/20">
+      <div className="w-full h-1 rounded-full bg-white/20 relative">
         <div
-          className="bg-white/30 absolute inset-y-0 left-0 z-10"
-          style={{ width: bufferedWidth }}
-        />
-        <div
-          className="bg-[var(--color-accent,#e50914)] opacity-80 absolute inset-y-0 left-0 z-20"
-          style={{ width: progressWidth }}
+          className="h-full rounded-full bg-white/30 absolute left-0 top-0"
+          style={{ width: bufferedPercent }}
         />
 
         <div
-          className="bg-[var(--color-accent,#e50914)] rounded-full size-3 absolute top-1/2 -translate-y-1/2 z-30"
-          style={{ left: progressWidth }}
+          className="h-full rounded-full bg-[var(--color-accent,#e50914)] absolute left-0 top-0"
+          style={{ width: progressPercent }}
         />
       </div>
+
+      <div
+        className="bg-[var(--color-accent,#e50914)] rounded-full size-3 absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10"
+        style={{ left: progressPercent }}
+      />
     </div>
   )
 }
