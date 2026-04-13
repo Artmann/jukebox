@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 
 import { LibraryGrid } from './LibraryGrid'
@@ -46,18 +46,11 @@ function renderWithRouter(component: React.ReactElement) {
 }
 
 describe('LibraryGrid', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('renders movie items', () => {
+  it('renders movie items with titles visible below posters', () => {
     renderWithRouter(<LibraryGrid items={mockMovies} />)
 
-    const jurassicLinks = screen.getAllByLabelText('Jurassic Park')
-    const matrixLinks = screen.getAllByLabelText('The Matrix')
-
-    expect(jurassicLinks.length).toBeGreaterThan(0)
-    expect(matrixLinks.length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Jurassic Park').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('The Matrix').length).toBeGreaterThan(0)
   })
 
   it('renders empty grid when no items', () => {
@@ -66,142 +59,109 @@ describe('LibraryGrid', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 
+  it('renders the grid with list role', () => {
+    renderWithRouter(<LibraryGrid items={mockMovies} />)
+
+    expect(screen.getByRole('list')).toBeInTheDocument()
+  })
+
   it('shows movie links with correct hrefs', () => {
     renderWithRouter(<LibraryGrid items={mockMovies} />)
 
     const links = screen.getAllByLabelText('Jurassic Park')
+
     expect(links[0]).toHaveAttribute('href', '/watch/1')
   })
 
-  it('shows hover popover after delay', async () => {
-    vi.useFakeTimers()
+  it('shows year below the poster', () => {
     renderWithRouter(<LibraryGrid items={mockMovies} />)
-
-    const gridItems = document.querySelectorAll('.relative')
-    const firstGridItem = gridItems[0]
-    expect(firstGridItem).toBeInTheDocument()
-
-    const popover = firstGridItem?.querySelector('div[style]')
-    expect(popover).toHaveStyle({ opacity: '0' })
-
-    fireEvent.mouseEnter(firstGridItem!)
-
-    await act(async () => {
-      vi.advanceTimersByTime(300)
-    })
-
-    expect(popover).toHaveStyle({ opacity: '1' })
-  })
-
-  it('hides popover on mouse leave', async () => {
-    vi.useFakeTimers()
-    renderWithRouter(<LibraryGrid items={mockMovies} />)
-
-    const gridItems = document.querySelectorAll('.relative')
-    const firstGridItem = gridItems[0]
-    const popover = firstGridItem?.querySelector('div[style]')
-
-    fireEvent.mouseEnter(firstGridItem!)
-
-    await act(async () => {
-      vi.advanceTimersByTime(300)
-    })
-
-    expect(popover).toHaveStyle({ opacity: '1' })
-
-    fireEvent.mouseLeave(firstGridItem!)
-
-    expect(popover).toHaveStyle({ opacity: '0' })
-  })
-
-  it('opens modal when clicking show more button', async () => {
-    vi.useFakeTimers()
-    renderWithRouter(<LibraryGrid items={mockMovies} />)
-
-    const gridItems = document.querySelectorAll('.relative')
-    const firstGridItem = gridItems[0]
-
-    fireEvent.mouseEnter(firstGridItem!)
-
-    await act(async () => {
-      vi.advanceTimersByTime(300)
-    })
-
-    const showMoreButton = firstGridItem?.querySelector('button')
-    expect(showMoreButton).toBeInTheDocument()
-
-    fireEvent.click(showMoreButton!)
 
     expect(screen.getByText('1993')).toBeInTheDocument()
-    expect(screen.getByText(/pragmatic paleontologist/)).toBeInTheDocument()
+    expect(screen.getByText('1999')).toBeInTheDocument()
   })
 
-  it('closes modal when clicking close button', async () => {
-    vi.useFakeTimers()
+  it('shows more info button with aria-label', () => {
     renderWithRouter(<LibraryGrid items={mockMovies} />)
 
-    const gridItems = document.querySelectorAll('.relative')
-    const firstGridItem = gridItems[0]
+    expect(
+      screen.getByLabelText('More information about Jurassic Park')
+    ).toBeInTheDocument()
 
-    fireEvent.mouseEnter(firstGridItem!)
+    expect(
+      screen.getByLabelText('More information about The Matrix')
+    ).toBeInTheDocument()
+  })
 
-    await act(async () => {
-      vi.advanceTimersByTime(300)
-    })
+  it('opens modal when clicking more info button', () => {
+    renderWithRouter(<LibraryGrid items={mockMovies} />)
 
-    const showMoreButton = firstGridItem?.querySelector('button')
-    fireEvent.click(showMoreButton!)
+    const infoButton = screen.getByLabelText(
+      'More information about Jurassic Park'
+    )
 
-    expect(screen.getByText('1993')).toBeInTheDocument()
+    fireEvent.click(infoButton)
+
+    expect(
+      screen.getByText(/pragmatic paleontologist/)
+    ).toBeInTheDocument()
+  })
+
+  it('closes modal when clicking close button', () => {
+    renderWithRouter(<LibraryGrid items={mockMovies} />)
+
+    const infoButton = screen.getByLabelText(
+      'More information about Jurassic Park'
+    )
+
+    fireEvent.click(infoButton)
+
+    expect(
+      screen.getByText(/pragmatic paleontologist/)
+    ).toBeInTheDocument()
 
     const modalButtons = document.querySelectorAll('.fixed button')
     const closeButton = modalButtons[0]
-    fireEvent.click(closeButton!)
 
-    expect(screen.queryByText('1993')).not.toBeInTheDocument()
+    fireEvent.click(closeButton as Element)
+
+    expect(
+      screen.queryByText(/pragmatic paleontologist/)
+    ).not.toBeInTheDocument()
   })
 
-  it('closes modal when clicking backdrop', async () => {
-    vi.useFakeTimers()
+  it('closes modal when clicking backdrop', () => {
     renderWithRouter(<LibraryGrid items={mockMovies} />)
 
-    const gridItems = document.querySelectorAll('.relative')
-    const firstGridItem = gridItems[0]
+    const infoButton = screen.getByLabelText(
+      'More information about Jurassic Park'
+    )
 
-    fireEvent.mouseEnter(firstGridItem!)
+    fireEvent.click(infoButton)
 
-    await act(async () => {
-      vi.advanceTimersByTime(300)
-    })
-
-    const showMoreButton = firstGridItem?.querySelector('button')
-    fireEvent.click(showMoreButton!)
-
-    expect(screen.getByText('1993')).toBeInTheDocument()
+    expect(
+      screen.getByText(/pragmatic paleontologist/)
+    ).toBeInTheDocument()
 
     const backdrop = document.querySelector('.fixed.inset-0')
-    fireEvent.click(backdrop!)
 
-    expect(screen.queryByText('1993')).not.toBeInTheDocument()
+    fireEvent.click(backdrop as Element)
+
+    expect(
+      screen.queryByText(/pragmatic paleontologist/)
+    ).not.toBeInTheDocument()
   })
 
-  it('renders YouTube trailer when trailerUrl exists', async () => {
-    vi.useFakeTimers()
+  it('renders YouTube trailer when trailerUrl exists', () => {
     renderWithRouter(<LibraryGrid items={mockMovies} />)
 
-    const gridItems = document.querySelectorAll('.relative')
-    const firstGridItem = gridItems[0]
+    const infoButton = screen.getByLabelText(
+      'More information about Jurassic Park'
+    )
 
-    fireEvent.mouseEnter(firstGridItem!)
-
-    await act(async () => {
-      vi.advanceTimersByTime(300)
-    })
-
-    const showMoreButton = firstGridItem?.querySelector('button')
-    fireEvent.click(showMoreButton!)
+    fireEvent.click(infoButton)
 
     const iframe = document.querySelector('iframe')
+
     expect(iframe).toBeInTheDocument()
     expect(iframe).toHaveAttribute(
       'src',
@@ -209,23 +169,16 @@ describe('LibraryGrid', () => {
     )
   })
 
-  it('does not render trailer iframe when trailerUrl is null', async () => {
-    vi.useFakeTimers()
+  it('shows backdrop image instead of trailer when trailerUrl is null', () => {
     renderWithRouter(<LibraryGrid items={[mockMovies[1]!]} />)
 
-    const gridItems = document.querySelectorAll('.relative')
-    const firstGridItem = gridItems[0]
+    const infoButton = screen.getByLabelText(
+      'More information about The Matrix'
+    )
 
-    fireEvent.mouseEnter(firstGridItem!)
+    fireEvent.click(infoButton)
 
-    await act(async () => {
-      vi.advanceTimersByTime(300)
-    })
-
-    const showMoreButton = firstGridItem?.querySelector('button')
-    fireEvent.click(showMoreButton!)
-
-    expect(screen.getByText('1999')).toBeInTheDocument()
+    expect(screen.getAllByText('1999').length).toBeGreaterThan(0)
     expect(document.querySelector('iframe')).not.toBeInTheDocument()
   })
 })

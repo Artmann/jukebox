@@ -1,5 +1,5 @@
-import { ChevronDown, PlayIcon, X } from 'lucide-react'
-import { memo, useRef, useState, type ReactElement } from 'react'
+import { Info, PlayIcon, X } from 'lucide-react'
+import { memo, useState, type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { Movie } from '../hooks/useMovies'
@@ -13,75 +13,21 @@ export const LibraryGrid = memo(function LibraryGrid({
 }): ReactElement {
   const [showMoreItemId, setShowMoreItemId] = useState<number | null>(null)
 
-  const showMoreItem = items.find((item) => item.id === showMoreItemId) || null
+  const showMoreItem = items.find((item) => item.id === showMoreItemId) ?? null
 
   return (
     <>
       {showMoreItem && (
-        <div
-          className="fixed inset-0 bg-black/70 z-40 p-3"
-          onClick={() => setShowMoreItemId(null)}
-        >
-          <div
-            className="rounded-md shadow-md bg-slate-900 text-white overflow-hidden relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="absolute top-3 right-3 z-20 p-2 rounded-full bg-black/90 hover:bg-black/80 cursor-pointer"
-              onClick={() => setShowMoreItemId(null)}
-            >
-              <X className="size-5" />
-            </button>
-
-            <div className="relative aspect-video overflow-hidden">
-              <img
-                src={buildBackdropUrl(showMoreItem.backdropPath) || undefined}
-                className="w-full h-full object-cover"
-              />
-
-              {showMoreItem.trailerUrl && (
-                <iframe
-                  src={getYouTubeEmbedUrl(showMoreItem.trailerUrl) || undefined}
-                  className="absolute inset-0 w-full h-full"
-                  allow="autoplay; encrypted-media"
-                  allowFullScreen
-                />
-              )}
-
-              <div className="absolute inset-0 pointer-events-none bg-linear-to-t from-black/80 via-transparent to-transparent" />
-
-              <div className="absolute bottom-0 left-0 right-0 p-6 z-10 flex flex-col gap-3">
-                <div className="font-medium text-2xl">{showMoreItem.title}</div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    asChild
-                    className="bg-white text-black hover:bg-white/90"
-                  >
-                    <Link
-                      to={`/watch/${showMoreItem.id}`}
-                      className="flex items-center gap-2"
-                    >
-                      <PlayIcon className="size-4" />
-                      Play
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 bg-zinc-800">
-              <div className="text-gray-300 text-sm mb-2">
-                <div>{showMoreItem.year}</div>
-              </div>
-
-              <div className="">{showMoreItem.overview}</div>
-            </div>
-          </div>
-        </div>
+        <DetailModal
+          item={showMoreItem}
+          onClose={() => setShowMoreItemId(null)}
+        />
       )}
 
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1 md:gap-2 p-3 md:p-6">
+      <ul
+        className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1 md:gap-2 p-3 md:p-6"
+        role="list"
+      >
         {items.map((item) => (
           <GridItem
             key={item.id}
@@ -89,10 +35,82 @@ export const LibraryGrid = memo(function LibraryGrid({
             onShowMoreInformation={() => setShowMoreItemId(item.id)}
           />
         ))}
-      </div>
+      </ul>
     </>
   )
 })
+
+function DetailModal({
+  item,
+  onClose
+}: {
+  item: Movie
+  onClose: () => void
+}): ReactElement {
+  return (
+    <div
+      className="fixed inset-0 bg-black/70 z-40 p-3"
+      onClick={onClose}
+    >
+      <div
+        className="rounded-md shadow-md bg-card text-foreground overflow-hidden relative"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          className="absolute top-3 right-3 z-20 p-2 rounded-full bg-black/90 hover:bg-black/80 cursor-pointer"
+          onClick={onClose}
+        >
+          <X className="size-5 text-white" />
+        </button>
+
+        <div className="relative aspect-video overflow-hidden">
+          {item.trailerUrl ? (
+            <iframe
+              src={getYouTubeEmbedUrl(item.trailerUrl) ?? undefined}
+              className="w-full h-full"
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+            />
+          ) : (
+            <img
+              src={buildBackdropUrl(item.backdropPath) ?? undefined}
+              className="w-full h-full object-cover"
+            />
+          )}
+
+          <div className="absolute inset-0 pointer-events-none bg-linear-to-t from-black/80 via-transparent to-transparent" />
+
+          <div className="absolute bottom-0 left-0 right-0 p-6 z-10 flex flex-col gap-3">
+            <div className="font-medium text-2xl text-white">{item.title}</div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                asChild
+                className="bg-white text-black hover:bg-white/90"
+              >
+                <Link
+                  to={`/watch/${item.id}`}
+                  className="flex items-center gap-2"
+                >
+                  <PlayIcon className="size-4" />
+                  Play
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 bg-muted">
+          <div className="text-muted-foreground text-sm mb-2">
+            <div>{item.year}</div>
+          </div>
+
+          <div>{item.overview}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function GridItem({
   item,
@@ -101,100 +119,56 @@ function GridItem({
   item: Movie
   onShowMoreInformation: () => void
 }): ReactElement {
-  const [isBeingHovered, setIsBeingHovered] = useState(false)
-  const hoverTimeoutRef = useRef<number | null>(null)
-
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => {
-        hoverTimeoutRef.current = window.setTimeout(() => {
-          setIsBeingHovered(true)
-        }, 250)
-      }}
-      onMouseLeave={() => {
-        if (hoverTimeoutRef.current) {
-          clearTimeout(hoverTimeoutRef.current)
-          hoverTimeoutRef.current = null
-        }
-        setIsBeingHovered(false)
-      }}
-    >
+    <li className="group relative">
       <Link
         aria-label={item.title}
-        role="link"
-        tabIndex={0}
         to={`/watch/${item.id}`}
       >
-        <div className="w-full overflow-hidden rounded-sm">
+        <div className="w-full overflow-hidden rounded-sm transition-transform duration-300 ease-out hover-hover:group-hover:scale-105">
           <PosterImage
             path={item.posterPath}
             alt={item.title}
             title={item.title}
             className="cursor-pointer w-full"
           />
+
+          <div className="absolute inset-0 rounded-sm bg-linear-to-t from-black/70 via-transparent to-transparent opacity-0 transition-opacity duration-300 hover-hover:group-hover:opacity-100" />
+
+          <div className="absolute bottom-8 left-0 right-0 px-2 flex items-center gap-1 opacity-0 transition-opacity duration-300 hover-hover:group-hover:opacity-100">
+            <PlayIcon className="size-3 text-white shrink-0" />
+            <span className="text-white text-xs font-medium truncate">
+              {item.title}
+            </span>
+          </div>
         </div>
       </Link>
 
-      <div
-        className={`
-          absolute top-1/2 left-1/2
-          -translate-x-1/2 -translate-y-1/2
-          z-20
-          bg-background
-          shadow-md rounded-sm
-          transition-all duration-200 ease-in-out
-        `}
-        style={{
-          opacity: isBeingHovered ? 1 : 0,
-          pointerEvents: isBeingHovered ? 'auto' : 'none',
-          width: isBeingHovered ? '110%' : '0%'
-        }}
-      >
+      <div className="mt-1 flex items-center gap-1">
         <Link
-          aria-label={item.title}
-          role="link"
-          tabIndex={0}
           to={`/watch/${item.id}`}
+          className="flex-1 min-w-0"
         >
-          <PosterImage
-            path={item.posterPath}
-            alt={item.title}
-            title={item.title}
-            className="cursor-pointer w-full"
-          />
+          <p className="text-sm text-muted-foreground truncate">{item.title}</p>
+
+          {item.year && (
+            <p className="text-xs text-muted-foreground/70">{item.year}</p>
+          )}
         </Link>
-        <div>
-          <div className="flex justify-between items-center px-2 py-2">
-            <div>
-              <Link
-                aria-label="Play"
-                className="block rounded-full p-2 bg-black hover:bg-gray-900 text-white"
-                role="link"
-                to={`/watch/${item.id}`}
-              >
-                <PlayIcon className="size-3" />
-              </Link>
-            </div>
-            <div>
-              <button
-                className="block rounded-full border-2 border-border p-2 cursor-pointer"
-                onClick={onShowMoreInformation}
-              >
-                <ChevronDown className="size-3" />
-              </button>
-            </div>
-          </div>
-          {/* <div>Runtime</div> */}
-          <div className="text-sm px-3 py-2">{item.title}</div>
-          <div className="h-4" />
-        </div>
+
+        <button
+          aria-label={`More information about ${item.title}`}
+          className="shrink-0 p-1 rounded-full text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          onClick={onShowMoreInformation}
+        >
+          <Info className="size-4" />
+        </button>
       </div>
-    </div>
+    </li>
   )
 }
 
-const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p'
+const tmdbImageBaseUrl = 'https://image.tmdb.org/t/p'
 
 type BackdropSize = 'w300' | 'w780' | 'w1280' | 'original'
 
@@ -203,7 +177,8 @@ function buildBackdropUrl(
   size: BackdropSize = 'w1280'
 ): string | null {
   if (!backdropPath) return null
-  return `${TMDB_IMAGE_BASE_URL}/${size}${backdropPath}`
+
+  return `${tmdbImageBaseUrl}/${size}${backdropPath}`
 }
 
 function getYouTubeEmbedUrl(url: string | null): string | null {
@@ -213,7 +188,7 @@ function getYouTubeEmbedUrl(url: string | null): string | null {
 
   const match = url.match(/[?&]v=([^&]+)/)
 
-  if (!match || !match[1]) {
+  if (!match?.[1]) {
     return null
   }
 
