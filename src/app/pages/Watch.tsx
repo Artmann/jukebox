@@ -154,6 +154,20 @@ export function WatchPage() {
     }
   }, [player])
 
+  // Skip backward/forward with arrow keys.
+  useHotkeys('left', () => {
+    if (!player) return
+    const currentTime = player.currentTime() ?? 0
+    player.currentTime(Math.max(0, currentTime - 10))
+  }, [player])
+
+  useHotkeys('right', () => {
+    if (!player) return
+    const currentTime = player.currentTime() ?? 0
+    const duration = player.duration() ?? 0
+    player.currentTime(Math.min(duration, currentTime + 10))
+  }, [player])
+
   // Movie queries (only when !isEpisode)
   const {
     data: movie,
