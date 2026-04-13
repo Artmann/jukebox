@@ -1,9 +1,58 @@
-import { eq } from 'drizzle-orm'
+import { eq, gt, and, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
 
 const episodeProgressRoutes = new Hono()
+
+// GET /show/:showId - Get progress for all episodes of a show
+episodeProgressRoutes.get('/show/:showId', async (context) => {
+  const showId = parseInt(context.req.param('showId'), 10)
+
+  if (isNaN(showId)) {
+    return context.json({ error: 'Invalid show ID' }, 400)
+  }
+
+  const episodes = await db
+    .select({ id: schema.episodes.id })
+    .from(schema.episodes)
+    .where(eq(schema.episodes.showId, showId))
+
+  const episodeIds = episodes.map((episode) => episode.id)
+
+  if (episodeIds.length === 0) {
+    return context.json({})
+  }
+
+  const progressRows = await db
+    .select({
+      episodeId: schema.watchProgress.episodeId,
+      currentTime: schema.watchProgress.currentTime,
+      duration: schema.watchProgress.duration,
+      updatedAt: schema.watchProgress.updatedAt
+    })
+    .from(schema.watchProgress)
+    .where(
+      and(
+        inArray(schema.watchProgress.episodeId, episodeIds),
+        gt(schema.watchProgress.currentTime, 0)
+      )
+    )
+
+  const progressMap: Record<number, { currentTime: number; duration: number | null; updatedAt: Date }> = {}
+
+  for (const row of progressRows) {
+    if (row.episodeId !== null) {
+      progressMap[row.episodeId] = {
+        currentTime: row.currentTime,
+        duration: row.duration,
+        updatedAt: row.updatedAt
+      }
+    }
+  }
+
+  return context.json(progressMap)
+})
 
 // GET /:episodeId
 episodeProgressRoutes.get('/:episodeId', async (context) => {
