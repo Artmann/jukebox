@@ -57,6 +57,20 @@ export function PageHeader(): ReactElement {
           >
             Movies
           </NavLink>
+
+          <NavLink
+            className={({ isActive }) =>
+              cn(
+                'rounded-md px-3 py-1.5 transition-colors',
+                isActive
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )
+            }
+            to="/shows"
+          >
+            TV Shows
+          </NavLink>
         </div>
       </nav>
     </header>

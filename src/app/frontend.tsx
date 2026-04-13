@@ -11,9 +11,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 
 import { HomePage } from './pages/Home'
+import { MoviesPage } from './pages/Movies'
+import { ShowDetailPage } from './pages/ShowDetail'
+import { ShowsPage } from './pages/Shows'
 import { WatchPage } from './pages/Watch'
 import './index.css'
-import { MoviesPage } from './pages/Movies'
 
 const queryClient = new QueryClient()
 
@@ -34,7 +36,19 @@ const app = (
             element={<MoviesPage />}
           />
           <Route
+            path="/shows"
+            element={<ShowsPage />}
+          />
+          <Route
+            path="/shows/:id"
+            element={<ShowDetailPage />}
+          />
+          <Route
             path="/watch/:id"
+            element={<WatchPage />}
+          />
+          <Route
+            path="/watch/episode/:id"
             element={<WatchPage />}
           />
         </Routes>
