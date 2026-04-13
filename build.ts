@@ -148,7 +148,10 @@ for (const entry of entrypoints) {
 
   if (links) {
     preprocessed.set(entry, original)
-    const stripped = original.replace(staticLinkPattern, '<!-- static-asset -->')
+    const stripped = original.replace(
+      staticLinkPattern,
+      '<!-- static-asset -->'
+    )
     await writeFile(entry, stripped)
   }
 }
@@ -176,9 +179,12 @@ const publicDir = path.join(process.cwd(), 'public')
 
 for (const output of result.outputs) {
   if (output.path.endsWith('.html')) {
-    const entry = entrypoints.find((e) =>
-      path.basename(e) === path.basename(output.path).replace(/-.+\.html/, '.html')
-    ) ?? entrypoints[0]
+    const entry =
+      entrypoints.find(
+        (e) =>
+          path.basename(e) ===
+          path.basename(output.path).replace(/-.+\.html/, '.html')
+      ) ?? entrypoints[0]
 
     if (entry && preprocessed.has(entry)) {
       const originalHtml = preprocessed.get(entry) ?? ''
