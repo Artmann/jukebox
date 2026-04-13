@@ -269,15 +269,15 @@ export function WatchPage() {
       className={`bg-black w-full h-screen flex flex-col ${controlsVisible ? '' : 'cursor-none'}`}
       onMouseMove={resetHideTimer}
     >
-      <div className="flex-1 flex overflow-hidden">
-        <main className="flex-1 flex items-center justify-center">
+      <div className="flex-1 relative overflow-hidden">
+        <main className="h-full flex items-center justify-center">
           <div className="w-full max-w-7xl">
             <VideoPlayer src={streamUrl} onReady={setPlayer} />
           </div>
         </main>
 
         {isEpisode && episodePanelOpen && show && episode && (
-          <div className="w-80 flex-shrink-0">
+          <div className="absolute top-0 right-0 bottom-0 w-96 z-20">
             <EpisodePanel
               currentEpisodeId={episode.id}
               onClose={() => setEpisodePanelOpen(false)}

@@ -51,7 +51,7 @@ export function EpisodePanel({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto slim-scrollbar">
         {activeSeason?.episodes.map((episode) => {
           const isCurrent = episode.id === currentEpisodeId
 
