@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
@@ -28,10 +28,67 @@ async function fetchProgress(movieId: number): Promise<WatchProgress> {
   return response.json()
 }
 
+const hideDelayMs = 3000
+
 export function WatchPage() {
   const { id } = useParams<{ id: string }>()
+  const [controlsVisible, setControlsVisible] = useState(true)
+  const [isPlaying, setIsPlaying] = useState(false)
   const [player, setPlayer] = useState<Player | null>(null)
   const hasRestoredProgress = useRef(false)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const resetHideTimer = useCallback(() => {
+    setControlsVisible(true)
+
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current)
+    }
+
+    if (isPlaying) {
+      hideTimerRef.current = setTimeout(() => {
+        setControlsVisible(false)
+      }, hideDelayMs)
+    }
+  }, [isPlaying])
+
+  // Track play/pause state for auto-hide logic.
+  useEffect(() => {
+    if (!player) {
+      return
+    }
+
+    const onPlay = () => setIsPlaying(true)
+    const onPause = () => setIsPlaying(false)
+
+    player.on('play', onPlay)
+    player.on('pause', onPause)
+    setIsPlaying(!player.paused())
+
+    return () => {
+      player.off('play', onPlay)
+      player.off('pause', onPause)
+    }
+  }, [player])
+
+  // When paused, always show controls. When playing, start the hide timer.
+  useEffect(() => {
+    if (!isPlaying) {
+      setControlsVisible(true)
+
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current)
+      }
+    } else {
+      resetHideTimer()
+    }
+
+    return () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current)
+      }
+    }
+  }, [isPlaying, resetHideTimer])
 
   const {
     data: movie,
@@ -85,7 +142,10 @@ export function WatchPage() {
   }
 
   return (
-    <div className="bg-black w-full h-screen flex flex-col">
+    <div
+      className={`bg-black w-full h-screen flex flex-col ${controlsVisible ? '' : 'cursor-none'}`}
+      onMouseMove={resetHideTimer}
+    >
       <main className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-7xl">
           <VideoPlayer
@@ -95,11 +155,15 @@ export function WatchPage() {
         </div>
       </main>
 
-      <VideoControls
-        title={movie.title}
-        player={player}
-        movieId={movie.id}
-      />
+      <div
+        className={`transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      >
+        <VideoControls
+          title={movie.title}
+          player={player}
+          movieId={movie.id}
+        />
+      </div>
     </div>
   )
 }

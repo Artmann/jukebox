@@ -22,8 +22,8 @@ interface VideoControlsProps {
   movieId: number
 }
 
-const SKIP_SECONDS = 10
-const SAVE_INTERVAL_MS = 10000
+const skipSeconds = 10
+const saveIntervalMs = 10000
 
 function formatTime(seconds: number): string {
   const hrs = Math.floor(seconds / 3600)
@@ -104,7 +104,7 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
       })
     }
 
-    const interval = setInterval(saveProgress, SAVE_INTERVAL_MS)
+    const interval = setInterval(saveProgress, saveIntervalMs)
 
     return () => {
       clearInterval(interval)
@@ -124,14 +124,14 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
   const handleSkipBackward = () => {
     if (!player) return
     const currentTime = player.currentTime() ?? 0
-    player.currentTime(Math.max(0, currentTime - SKIP_SECONDS))
+    player.currentTime(Math.max(0, currentTime - skipSeconds))
   }
 
   const handleSkipForward = () => {
     if (!player) return
     const currentTime = player.currentTime() ?? 0
     const duration = player.duration() ?? 0
-    player.currentTime(Math.min(duration, currentTime + SKIP_SECONDS))
+    player.currentTime(Math.min(duration, currentTime + skipSeconds))
   }
 
   const handleFullscreen = () => {
@@ -165,7 +165,10 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
       </div>
       <div className="flex justify-between items-center py-4 relative z-10">
         <div className="flex gap-2 items-center">
-          <IconButton onClick={handlePlayPause}>
+          <IconButton
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            onClick={handlePlayPause}
+          >
             {isPlaying ? (
               <PauseIcon className="size-7 hover:scale-125 text-white" />
             ) : (
@@ -173,11 +176,17 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
             )}
           </IconButton>
 
-          <IconButton onClick={handleSkipBackward}>
+          <IconButton
+            aria-label="Skip backward 10 seconds"
+            onClick={handleSkipBackward}
+          >
             <RotateCcw className="size-7 hover:scale-125 text-white" />
           </IconButton>
 
-          <IconButton onClick={handleSkipForward}>
+          <IconButton
+            aria-label="Skip forward 10 seconds"
+            onClick={handleSkipForward}
+          >
             <RotateCw className="size-7 hover:scale-125 text-white" />
           </IconButton>
 
@@ -187,7 +196,10 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
         <div className="text-white text-sm truncate">{title}</div>
 
         <div>
-          <IconButton onClick={handleFullscreen}>
+          <IconButton
+            aria-label="Toggle fullscreen"
+            onClick={handleFullscreen}
+          >
             <Maximize className="size-7 hover:scale-125 text-white" />
           </IconButton>
         </div>
@@ -197,13 +209,19 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
 }
 
 interface IconButtonProps {
+  'aria-label': string
   children: ReactNode
   onClick?: () => void
 }
 
-function IconButton({ children, onClick }: IconButtonProps): ReactElement {
+function IconButton({
+  'aria-label': ariaLabel,
+  children,
+  onClick
+}: IconButtonProps): ReactElement {
   return (
     <button
+      aria-label={ariaLabel}
       className="p-2 flex justify-center items-center cursor-pointer"
       onClick={onClick}
     >

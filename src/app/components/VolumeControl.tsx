@@ -12,11 +12,11 @@ interface VolumeControlProps {
   player: Player | null
 }
 
-const STORAGE_KEY = 'jukebox-volume'
+const storageKey = 'jukebox-volume'
 
 function getStoredVolume(): { volume: number; muted: boolean } {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = localStorage.getItem(storageKey)
     if (stored) {
       return JSON.parse(stored)
     }
@@ -28,7 +28,7 @@ function getStoredVolume(): { volume: number; muted: boolean } {
 
 function storeVolume(volume: number, muted: boolean): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ volume, muted }))
+    localStorage.setItem(storageKey, JSON.stringify({ volume, muted }))
   } catch {
     // Ignore errors
   }
@@ -107,6 +107,7 @@ export function VolumeControl({ player }: VolumeControlProps): ReactElement {
   return (
     <div className="relative group">
       <button
+        aria-label={muted ? 'Unmute' : 'Mute'}
         className="p-2 flex justify-center items-center cursor-pointer"
         onClick={toggleMute}
       >
@@ -114,10 +115,10 @@ export function VolumeControl({ player }: VolumeControlProps): ReactElement {
       </button>
 
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 hidden group-hover:block z-50 pb-2">
-        <div className="bg-black/90 rounded-lg p-3 shadow-lg border border-gray-700">
+        <div className="bg-black/90 rounded-lg p-3 shadow-lg border border-white/20">
           <div
             ref={sliderRef}
-            className="relative w-2 h-24 bg-gray-700 rounded cursor-pointer"
+            className="relative w-2 h-24 bg-white/20 rounded cursor-pointer"
             onClick={handleSliderClick}
           >
             <div
