@@ -29,18 +29,18 @@ export function VideoTrackBar({
       className="relative w-full cursor-pointer"
       onClick={handleClick}
     >
-      <div className="w-full h-1 rounded overflow-hidden bg-gray-700/80">
+      <div className="w-full h-1 rounded overflow-hidden bg-white/20">
         <div
-          className="bg-gray-200/60 absolute inset-y-0 left-0 z-10"
+          className="bg-white/30 absolute inset-y-0 left-0 z-10"
           style={{ width: bufferedWidth }}
         />
         <div
-          className="bg-red-700/80 absolute inset-y-0 left-0 z-20"
+          className="bg-[var(--color-accent,#e50914)] opacity-80 absolute inset-y-0 left-0 z-20"
           style={{ width: progressWidth }}
         />
 
         <div
-          className="bg-red-700 rounded-full size-3 absolute top-1/2 -translate-y-1/2 z-30"
+          className="bg-[var(--color-accent,#e50914)] rounded-full size-3 absolute top-1/2 -translate-y-1/2 z-30"
           style={{ left: progressWidth }}
         />
       </div>
