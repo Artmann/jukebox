@@ -46,7 +46,7 @@ export function EpisodePanel({
             }`}
             onClick={() => onSelectSeason(season.seasonNumber)}
           >
-            S{season.seasonNumber}
+            Season {season.seasonNumber}
           </button>
         ))}
       </div>
