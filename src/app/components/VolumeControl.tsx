@@ -18,7 +18,7 @@ function getStoredVolume(): { volume: number; muted: boolean } {
   try {
     const stored = localStorage.getItem(storageKey)
     if (stored) {
-      return JSON.parse(stored)
+      return JSON.parse(stored) as { volume: number; muted: boolean }
     }
   } catch {
     // Ignore errors

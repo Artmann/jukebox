@@ -105,9 +105,7 @@ describe('LibraryGrid', () => {
 
     fireEvent.click(infoButton)
 
-    expect(
-      screen.getByText(/pragmatic paleontologist/)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/pragmatic paleontologist/)).toBeInTheDocument()
   })
 
   it('closes modal when clicking close button', () => {
@@ -119,9 +117,7 @@ describe('LibraryGrid', () => {
 
     fireEvent.click(infoButton)
 
-    expect(
-      screen.getByText(/pragmatic paleontologist/)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/pragmatic paleontologist/)).toBeInTheDocument()
 
     const modalButtons = document.querySelectorAll('.fixed button')
     const closeButton = modalButtons[0]
@@ -142,9 +138,7 @@ describe('LibraryGrid', () => {
 
     fireEvent.click(infoButton)
 
-    expect(
-      screen.getByText(/pragmatic paleontologist/)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/pragmatic paleontologist/)).toBeInTheDocument()
 
     const backdrop = document.querySelector('.fixed.inset-0')
 
@@ -174,7 +168,10 @@ describe('LibraryGrid', () => {
   })
 
   it('shows backdrop image instead of trailer when trailerUrl is null', () => {
-    renderWithRouter(<LibraryGrid items={[mockMovies[1]!]} />)
+    const movie = mockMovies[1]
+    if (!movie) throw new Error('Missing test data')
+
+    renderWithRouter(<LibraryGrid items={[movie]} />)
 
     const infoButton = screen.getByLabelText(
       'More information about The Matrix'

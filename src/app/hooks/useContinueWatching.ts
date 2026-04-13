@@ -15,7 +15,7 @@ export function useContinueWatching() {
     queryFn: async (): Promise<ContinueWatchingItem[]> => {
       const response = await fetch('/api/progress/continue-watching')
 
-      return response.json()
+      return (await response.json()) as ContinueWatchingItem[]
     }
   })
 }

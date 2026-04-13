@@ -4,7 +4,7 @@ import { scanLibrary } from '../services/scanner'
 
 config()
 
-const libraryPath = process.argv[2] || 'D:\\Downloads\\Movies'
+const libraryPath = process.argv[2] ?? 'D:\\Downloads\\Movies'
 
 async function main() {
   console.log('Movie Library Scanner')
@@ -31,4 +31,4 @@ async function main() {
   }
 }
 
-main()
+void main()

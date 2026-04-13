@@ -8,14 +8,18 @@ interface ContinueWatchingRowProps {
   items: ContinueWatchingItem[]
 }
 
-export function ContinueWatchingRow({ items }: ContinueWatchingRowProps): ReactElement | null {
+export function ContinueWatchingRow({
+  items
+}: ContinueWatchingRowProps): ReactElement | null {
   if (items.length === 0) {
     return null
   }
 
   return (
     <section className="px-6 py-4">
-      <h2 className="text-lg font-semibold text-foreground mb-3">Continue Watching</h2>
+      <h2 className="text-lg font-semibold text-foreground mb-3">
+        Continue Watching
+      </h2>
 
       <div className="flex gap-2 overflow-x-auto scroll-smooth pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {items.map((item) => {

@@ -12,10 +12,13 @@ progressRoutes.get('/continue-watching', async (context) => {
       currentTime: schema.watchProgress.currentTime,
       duration: schema.watchProgress.duration,
       movie: schema.movies,
-      updatedAt: schema.watchProgress.updatedAt,
+      updatedAt: schema.watchProgress.updatedAt
     })
     .from(schema.watchProgress)
-    .innerJoin(schema.movies, eq(schema.watchProgress.movieId, schema.movies.id))
+    .innerJoin(
+      schema.movies,
+      eq(schema.watchProgress.movieId, schema.movies.id)
+    )
     .where(
       and(
         gt(schema.watchProgress.currentTime, 0),

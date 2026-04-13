@@ -24,7 +24,7 @@ async function fetchMovies(): Promise<Movie[]> {
   if (!response.ok) {
     throw new Error('Failed to fetch movies')
   }
-  return response.json()
+  return (await response.json()) as Movie[]
 }
 
 export function useMovies() {
