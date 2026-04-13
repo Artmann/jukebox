@@ -1,12 +1,31 @@
 import { Loader2, PlayIcon } from 'lucide-react'
-import { useState, useEffect, type ReactElement } from 'react'
+import { useMemo, useState, useEffect, type ReactElement } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '../components/PageHeader'
 import { PosterImage } from '../components/PosterImage'
 import { useShow } from '../hooks/useShow'
 import type { Episode } from '../lib/media'
+
+interface EpisodeProgress {
+  currentTime: number
+  duration: number | null
+  updatedAt: string
+}
+
+type EpisodeProgressMap = Record<number, EpisodeProgress>
+
+async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
+  const response = await fetch(`/api/progress/episode/show/${showId}`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch show progress')
+  }
+
+  return (await response.json()) as EpisodeProgressMap
+}
 
 function formatRuntime(minutes: number | null): string {
   if (minutes === null) {
@@ -23,24 +42,89 @@ function formatRuntime(minutes: number | null): string {
   return remaining > 0 ? `${hours}h ${remaining}m` : `${hours}h`
 }
 
+function progressPercent(progress: EpisodeProgress | undefined): number {
+  if (!progress || !progress.duration) {
+    return 0
+  }
+
+  return Math.min((progress.currentTime / progress.duration) * 100, 100)
+}
+
+function isWatched(progress: EpisodeProgress | undefined): boolean {
+  if (!progress || !progress.duration) {
+    return false
+  }
+
+  return progress.currentTime >= progress.duration * 0.9
+}
+
 export function ShowDetailPage(): ReactElement {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: show, isLoading, error } = useShow(id)
 
-  const [selectedSeason, setSelectedSeason] = useState(1)
+  const showId = show?.id
+
+  const { data: progressMap } = useQuery({
+    queryKey: ['show-progress', showId],
+    queryFn: () => fetchShowProgress(showId ?? 0),
+    enabled: !!showId
+  })
+
+  // Find the season the user is currently watching (most recently updated episode).
+  const currentWatchingSeason = useMemo(() => {
+    if (!progressMap || !show) {
+      return null
+    }
+
+    let latestEpisodeId: number | null = null
+    let latestTime = ''
+
+    for (const [episodeIdStr, progress] of Object.entries(progressMap)) {
+      const episodeId = parseInt(episodeIdStr, 10)
+
+      if (progress.duration && progress.currentTime < progress.duration * 0.9) {
+        if (!latestTime || progress.updatedAt > latestTime) {
+          latestTime = progress.updatedAt
+          latestEpisodeId = episodeId
+        }
+      }
+    }
+
+    if (latestEpisodeId === null) {
+      return null
+    }
+
+    for (const season of show.seasons) {
+      for (const episode of season.episodes) {
+        if (episode.id === latestEpisodeId) {
+          return season.seasonNumber
+        }
+      }
+    }
+
+    return null
+  }, [progressMap, show])
+
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null)
 
   useEffect(() => {
+    if (selectedSeason !== null) {
+      return
+    }
+
     if (!show) {
       return
     }
 
-    const seasonNumbers = show.seasons.map((season) => season.seasonNumber)
-
-    if (!seasonNumbers.includes(selectedSeason)) {
-      setSelectedSeason(seasonNumbers[0] ?? 1)
+    if (currentWatchingSeason !== null) {
+      setSelectedSeason(currentWatchingSeason)
+      return
     }
-  }, [show, selectedSeason])
+
+    const firstSeason = show.seasons[0]?.seasonNumber ?? 1
+    setSelectedSeason(firstSeason)
+  }, [show, currentWatchingSeason, selectedSeason])
 
   function handleEpisodeClick(episode: Episode) {
     void navigate(`/watch/episode/${episode.id}`)
@@ -82,7 +166,7 @@ export function ShowDetailPage(): ReactElement {
     <>
       <PageHeader />
 
-      <div className="px-4 sm:px-9 pt-6 pb-12">
+      <div className="px-6 pt-6 pb-12">
         <div className="flex gap-6 mb-8">
           <div className="hidden sm:block flex-shrink-0 w-40">
             <PosterImage
@@ -141,6 +225,10 @@ export function ShowDetailPage(): ReactElement {
           <div className="flex flex-col gap-1">
             {currentSeason.episodes.map((episode) => {
               const runtime = formatRuntime(episode.runtime)
+              const progress = progressMap?.[episode.id]
+              const percent = progressPercent(progress)
+              const watched = isWatched(progress)
+              const inProgress = percent > 0 && !watched
 
               return (
                 <div
@@ -154,7 +242,7 @@ export function ShowDetailPage(): ReactElement {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-foreground">
+                      <span className={`font-medium ${watched ? 'text-muted-foreground' : 'text-foreground'}`}>
                         {episode.title}
                       </span>
 
@@ -163,12 +251,27 @@ export function ShowDetailPage(): ReactElement {
                           {runtime}
                         </span>
                       )}
+
+                      {watched && (
+                        <span className="text-xs text-muted-foreground/60">
+                          Watched
+                        </span>
+                      )}
                     </div>
 
                     {episode.overview && (
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                         {episode.overview}
                       </p>
+                    )}
+
+                    {inProgress && (
+                      <div className="mt-2 h-1 w-full max-w-xs rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-red-600 transition-all"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
                     )}
                   </div>
 
