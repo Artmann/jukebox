@@ -14,6 +14,7 @@ import {
   type ReactNode
 } from 'react'
 import type Player from 'video.js/dist/types/player'
+import { formatTime } from '../lib/format'
 import { VideoTrackBar } from './VideoTrackBar'
 import { VolumeControl } from './VolumeControl'
 
@@ -28,16 +29,6 @@ interface VideoControlsProps {
 
 const skipSeconds = 10
 const saveIntervalMs = 10000
-
-function formatTime(seconds: number): string {
-  const hrs = Math.floor(seconds / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  const secs = Math.floor(seconds % 60)
-
-  const parts = hrs > 0 ? [hrs, mins, secs] : [mins, secs]
-
-  return parts.map((v) => v.toString().padStart(2, '0')).join(':')
-}
 
 export function VideoControls({
   title,
