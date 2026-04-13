@@ -62,4 +62,48 @@ describe('parseEpisodeFilename', () => {
       title: 'Episode Title'
     })
   })
+
+  it('parses double-digit season and episode numbers', () => {
+    expect(
+      parseEpisodeFilename('Doctor.Who.S13E07.The.Power.Of.The.Doctor.mp4')
+    ).toEqual({
+      seasonNumber: 13,
+      episodeNumber: 7,
+      title: 'The Power Of The Doctor'
+    })
+  })
+
+  it('handles various video extensions', () => {
+    expect(parseEpisodeFilename('Show.S01E01.Pilot.avi')).toEqual({
+      seasonNumber: 1,
+      episodeNumber: 1,
+      title: 'Pilot'
+    })
+
+    expect(parseEpisodeFilename('Show.S01E01.Pilot.mov')).toEqual({
+      seasonNumber: 1,
+      episodeNumber: 1,
+      title: 'Pilot'
+    })
+
+    expect(parseEpisodeFilename('Show.S01E01.Pilot.webm')).toEqual({
+      seasonNumber: 1,
+      episodeNumber: 1,
+      title: 'Pilot'
+    })
+  })
+
+  it('returns null for files without SxxExx pattern', () => {
+    expect(parseEpisodeFilename('Some.Random.Movie.2020.1080p.mkv')).toEqual(null)
+  })
+
+  it('strips BluRay and x265 from title', () => {
+    expect(
+      parseEpisodeFilename('Show.S02E03.Title.Here.1080p.BluRay.x265.mkv')
+    ).toEqual({
+      seasonNumber: 2,
+      episodeNumber: 3,
+      title: 'Title Here'
+    })
+  })
 })
