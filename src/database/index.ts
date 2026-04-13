@@ -49,7 +49,7 @@ for (const col of tmdbColumns) {
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS watch_progress (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    movie_id INTEGER NOT NULL REFERENCES movies(id),
+    movie_id INTEGER REFERENCES movies(id),
     current_time INTEGER NOT NULL,
     duration INTEGER,
     updated_at INTEGER NOT NULL
