@@ -32,10 +32,15 @@ export function PageHeader(): ReactElement {
     >
       <nav className="flex items-center gap-6 px-4 py-3 sm:px-9 sm:py-4">
         <Link
-          className="text-xl font-bold tracking-tight text-primary"
+          className="flex items-center gap-2 text-xl font-bold tracking-tight text-primary"
           to="/"
         >
-          <span className="text-red-500">▶</span> Jukebox
+          <img
+            alt=""
+            className="size-7"
+            src="/images/jukebox-icon-28.png"
+          />
+          Jukebox
         </Link>
 
         <div className="flex items-center gap-1 text-sm">

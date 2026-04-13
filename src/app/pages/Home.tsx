@@ -6,11 +6,11 @@ import { MovieRow } from '../components/MovieRow'
 import { PageHeader } from '../components/PageHeader'
 import { SkeletonRow } from '../components/SkeletonRow'
 import { useContinueWatching } from '../hooks/useContinueWatching'
-import { useMovies, type Movie } from '../hooks/useMovies'
+import { useMovies } from '../hooks/useMovies'
+import { buildGenreRows } from '../lib/genres'
 
 const maxGenreRows = 6
 const recentlyAddedLimit = 20
-const minimumMoviesPerGenre = 2
 
 export function HomePage() {
   const { data: movies, isLoading: isLoadingMovies } = useMovies()
@@ -24,7 +24,7 @@ export function HomePage() {
       return []
     }
 
-    return buildGenreRows(movies)
+    return buildGenreRows(movies, maxGenreRows)
   }, [movies])
 
   const recentlyAdded = useMemo(() => {
@@ -101,47 +101,3 @@ export function HomePage() {
   )
 }
 
-interface GenreRow {
-  genre: string
-  movies: Movie[]
-}
-
-function buildGenreRows(movies: Movie[]): GenreRow[] {
-  const genreMap = new Map<string, Movie[]>()
-
-  for (const movie of movies) {
-    const genres = parseGenres(movie)
-
-    for (const genre of genres) {
-      const existing = genreMap.get(genre) ?? []
-      existing.push(movie)
-      genreMap.set(genre, existing)
-    }
-  }
-
-  return Array.from(genreMap.entries())
-    .filter(([, genreMovies]) => genreMovies.length >= minimumMoviesPerGenre)
-    .sort((a, b) => b[1].length - a[1].length)
-    .slice(0, maxGenreRows)
-    .map(([genre, genreMovies]) => ({ genre, movies: genreMovies }))
-}
-
-function parseGenres(movie: Movie): string[] {
-  const movieWithGenres = movie as Movie & { genres?: string | null }
-
-  if (!movieWithGenres.genres) {
-    return []
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(movieWithGenres.genres)
-
-    if (Array.isArray(parsed)) {
-      return parsed.filter((item): item is string => typeof item === 'string')
-    }
-
-    return []
-  } catch {
-    return []
-  }
-}
