@@ -1,14 +1,13 @@
-import { readFileSync } from 'fs'
+import { readFile } from 'fs/promises'
 
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 
-import * as schema from './schema'
-
 const sqlite = new Database('jukebox.db')
+const db = drizzle(sqlite)
 
-export const db = drizzle(sqlite, { schema })
+console.log('Running migrations...')
 
 try {
   migrate(db, { migrationsFolder: './drizzle' })
@@ -22,9 +21,12 @@ try {
     throw error
   }
 
-  // Database was created before migrations were adopted. Mark all as applied.
+  // Database was created by manual SQL before migrations were adopted.
+  // Mark all existing migrations as applied.
+  console.log('Existing database detected. Marking migrations as applied...')
+
   const journal = JSON.parse(
-    readFileSync('./drizzle/meta/_journal.json', 'utf-8')
+    await readFile('./drizzle/meta/_journal.json', 'utf-8')
   ) as { entries: { tag: string; when: number }[] }
 
   for (const entry of journal.entries) {
@@ -32,6 +34,8 @@ try {
       `INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES ('${entry.tag}', ${entry.when})`
     )
   }
+
+  console.log(`Marked ${journal.entries.length} migrations as applied.`)
 }
 
-export { schema }
+console.log('Migrations complete.')
