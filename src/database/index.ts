@@ -56,5 +56,62 @@ sqlite.exec(`
   )
 `)
 
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS shows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    folder_path TEXT NOT NULL UNIQUE,
+    tmdb_id INTEGER,
+    year INTEGER,
+    overview TEXT,
+    genres TEXT,
+    rating REAL,
+    poster_path TEXT,
+    backdrop_path TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`)
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS seasons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    show_id INTEGER NOT NULL REFERENCES shows(id),
+    season_number INTEGER NOT NULL,
+    name TEXT,
+    overview TEXT,
+    poster_path TEXT,
+    episode_count INTEGER,
+    UNIQUE(show_id, season_number)
+  )
+`)
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS episodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    show_id INTEGER NOT NULL REFERENCES shows(id),
+    season_id INTEGER NOT NULL REFERENCES seasons(id),
+    season_number INTEGER NOT NULL,
+    episode_number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    file_path TEXT NOT NULL UNIQUE,
+    file_name TEXT NOT NULL,
+    file_size INTEGER,
+    extension TEXT,
+    tmdb_id INTEGER,
+    overview TEXT,
+    runtime INTEGER,
+    still_path TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`)
+
+try {
+  sqlite.exec('ALTER TABLE watch_progress ADD COLUMN episode_id INTEGER REFERENCES episodes(id)')
+} catch {
+  // Column already exists
+}
+
 export const db = drizzle(sqlite, { schema })
 export { schema }
