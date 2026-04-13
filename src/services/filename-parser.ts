@@ -13,13 +13,13 @@ export interface ParsedFilename {
  */
 export function parseFilename(fileName: string): ParsedFilename {
   // Remove file extension
-  let name = fileName.replace(/\.[^.]+$/, '')
+  const name = fileName.replace(/\.[^.]+$/, '')
 
   // Try to find year in parentheses/brackets first: (2010), [2010]
-  const bracketYearMatch = name.match(/[\(\[]((?:19|20)\d{2})[\)\]]/)
+  const bracketYearMatch = name.match(/[([]((?:19|20)\d{2})[)\]]/)
   if (bracketYearMatch?.[1]) {
     const year = parseInt(bracketYearMatch[1], 10)
-    const yearIndex = bracketYearMatch.index!
+    const yearIndex = bracketYearMatch.index ?? 0
     let title = name.substring(0, yearIndex)
 
     // Replace separators with spaces and clean up
@@ -61,7 +61,8 @@ export function parseFilename(fileName: string): ParsedFilename {
   }
 
   // No year found - just clean up the whole name
-  let title = name.replace(/[._]/g, ' ').replace(/\s+/g, ' ').trim()
+  const title = name.replace(/[._]/g, ' ').replace(/\s+/g, ' ').trim()
+
   return { title, year: null }
 }
 

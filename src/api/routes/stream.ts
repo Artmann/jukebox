@@ -32,7 +32,7 @@ streamRoutes.get('/:id', async (context) => {
   }
 
   const fileSize = file.size
-  const mimeType = file.type || 'video/mp4'
+  const mimeType = file.type ?? 'video/mp4'
   const range = context.req.header('range')
 
   if (range) {

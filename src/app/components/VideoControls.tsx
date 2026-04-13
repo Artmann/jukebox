@@ -58,8 +58,9 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
     }
 
     const onProgress = () => {
-      const bufferedRanges = player.buffered()
+      const bufferedRanges = player.buffered() as TimeRanges | null
       const duration = player.duration() ?? 0
+
       if (bufferedRanges && bufferedRanges.length > 0 && duration > 0) {
         const bufferedEnd = bufferedRanges.end(bufferedRanges.length - 1)
         setBuffered(bufferedEnd / duration)
@@ -104,20 +105,20 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
       })
     }
 
-    const interval = setInterval(saveProgress, saveIntervalMs)
+    const interval = setInterval(() => void saveProgress(), saveIntervalMs)
 
     return () => {
       clearInterval(interval)
-      saveProgress()
+      void saveProgress()
     }
   }, [player, movieId])
 
   const handlePlayPause = () => {
     if (!player) return
     if (player.paused()) {
-      player.play()
+      void player.play()
     } else {
-      player.pause()
+      void player.pause()
     }
   }
 
@@ -137,9 +138,9 @@ export function VideoControls({ title, player, movieId }: VideoControlsProps) {
   const handleFullscreen = () => {
     if (!player) return
     if (player.isFullscreen()) {
-      player.exitFullscreen()
+      void player.exitFullscreen()
     } else {
-      player.requestFullscreen()
+      void player.requestFullscreen()
     }
   }
 

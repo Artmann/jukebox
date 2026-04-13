@@ -32,7 +32,11 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
           poster
         },
         () => {
-          onReady?.(playerRef.current!)
+          const player = playerRef.current
+
+          if (player) {
+            onReady?.(player)
+          }
         }
       )
     }
@@ -50,7 +54,7 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
       return
     }
     if (playerRef.current.paused()) {
-      playerRef.current.play()
+      void playerRef.current.play()
     } else {
       playerRef.current.pause()
     }

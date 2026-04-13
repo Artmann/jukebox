@@ -45,20 +45,22 @@ export interface MovieMetadata {
   trailerUrl: string | null
 }
 
-function checkApiKey(): void {
+function getApiKey(): string {
   if (!TMDB_API_KEY) {
     throw new Error('TMDB_API_KEY environment variable is not set')
   }
+
+  return TMDB_API_KEY
 }
 
 export async function searchMovie(
   title: string,
   year?: number
 ): Promise<TMDBSearchResult[]> {
-  checkApiKey()
+  const apiKey = getApiKey()
 
   const params = new URLSearchParams({
-    api_key: TMDB_API_KEY!,
+    api_key: apiKey,
     query: title
   })
 
@@ -74,17 +76,18 @@ export async function searchMovie(
     throw new Error(`TMDB search failed: ${response.statusText}`)
   }
 
-  const data = await response.json()
-  return data.results as TMDBSearchResult[]
+  const data = (await response.json()) as { results: TMDBSearchResult[] }
+
+  return data.results
 }
 
 export async function getMovieDetails(
   tmdbId: number
 ): Promise<TMDBMovieDetails> {
-  checkApiKey()
+  const apiKey = getApiKey()
 
   const params = new URLSearchParams({
-    api_key: TMDB_API_KEY!
+    api_key: apiKey
   })
 
   const response = await fetch(
@@ -95,14 +98,14 @@ export async function getMovieDetails(
     throw new Error(`TMDB movie details failed: ${response.statusText}`)
   }
 
-  return response.json()
+  return (await response.json()) as TMDBMovieDetails
 }
 
 export async function getMovieVideos(tmdbId: number): Promise<TMDBVideo[]> {
-  checkApiKey()
+  const apiKey = getApiKey()
 
   const params = new URLSearchParams({
-    api_key: TMDB_API_KEY!
+    api_key: apiKey
   })
 
   const response = await fetch(
@@ -113,8 +116,9 @@ export async function getMovieVideos(tmdbId: number): Promise<TMDBVideo[]> {
     throw new Error(`TMDB movie videos failed: ${response.statusText}`)
   }
 
-  const data = await response.json()
-  return data.results as TMDBVideo[]
+  const data = (await response.json()) as { results: TMDBVideo[] }
+
+  return data.results
 }
 
 export function getTrailerUrl(videos: TMDBVideo[]): string | null {
@@ -159,7 +163,7 @@ export async function fetchMovieMetadata(
   year?: number
 ): Promise<MovieMetadata | null> {
   try {
-    checkApiKey()
+    getApiKey()
   } catch {
     return null
   }

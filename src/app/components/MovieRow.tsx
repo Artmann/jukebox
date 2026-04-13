@@ -9,7 +9,10 @@ interface MovieRowProps {
   title: string
 }
 
-export function MovieRow({ movies, title }: MovieRowProps): ReactElement | null {
+export function MovieRow({
+  movies,
+  title
+}: MovieRowProps): ReactElement | null {
   if (movies.length === 0) {
     return null
   }

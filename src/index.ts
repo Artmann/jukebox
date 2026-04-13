@@ -32,8 +32,8 @@ const shutdown = async (signal: string) => {
   process.exit(0)
 }
 
-process.on('SIGINT', () => shutdown('SIGINT'))
-process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => void shutdown('SIGINT'))
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
 
 export default {
   fetch: app.fetch,

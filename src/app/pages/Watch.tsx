@@ -15,7 +15,7 @@ async function fetchMovie(id: string): Promise<Movie> {
     throw new Error('Failed to fetch movie')
   }
 
-  return response.json()
+  return (await response.json()) as Movie
 }
 
 interface WatchProgress {
@@ -25,7 +25,8 @@ interface WatchProgress {
 
 async function fetchProgress(movieId: number): Promise<WatchProgress> {
   const response = await fetch(`/api/progress/${movieId}`)
-  return response.json()
+
+  return (await response.json()) as WatchProgress
 }
 
 const hideDelayMs = 3000
@@ -96,13 +97,13 @@ export function WatchPage() {
     error
   } = useQuery({
     queryKey: ['movie', id],
-    queryFn: () => fetchMovie(id!),
+    queryFn: () => fetchMovie(id ?? ''),
     enabled: !!id
   })
 
   const { data: savedProgress } = useQuery({
     queryKey: ['progress', movie?.id],
-    queryFn: () => fetchProgress(movie!.id),
+    queryFn: () => fetchProgress(movie?.id ?? 0),
     enabled: !!movie
   })
 
