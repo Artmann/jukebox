@@ -68,11 +68,13 @@ describe('ScanPage', () => {
 
     renderScan()
 
-    expect(screen.getByText('Scanning Libraries')).toBeInTheDocument()
+    expect(screen.getByText('Scanning your libraries...')).toBeInTheDocument()
   })
 
   it('shows skeletons while loading libraries', () => {
-    global.fetch = vi.fn().mockReturnValue(new Promise(() => {})) as unknown as typeof fetch
+    global.fetch = vi
+      .fn()
+      .mockReturnValue(new Promise(() => {})) as unknown as typeof fetch
 
     renderScan()
 
@@ -84,10 +86,11 @@ describe('ScanPage', () => {
   it('shows libraries after fetching', async () => {
     setFetchMock({
       ok: true,
-      json: () => Promise.resolve([
-        { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' },
-        { id: 2, name: 'Shows', path: '/media/shows', type: 'shows' }
-      ])
+      json: () =>
+        Promise.resolve([
+          { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' },
+          { id: 2, name: 'Shows', path: '/media/shows', type: 'shows' }
+        ])
     })
 
     renderScan()
@@ -101,42 +104,24 @@ describe('ScanPage', () => {
   it('shows pending status for libraries', async () => {
     setFetchMock({
       ok: true,
-      json: () => Promise.resolve([
-        { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' }
-      ])
+      json: () =>
+        Promise.resolve([
+          { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' }
+        ])
     })
 
     renderScan()
 
     await waitFor(() => {
-      expect(screen.getByText('Waiting...')).toBeInTheDocument()
+      expect(screen.getByText('Waiting')).toBeInTheDocument()
     })
   })
 
-  it('shows 0 media files found initially', () => {
+  it('hides start watching button while scanning', () => {
     setFetchMock({ ok: true, json: () => Promise.resolve([]) })
 
     renderScan()
 
-    expect(screen.getByText('0 media files found')).toBeInTheDocument()
-  })
-
-  it('disables go to library button while scanning', () => {
-    setFetchMock({ ok: true, json: () => Promise.resolve([]) })
-
-    renderScan()
-
-    const button = screen.getByText('Go to Library')
-
-    expect(button).toBeDisabled()
-  })
-
-  it('shows footer with totals', () => {
-    setFetchMock({ ok: true, json: () => Promise.resolve([]) })
-
-    renderScan()
-
-    expect(screen.getByText('0 media files found')).toBeInTheDocument()
-    expect(screen.getByText('0 added, 0 updated')).toBeInTheDocument()
+    expect(screen.queryByText('Start Watching')).not.toBeInTheDocument()
   })
 })

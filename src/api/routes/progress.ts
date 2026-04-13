@@ -63,7 +63,7 @@ progressRoutes.get('/:movieId', async (c) => {
   const movieId = parseInt(c.req.param('movieId'), 10)
 
   if (isNaN(movieId)) {
-    return c.json({ error: 'Invalid movie ID' }, 400)
+    return c.json({ error: { message: 'Invalid movie ID' } }, 400)
   }
 
   const [progress] = await db
@@ -87,13 +87,13 @@ progressRoutes.put('/:movieId', async (c) => {
   const movieId = parseInt(c.req.param('movieId'), 10)
 
   if (isNaN(movieId)) {
-    return c.json({ error: 'Invalid movie ID' }, 400)
+    return c.json({ error: { message: 'Invalid movie ID' } }, 400)
   }
 
   const body = await c.req.json<{ currentTime: number; duration?: number }>()
 
   if (typeof body.currentTime !== 'number') {
-    return c.json({ error: 'currentTime is required' }, 400)
+    return c.json({ error: { message: 'currentTime is required' } }, 400)
   }
 
   const [existing] = await db

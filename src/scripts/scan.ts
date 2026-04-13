@@ -21,7 +21,9 @@ async function scanFromLibraries() {
   const libraries = await db.select().from(schema.libraries)
 
   if (libraries.length === 0) {
-    console.log('No libraries configured. Run the setup at http://localhost:1990/setup')
+    console.log(
+      'No libraries configured. Run the setup at http://localhost:1990/setup'
+    )
 
     return
   }

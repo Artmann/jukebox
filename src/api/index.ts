@@ -14,6 +14,15 @@ import { streamRoutes } from './routes/stream'
 const app = new Hono()
 
 app.use('*', logger())
+
+app.onError((error, context) => {
+  console.error('Unhandled error:', error)
+
+  const message =
+    error instanceof Error ? error.message : 'An unexpected error occurred'
+
+  return context.json({ error: { message } }, 500)
+})
 app.route('/api/hello', helloRoutes)
 app.route('/api/library/shows', showRoutes)
 app.route('/api/library', libraryRoutes)

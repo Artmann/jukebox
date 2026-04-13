@@ -36,6 +36,7 @@
     "react-dom": "^19",
     "react-hotkeys-hook": "^5.2.4",
     "react-router-dom": "^7.11.0",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "tiny-invariant": "^1.3.3",
     "tiny-typescript-logger": "^3.2.3",

@@ -1,4 +1,4 @@
-import { CheckCircle, Circle, Loader2, Search, XCircle } from 'lucide-react'
+import { CheckCircle, Circle, Loader2, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -8,13 +8,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 interface LibraryProgress {
   error?: string
   name: string
-  progress: { added: number, total: number, updated: number }
+  progress: { added: number; total: number; updated: number }
   status: 'pending' | 'scanning' | 'complete' | 'error'
   type: string
 }
 
 async function fetchLibraries(): Promise<
-  Array<{ id: number, name: string, path: string, type: string }>
+  Array<{ id: number; name: string; path: string; type: string }>
 > {
   const response = await fetch('/api/scan/libraries')
 
@@ -81,10 +81,13 @@ export function ScanPage() {
     eventSource.addEventListener('library-start', (event) => {
       const data = JSON.parse(event.data) as { index: number }
 
-      setLibraries((previous) =>
-        previous?.map((library, i) =>
-          i === data.index ? { ...library, status: 'scanning' as const } : library
-        ) ?? null
+      setLibraries(
+        (previous) =>
+          previous?.map((library, i) =>
+            i === data.index
+              ? { ...library, status: 'scanning' as const }
+              : library
+          ) ?? null
       )
     })
 
@@ -96,15 +99,20 @@ export function ScanPage() {
         updated: number
       }
 
-      setLibraries((previous) =>
-        previous?.map((library, i) =>
-          i === data.index
-            ? {
-                ...library,
-                progress: { added: data.added, total: data.total, updated: data.updated }
-              }
-            : library
-        ) ?? null
+      setLibraries(
+        (previous) =>
+          previous?.map((library, i) =>
+            i === data.index
+              ? {
+                  ...library,
+                  progress: {
+                    added: data.added,
+                    total: data.total,
+                    updated: data.updated
+                  }
+                }
+              : library
+          ) ?? null
       )
     })
 
@@ -116,16 +124,21 @@ export function ScanPage() {
         updated: number
       }
 
-      setLibraries((previous) =>
-        previous?.map((library, i) =>
-          i === data.index
-            ? {
-                ...library,
-                progress: { added: data.added, total: data.total, updated: data.updated },
-                status: 'complete' as const
-              }
-            : library
-        ) ?? null
+      setLibraries(
+        (previous) =>
+          previous?.map((library, i) =>
+            i === data.index
+              ? {
+                  ...library,
+                  progress: {
+                    added: data.added,
+                    total: data.total,
+                    updated: data.updated
+                  },
+                  status: 'complete' as const
+                }
+              : library
+          ) ?? null
       )
     })
 
@@ -135,12 +148,13 @@ export function ScanPage() {
         index: number
       }
 
-      setLibraries((previous) =>
-        previous?.map((library, i) =>
-          i === data.index
-            ? { ...library, error: data.error, status: 'error' as const }
-            : library
-        ) ?? null
+      setLibraries(
+        (previous) =>
+          previous?.map((library, i) =>
+            i === data.index
+              ? { ...library, error: data.error, status: 'error' as const }
+              : library
+          ) ?? null
       )
     })
 
@@ -156,119 +170,103 @@ export function ScanPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col px-6 py-16">
-      {/* Header */}
-      <div className="mx-auto w-full max-w-xl">
-        <div className="mb-8">
-          <div className="flex items-center gap-3">
-            {scanning ? (
-              <Loader2 className="size-6 shrink-0 animate-spin text-primary" />
-            ) : (
-              <Search className="size-6 shrink-0 text-primary" />
-            )}
-            <h1 className="text-2xl font-bold text-foreground">
-              {scanning ? 'Scanning Libraries' : 'Scan Complete'}
-            </h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {scanning
-              ? 'Finding your media and fetching metadata...'
-              : `Found ${totals.found} media files.`}
-          </p>
+    <div className="flex min-h-screen items-center justify-center px-6 py-16">
+      <div className="w-full max-w-md">
+        <div className="mb-10 animate-fade-up">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            {scanning ? 'Scanning your libraries...' : 'Your library is ready'}
+          </h1>
+          {!scanning && (
+            <p className="mt-2 text-muted-foreground">
+              {totals.found} movies and episodes found.
+            </p>
+          )}
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="mx-auto w-full max-w-xl flex-1 overflow-y-auto">
-        {libraries === null ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div className="flex items-center gap-3 px-4 py-3" key={i}>
-                <Skeleton className="size-4 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-24" />
+        <div className="animate-fade-up animate-delay-1">
+          {libraries === null ? (
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <div
+                  className="flex items-center gap-3"
+                  key={i}
+                >
+                  <Skeleton className="size-4 rounded-full" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-32" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {libraries.map((library, index) => (
-              <div
-                className="flex items-center gap-3 rounded-md px-4 py-3"
-                key={index}
-              >
-                {library.status === 'pending' && (
-                  <Circle className="size-4 shrink-0 text-muted-foreground/30" />
-                )}
-                {library.status === 'scanning' && (
-                  <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
-                )}
-                {library.status === 'complete' && (
-                  <CheckCircle className="size-4 shrink-0 text-green-500" />
-                )}
-                {library.status === 'error' && (
-                  <XCircle className="size-4 shrink-0 text-destructive" />
-                )}
-
-                <div className="flex-1">
-                  <p className="text-sm text-foreground">
-                    {library.name}
-                  </p>
-
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {libraries.map((library, index) => (
+                <div
+                  className="flex items-center gap-3"
+                  key={index}
+                >
                   {library.status === 'pending' && (
-                    <p className="text-xs text-muted-foreground">Waiting...</p>
+                    <Circle className="size-4 shrink-0 text-muted-foreground/20" />
                   )}
-
-                  {(library.status === 'scanning' || library.status === 'complete') && (
-                    <p className="text-xs text-muted-foreground">
-                      {library.progress.total > 0 ? (
-                        <>
-                          Found {library.progress.total} files
-                          {library.progress.added > 0 && `, ${library.progress.added} new`}
-                          {library.progress.updated > 0 && `, ${library.progress.updated} updated`}
-                        </>
-                      ) : (
-                        'Scanning...'
-                      )}
-                    </p>
+                  {library.status === 'scanning' && (
+                    <Loader2 className="size-4 shrink-0 animate-spin text-foreground" />
                   )}
-
+                  {library.status === 'complete' && (
+                    <CheckCircle className="size-4 shrink-0 text-foreground" />
+                  )}
                   {library.status === 'error' && (
-                    <p className="text-xs text-destructive">{library.error}</p>
+                    <XCircle className="size-4 shrink-0 text-destructive" />
                   )}
-                </div>
 
-                <span className="text-xs text-muted-foreground capitalize">
-                  {library.type}
-                </span>
-              </div>
-            ))}
+                  <div className="flex-1">
+                    <p className="text-sm text-foreground">{library.name}</p>
+
+                    {library.status === 'pending' && (
+                      <p className="text-xs text-muted-foreground/50">
+                        Waiting
+                      </p>
+                    )}
+
+                    {(library.status === 'scanning' ||
+                      library.status === 'complete') && (
+                      <p className="text-xs text-muted-foreground">
+                        {library.progress.total > 0 ? (
+                          <>
+                            {library.progress.total} files
+                            {library.progress.added > 0 &&
+                              ` \u00b7 ${library.progress.added} new`}
+                            {library.progress.updated > 0 &&
+                              ` \u00b7 ${library.progress.updated} updated`}
+                          </>
+                        ) : (
+                          'Scanning...'
+                        )}
+                      </p>
+                    )}
+
+                    {library.status === 'error' && (
+                      <p className="text-xs text-destructive">
+                        {library.error}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {!scanning && (
+          <div className="mt-12 animate-fade-up animate-delay-2">
+            <Button
+              onClick={() => navigate('/')}
+              size="lg"
+            >
+              Start Watching
+            </Button>
           </div>
         )}
-      </div>
-
-      {/* Footer */}
-      <div className="mx-auto w-full max-w-xl pt-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-lg font-semibold text-foreground">
-              {totals.found} media files found
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {totals.added} added, {totals.updated} updated
-            </p>
-          </div>
-
-          <Button
-            disabled={scanning}
-            onClick={() => navigate('/')}
-            size="lg"
-          >
-            Go to Library
-          </Button>
-        </div>
       </div>
     </div>
   )

@@ -18,7 +18,7 @@ libraryRoutes.get('/movies/:id', async (c) => {
   const id = parseInt(c.req.param('id'), 10)
 
   if (isNaN(id)) {
-    return c.json({ error: 'Invalid movie ID' }, 400)
+    return c.json({ error: { message: 'Invalid movie ID' } }, 400)
   }
 
   const movie = await db
@@ -28,7 +28,7 @@ libraryRoutes.get('/movies/:id', async (c) => {
     .limit(1)
 
   if (movie.length === 0) {
-    return c.json({ error: 'Movie not found' }, 404)
+    return c.json({ error: { message: 'Movie not found' } }, 404)
   }
 
   return c.json(movie[0])

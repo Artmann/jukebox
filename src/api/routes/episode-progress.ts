@@ -10,7 +10,7 @@ episodeProgressRoutes.get('/show/:showId', async (context) => {
   const showId = parseInt(context.req.param('showId'), 10)
 
   if (isNaN(showId)) {
-    return context.json({ error: 'Invalid show ID' }, 400)
+    return context.json({ error: { message: 'Invalid show ID' } }, 400)
   }
 
   const episodes = await db
@@ -62,7 +62,7 @@ episodeProgressRoutes.get('/:episodeId', async (context) => {
   const episodeId = parseInt(context.req.param('episodeId'), 10)
 
   if (isNaN(episodeId)) {
-    return context.json({ error: 'Invalid episode ID' }, 400)
+    return context.json({ error: { message: 'Invalid episode ID' } }, 400)
   }
 
   const [progress] = await db
@@ -86,7 +86,7 @@ episodeProgressRoutes.put('/:episodeId', async (context) => {
   const episodeId = parseInt(context.req.param('episodeId'), 10)
 
   if (isNaN(episodeId)) {
-    return context.json({ error: 'Invalid episode ID' }, 400)
+    return context.json({ error: { message: 'Invalid episode ID' } }, 400)
   }
 
   const body = await context.req.json<{
@@ -95,7 +95,7 @@ episodeProgressRoutes.put('/:episodeId', async (context) => {
   }>()
 
   if (typeof body.currentTime !== 'number') {
-    return context.json({ error: 'currentTime is required' }, 400)
+    return context.json({ error: { message: 'currentTime is required' } }, 400)
   }
 
   const [existing] = await db

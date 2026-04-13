@@ -5,6 +5,7 @@ const mockValues = vi.fn()
 
 vi.mock('../../database', () => ({
   db: {
+    delete: vi.fn(() => Promise.resolve()),
     select: vi.fn(() => ({ from: mockFrom })),
     insert: vi.fn(() => ({ values: mockValues }))
   },
@@ -44,7 +45,9 @@ describe('setup routes', () => {
 
       expect(status).toEqual(200)
       expect(body).toEqual({
+        config: null,
         hasApiKey: false,
+        libraries: [],
         libraryCount: 0,
         needsSetup: true
       })
@@ -52,16 +55,26 @@ describe('setup routes', () => {
 
     it('returns needsSetup false when libraries exist', async () => {
       vi.mocked(getConfig).mockReturnValue({ tmdbApiKey: 'key' })
-      mockFrom.mockResolvedValue([{ id: 1 }])
+      mockFrom.mockResolvedValue([
+        {
+          id: 1,
+          name: 'Movies',
+          path: '/media/movies',
+          type: 'movies',
+          createdAt: new Date()
+        }
+      ])
 
       const { status, body } = await request('/')
 
       expect(status).toEqual(200)
-      expect(body).toEqual({
-        hasApiKey: true,
-        libraryCount: 1,
-        needsSetup: false
-      })
+      expect(body.hasApiKey).toEqual(true)
+      expect(body.libraryCount).toEqual(1)
+      expect(body.needsSetup).toEqual(false)
+      expect(body.config).toEqual({ tmdbApiKey: 'key' })
+      expect(body.libraries).toEqual([
+        { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' }
+      ])
     })
 
     it('returns hasApiKey true when config has key', async () => {
@@ -79,11 +92,13 @@ describe('setup routes', () => {
       const { status, body } = await request('/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ libraries: [{ name: 'Movies', path: '/movies', type: 'movies' }] })
+        body: JSON.stringify({
+          libraries: [{ name: 'Movies', path: '/movies', type: 'movies' }]
+        })
       })
 
       expect(status).toEqual(400)
-      expect(body.error).toEqual('TMDB API key is required')
+      expect(body.error).toEqual({ message: 'TMDB API key is required' })
     })
 
     it('returns error when libraries are empty', async () => {
@@ -94,7 +109,9 @@ describe('setup routes', () => {
       })
 
       expect(status).toEqual(400)
-      expect(body.error).toEqual('At least one library is required')
+      expect(body.error).toEqual({
+        message: 'At least one library is required'
+      })
     })
 
     it('saves config and libraries on valid input', async () => {
@@ -103,9 +120,7 @@ describe('setup routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tmdbApiKey: 'test-key',
-          libraries: [
-            { name: 'Movies', path: '/media/movies', type: 'movies' }
-          ]
+          libraries: [{ name: 'Movies', path: '/media/movies', type: 'movies' }]
         })
       })
 

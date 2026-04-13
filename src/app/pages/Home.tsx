@@ -79,11 +79,14 @@ export function HomePage() {
           </h2>
 
           <p className="text-sm text-muted-foreground max-w-md">
-            Your libraries are configured but no media was found.
-            Check that your library paths are correct, or run a scan.
+            Your libraries are configured but no media was found. Check that
+            your library paths are correct, or run a scan.
           </p>
 
-          <Button asChild variant="outline">
+          <Button
+            asChild
+            variant="outline"
+          >
             <Link to="/setup">Go to Setup</Link>
           </Button>
         </div>

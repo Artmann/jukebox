@@ -24,7 +24,7 @@ scanRoutes.get('/stream', async (context) => {
   const libraries = await db.select().from(schema.libraries)
 
   if (libraries.length === 0) {
-    return context.json({ error: 'No libraries configured' }, 400)
+    return context.json({ error: { message: 'No libraries configured' } }, 400)
   }
 
   return streamSSE(context, async (stream) => {
@@ -45,14 +45,18 @@ scanRoutes.get('/stream', async (context) => {
       })
 
       try {
-        const onProgress = async (progress: { added: number, total: number, updated: number }) => {
+        const onProgress = async (progress: {
+          added: number
+          total: number
+          updated: number
+        }) => {
           await stream.writeSSE({
             event: 'file-scanned',
             data: JSON.stringify({ index: i, ...progress })
           })
         }
 
-        let result: { added: number, total: number, updated: number }
+        let result: { added: number; total: number; updated: number }
 
         if (library.type === 'movies') {
           result = await scanLibrary(library.path, onProgress)

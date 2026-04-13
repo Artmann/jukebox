@@ -11,7 +11,7 @@ streamRoutes.get('/:id', async (context) => {
   const id = parseInt(context.req.param('id'), 10)
 
   if (isNaN(id)) {
-    return context.json({ error: 'Invalid movie ID' }, 400)
+    return context.json({ error: { message: 'Invalid movie ID' } }, 400)
   }
 
   const [movie] = await db
@@ -21,14 +21,14 @@ streamRoutes.get('/:id', async (context) => {
     .limit(1)
 
   if (!movie) {
-    return context.json({ error: 'Movie not found' }, 404)
+    return context.json({ error: { message: 'Movie not found' } }, 404)
   }
 
   const filePath = movie.filePath
   const file = Bun.file(filePath)
 
   if (!(await file.exists())) {
-    return context.json({ error: 'Video file not found' }, 404)
+    return context.json({ error: { message: 'Video file not found' } }, 404)
   }
 
   const fileSize = file.size

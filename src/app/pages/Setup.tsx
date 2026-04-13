@@ -1,10 +1,10 @@
-import { Film, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -19,21 +19,58 @@ interface LibraryEntry {
   type: 'movies' | 'shows'
 }
 
+interface SetupData {
+  config: { tmdbApiKey: string } | null
+  libraries: Array<{ id: number; name: string; path: string; type: string }>
+}
+
 export function SetupPage() {
   const navigate = useNavigate()
 
   const [apiKey, setApiKey] = useState('')
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [libraries, setLibraries] = useState<LibraryEntry[]>([])
+  const [loaded, setLoaded] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const pathInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    void loadExistingConfig()
+  }, [])
 
   useEffect(() => {
     if (editingIndex !== null) {
       pathInputRef.current?.focus()
     }
   }, [editingIndex])
+
+  async function loadExistingConfig() {
+    try {
+      const response = await fetch('/api/setup')
+
+      if (!response.ok) {
+        return
+      }
+
+      const data = (await response.json()) as SetupData
+
+      if (data.config?.tmdbApiKey) {
+        setApiKey(data.config.tmdbApiKey)
+      }
+
+      if (data.libraries.length > 0) {
+        setLibraries(
+          data.libraries.map((library) => ({
+            name: library.name,
+            path: library.path,
+            type: library.type as 'movies' | 'shows'
+          }))
+        )
+      }
+    } finally {
+      setLoaded(true)
+    }
+  }
 
   function addLibrary() {
     const newIndex = libraries.length
@@ -75,14 +112,13 @@ export function SetupPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setError(null)
 
     const validLibraries = libraries.filter(
       (library) => library.path.trim() !== ''
     )
 
     if (validLibraries.length === 0) {
-      setError('Please add at least one library.')
+      toast.error('Please add at least one library.')
 
       return
     }
@@ -90,7 +126,7 @@ export function SetupPage() {
     const trimmedKey = apiKey.trim()
 
     if (!trimmedKey) {
-      setError('Please enter your TMDB API key.')
+      toast.error('Please enter your TMDB API key.')
 
       return
     }
@@ -114,14 +150,14 @@ export function SetupPage() {
       })
 
       if (!response.ok) {
-        const data = (await response.json()) as { error?: string }
+        const data = (await response.json()) as { error?: { message?: string } }
 
-        throw new Error(data.error ?? 'Setup failed')
+        throw new Error(data.error?.message ?? 'Setup failed')
       }
 
       navigate('/scan')
     } catch (caughtError) {
-      setError(
+      toast.error(
         caughtError instanceof Error ? caughtError.message : 'Setup failed'
       )
     } finally {
@@ -129,162 +165,154 @@ export function SetupPage() {
     }
   }
 
+  if (!loaded) {
+    return null
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center px-6 py-16">
-      <div className="w-full max-w-2xl">
-        <div className="mb-10 flex flex-col items-center gap-3 text-center">
-          <Film className="size-12 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">
-            Welcome to Jukebox
+    <div className="flex min-h-screen items-start justify-center px-6 pt-[15vh] pb-16">
+      <div className="w-full max-w-lg">
+        <div className="mb-16 animate-fade-up">
+          <h1 className="text-4xl font-bold tracking-tight text-foreground">
+            Set up your library
           </h1>
-          <p className="text-muted-foreground">
-            Let's get your media server set up.
+          <p className="mt-3 text-muted-foreground">
+            Add your media folders and we'll take care of the rest.
           </p>
         </div>
 
         <form onSubmit={(event) => void handleSubmit(event)}>
-          <div className="space-y-12">
-            {/* Libraries */}
-            <section>
-              <h2 className="text-lg font-semibold text-foreground">
-                Media Libraries
+          <div className="space-y-16">
+            <section className="animate-fade-up animate-delay-1">
+              <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
+                Libraries
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Add the directories where your movies and TV shows are stored.
-              </p>
 
-              <div className="mt-4 space-y-3">
-                {libraries.map((library, index) => (
-                  <div
-                    className="flex items-center gap-3"
-                    key={index}
+              <div className="mt-6">
+                {libraries.length === 0 ? (
+                  <button
+                    className="flex w-full items-center justify-center rounded-lg border border-dashed border-border py-10 text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+                    onClick={addLibrary}
+                    type="button"
                   >
-                    {editingIndex === index ? (
-                      <Input
-                        ref={pathInputRef}
-                        className="flex-[2]"
-                        onBlur={() => handleBlur(index)}
-                        onChange={(event) =>
-                          updateLibrary(index, 'path', event.target.value)
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            pathInputRef.current?.blur()
-                          }
-                        }}
-                        placeholder="/mnt/media/movies"
-                        value={library.path}
-                      />
-                    ) : (
-                      <button
-                        className="flex-[2] cursor-pointer truncate rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
-                        onClick={() => setEditingIndex(index)}
-                        type="button"
+                    <Plus className="mr-2 size-4" />
+                    Add a folder
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    {libraries.map((library, index) => (
+                      <div
+                        className="flex items-center gap-3"
+                        key={index}
                       >
-                        {library.path || (
-                          <span className="text-muted-foreground">
-                            /mnt/media/movies
-                          </span>
+                        {editingIndex === index ? (
+                          <Input
+                            ref={pathInputRef}
+                            className="flex-[2]"
+                            onBlur={() => handleBlur(index)}
+                            onChange={(event) =>
+                              updateLibrary(index, 'path', event.target.value)
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                pathInputRef.current?.blur()
+                              }
+                            }}
+                            placeholder="/mnt/media/movies"
+                            value={library.path}
+                          />
+                        ) : (
+                          <button
+                            className="flex-[2] cursor-pointer truncate rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
+                            onClick={() => setEditingIndex(index)}
+                            type="button"
+                          >
+                            {library.path || (
+                              <span className="text-muted-foreground">
+                                /mnt/media/movies
+                              </span>
+                            )}
+                          </button>
                         )}
-                      </button>
-                    )}
 
-                    <Select
-                      onValueChange={(value) =>
-                        updateLibrary(index, 'type', value)
-                      }
-                      value={library.type}
-                    >
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="movies">Movies</SelectItem>
-                        <SelectItem value="shows">Shows</SelectItem>
-                      </SelectContent>
-                    </Select>
+                        <Select
+                          onValueChange={(value) =>
+                            updateLibrary(index, 'type', value)
+                          }
+                          value={library.type}
+                        >
+                          <SelectTrigger className="w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="movies">Movies</SelectItem>
+                            <SelectItem value="shows">Shows</SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        <Button
+                          onClick={() => removeLibrary(index)}
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    ))}
 
                     <Button
-                      onClick={() => removeLibrary(index)}
-                      size="icon"
+                      className="mt-1"
+                      onClick={addLibrary}
+                      size="sm"
                       type="button"
                       variant="ghost"
                     >
-                      <Trash2 className="size-4" />
+                      <Plus className="size-4" />
+                      Add another
                     </Button>
                   </div>
-                ))}
-
-                <Button
-                  className="flex gap-2 mt-3"
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                  onClick={addLibrary}
-                >
-                  <Plus className="size-4" />
-                  Add Library
-                </Button>
+                )}
               </div>
             </section>
 
-            <hr className="border-border" />
-
-            {/* TMDB API Key */}
-            <section>
-              <h2 className="text-lg font-semibold text-foreground">
-                Movie Metadata
+            <section className="animate-fade-up animate-delay-2">
+              <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
+                Metadata
               </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-3 text-sm text-muted-foreground/70">
                 Jukebox uses{' '}
                 <a
-                  className="text-primary underline underline-offset-4"
-                  href="https://www.themoviedb.org"
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  The Movie Database (TMDB)
-                </a>{' '}
-                to fetch posters, descriptions, and other metadata for your
-                media. Create a free account, then go to{' '}
-                <a
-                  className="text-primary underline underline-offset-4"
+                  className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
                   href="https://www.themoviedb.org/settings/api"
                   rel="noopener noreferrer"
                   target="_blank"
                 >
-                  Settings &rarr; API
+                  TMDB
                 </a>{' '}
-                to generate your API key.
+                to find posters, ratings, and descriptions for your media.
               </p>
 
-              <div className="mt-6 space-y-2">
-                <Label htmlFor="api-key">API Key</Label>
-                <Input
-                  id="api-key"
-                  onChange={(event) => setApiKey(event.target.value)}
-                  placeholder="Enter your TMDB API key"
-                  type="text"
-                  value={apiKey}
-                />
-              </div>
+              <Input
+                className="mt-4"
+                onChange={(event) => setApiKey(event.target.value)}
+                placeholder="TMDB API key"
+                type="text"
+                value={apiKey}
+              />
             </section>
 
-            <hr className="border-border" />
-
-            {error && (
-              <p className="text-center text-sm text-destructive">{error}</p>
-            )}
-
-            <div className="flex justify-end">
-              <Button
-                disabled={submitting}
-                size="lg"
-                type="submit"
-              >
-                {submitting ? 'Setting up...' : 'Complete Setup'}
-              </Button>
+            <div className="animate-fade-up animate-delay-3">
+              <div className="flex justify-end">
+                <Button
+                  disabled={submitting}
+                  size="lg"
+                  type="submit"
+                >
+                  {submitting ? 'Setting up...' : 'Complete Setup'}
+                </Button>
+              </div>
             </div>
           </div>
         </form>

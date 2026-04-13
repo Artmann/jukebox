@@ -38,7 +38,7 @@ showRoutes.get('/episodes/:id', async (context) => {
   const id = parseInt(context.req.param('id'), 10)
 
   if (isNaN(id)) {
-    return context.json({ error: 'Invalid episode ID' }, 400)
+    return context.json({ error: { message: 'Invalid episode ID' } }, 400)
   }
 
   const [episode] = await db
@@ -48,7 +48,7 @@ showRoutes.get('/episodes/:id', async (context) => {
     .limit(1)
 
   if (!episode) {
-    return context.json({ error: 'Episode not found' }, 404)
+    return context.json({ error: { message: 'Episode not found' } }, 404)
   }
 
   const [show] = await db
@@ -65,7 +65,7 @@ showRoutes.get('/:id', async (context) => {
   const id = parseInt(context.req.param('id'), 10)
 
   if (isNaN(id)) {
-    return context.json({ error: 'Invalid show ID' }, 400)
+    return context.json({ error: { message: 'Invalid show ID' } }, 400)
   }
 
   const [show] = await db
@@ -75,7 +75,7 @@ showRoutes.get('/:id', async (context) => {
     .limit(1)
 
   if (!show) {
-    return context.json({ error: 'Show not found' }, 404)
+    return context.json({ error: { message: 'Show not found' } }, 404)
   }
 
   const seasonRows = await db
@@ -104,7 +104,7 @@ showRoutes.get('/:id/seasons/:seasonNumber', async (context) => {
   const seasonNumber = parseInt(context.req.param('seasonNumber'), 10)
 
   if (isNaN(showId) || isNaN(seasonNumber)) {
-    return context.json({ error: 'Invalid parameters' }, 400)
+    return context.json({ error: { message: 'Invalid parameters' } }, 400)
   }
 
   const episodes = await db
