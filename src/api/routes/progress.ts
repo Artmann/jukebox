@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, sql } from 'drizzle-orm'
+import { and, eq, gt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
