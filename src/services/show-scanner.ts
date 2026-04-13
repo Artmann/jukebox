@@ -1,7 +1,12 @@
 import { readdir, stat } from 'fs/promises'
 import { extname, join } from 'path'
 
+import { and, eq } from 'drizzle-orm'
+
+import { db, schema } from '../database'
+import type { NewEpisode, NewSeason, NewShow } from '../database/schema'
 import { parseEpisodeFilename } from './episode-parser'
+import { fetchSeasonMetadata, fetchShowMetadata } from './tmdb'
 
 const videoExtensions = new Set([
   '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.m4v', '.webm', '.flv', '.mpeg', '.mpg'
@@ -284,4 +289,183 @@ export async function discoverShows(libraryPath: string): Promise<ScannedShow[]>
   }
 
   return shows
+}
+
+export async function scanShowLibrary(libraryPath: string): Promise<{ added: number; updated: number; total: number }> {
+  let added = 0
+  let updated = 0
+  let total = 0
+
+  console.log(`Scanning: ${libraryPath}`)
+
+  const discoveredShows = await discoverShows(libraryPath)
+
+  for (const discoveredShow of discoveredShows) {
+    const { name, year, episodes } = discoveredShow
+    const folderPath = discoveredShow.folders[0] ?? ''
+
+    // Find or create the show record
+    const existingShows = await db
+      .select()
+      .from(schema.shows)
+      .where(eq(schema.shows.folderPath, folderPath))
+      .limit(1)
+
+    let showId: number
+    let tmdbId: number | null
+
+    if (existingShows.length > 0 && existingShows[0]) {
+      showId = existingShows[0].id
+      tmdbId = existingShows[0].tmdbId ?? null
+    } else {
+      console.log(`  Fetching TMDB metadata for show: ${name}`)
+      const metadata = await fetchShowMetadata(name, year ?? undefined)
+
+      const now = new Date()
+      const newShow: NewShow = {
+        title: metadata?.title ?? name,
+        folderPath,
+        tmdbId: metadata?.tmdbId ?? null,
+        year: metadata?.year ?? year ?? null,
+        overview: metadata?.overview ?? null,
+        genres: metadata?.genres ?? null,
+        rating: metadata?.rating ?? null,
+        posterPath: metadata?.posterPath ?? null,
+        backdropPath: metadata?.backdropPath ?? null,
+        createdAt: now,
+        updatedAt: now
+      }
+
+      const inserted = await db
+        .insert(schema.shows)
+        .values(newShow)
+        .returning({ id: schema.shows.id })
+
+      showId = inserted[0]?.id ?? 0
+      tmdbId = metadata?.tmdbId ?? null
+    }
+
+    // Group episodes by season number
+    const seasonMap = new Map<number, ScannedEpisode[]>()
+
+    for (const episode of episodes) {
+      const seasonEpisodes = seasonMap.get(episode.seasonNumber) ?? []
+      seasonEpisodes.push(episode)
+      seasonMap.set(episode.seasonNumber, seasonEpisodes)
+    }
+
+    for (const [seasonNumber, seasonEpisodes] of seasonMap) {
+      // Fetch TMDB season metadata once per season
+      let tmdbEpisodes: { episodeNumber: number; title: string; overview: string; runtime: number | null; stillPath: string | null }[] = []
+
+      // Find or create the season record
+      const existingSeasons = await db
+        .select()
+        .from(schema.seasons)
+        .where(
+          and(
+            eq(schema.seasons.showId, showId),
+            eq(schema.seasons.seasonNumber, seasonNumber)
+          )
+        )
+        .limit(1)
+
+      let seasonId: number
+
+      if (existingSeasons.length > 0 && existingSeasons[0]) {
+        seasonId = existingSeasons[0].id
+
+        if (tmdbId !== null) {
+          const seasonMetadata = await fetchSeasonMetadata(tmdbId, seasonNumber)
+          tmdbEpisodes = seasonMetadata?.episodes ?? []
+        }
+      } else {
+        let seasonMetadata = null
+
+        if (tmdbId !== null) {
+          console.log(`  Fetching TMDB metadata for season ${seasonNumber} of: ${name}`)
+          seasonMetadata = await fetchSeasonMetadata(tmdbId, seasonNumber)
+          tmdbEpisodes = seasonMetadata?.episodes ?? []
+        }
+
+        const newSeason: NewSeason = {
+          showId,
+          seasonNumber,
+          name: seasonMetadata?.name ?? null,
+          overview: seasonMetadata?.overview ?? null,
+          posterPath: seasonMetadata?.posterPath ?? null,
+          episodeCount: seasonEpisodes.length
+        }
+
+        const insertedSeason = await db
+          .insert(schema.seasons)
+          .values(newSeason)
+          .returning({ id: schema.seasons.id })
+
+        seasonId = insertedSeason[0]?.id ?? 0
+      }
+
+      for (const scannedEpisode of seasonEpisodes) {
+        total++
+
+        const tmdbEpisode = tmdbEpisodes.find(
+          (e) => e.episodeNumber === scannedEpisode.episodeNumber
+        )
+
+        const episodeTitle =
+          tmdbEpisode?.title ??
+          scannedEpisode.title ??
+          `Episode ${scannedEpisode.episodeNumber}`
+
+        // Check for existing episode
+        const existingEpisodes = await db
+          .select()
+          .from(schema.episodes)
+          .where(eq(schema.episodes.filePath, scannedEpisode.filePath))
+          .limit(1)
+
+        const now = new Date()
+
+        if (existingEpisodes.length > 0) {
+          await db
+            .update(schema.episodes)
+            .set({
+              title: episodeTitle,
+              fileName: scannedEpisode.fileName,
+              fileSize: scannedEpisode.fileSize,
+              extension: scannedEpisode.extension,
+              updatedAt: now
+            })
+            .where(eq(schema.episodes.filePath, scannedEpisode.filePath))
+
+          updated++
+        } else {
+          const newEpisode: NewEpisode = {
+            showId,
+            seasonId,
+            seasonNumber,
+            episodeNumber: scannedEpisode.episodeNumber,
+            title: episodeTitle,
+            filePath: scannedEpisode.filePath,
+            fileName: scannedEpisode.fileName,
+            fileSize: scannedEpisode.fileSize,
+            extension: scannedEpisode.extension,
+            tmdbId: tmdbEpisode ? null : null,
+            overview: tmdbEpisode?.overview ?? null,
+            runtime: tmdbEpisode?.runtime ?? null,
+            stillPath: tmdbEpisode?.stillPath ?? null,
+            createdAt: now,
+            updatedAt: now
+          }
+
+          await db.insert(schema.episodes).values(newEpisode)
+          added++
+        }
+      }
+    }
+
+    console.log(`  Found show: ${name} (${episodes.length} episodes)`)
+  }
+
+  return { added, updated, total }
 }
