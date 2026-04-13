@@ -21,6 +21,8 @@ const mockMovies: Movie[] = [
     fileSize: 1000000,
     extension: '.mp4',
     createdAt: '2024-01-01',
+    genres: '["Action","Adventure","Science Fiction"]',
+    runtime: 127,
     updatedAt: '2024-01-01'
   },
   {
@@ -37,6 +39,8 @@ const mockMovies: Movie[] = [
     fileSize: 2000000,
     extension: '.mp4',
     createdAt: '2024-01-01',
+    genres: '["Action","Science Fiction"]',
+    runtime: 136,
     updatedAt: '2024-01-01'
   }
 ]
