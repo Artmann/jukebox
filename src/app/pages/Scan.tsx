@@ -1,5 +1,5 @@
 import { CheckCircle, Circle, Loader2, XCircle } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
@@ -52,16 +52,7 @@ export function ScanPage() {
     )
   }, [libraries])
 
-  useEffect(() => {
-    if (startedRef.current) {
-      return
-    }
-
-    startedRef.current = true
-    void loadAndScan()
-  }, [])
-
-  async function loadAndScan() {
+  const loadAndScan = useCallback(async () => {
     const fetched = await fetchLibraries()
 
     const initial: LibraryProgress[] = fetched.map((library) => ({
@@ -73,13 +64,22 @@ export function ScanPage() {
 
     setLibraries(initial)
     startScan()
-  }
+  }, [])
+
+  useEffect(() => {
+    if (startedRef.current) {
+      return
+    }
+
+    startedRef.current = true
+    void loadAndScan()
+  }, [loadAndScan])
 
   function startScan() {
     const eventSource = new EventSource('/api/scan/stream')
 
     eventSource.addEventListener('library-start', (event) => {
-      const data = JSON.parse(event.data) as { index: number }
+      const data = JSON.parse(event.data as string) as { index: number }
 
       setLibraries(
         (previous) =>
@@ -92,7 +92,7 @@ export function ScanPage() {
     })
 
     eventSource.addEventListener('file-scanned', (event) => {
-      const data = JSON.parse(event.data) as {
+      const data = JSON.parse(event.data as string) as {
         added: number
         index: number
         total: number
@@ -117,7 +117,7 @@ export function ScanPage() {
     })
 
     eventSource.addEventListener('library-complete', (event) => {
-      const data = JSON.parse(event.data) as {
+      const data = JSON.parse(event.data as string) as {
         added: number
         index: number
         total: number
@@ -143,7 +143,7 @@ export function ScanPage() {
     })
 
     eventSource.addEventListener('library-error', (event) => {
-      const data = JSON.parse(event.data) as {
+      const data = JSON.parse(event.data as string) as {
         error: string
         index: number
       }
@@ -260,7 +260,7 @@ export function ScanPage() {
         {!scanning && (
           <div className="mt-12 animate-fade-up animate-delay-2">
             <Button
-              onClick={() => navigate('/')}
+              onClick={() => void navigate('/')}
               size="lg"
             >
               Start Watching

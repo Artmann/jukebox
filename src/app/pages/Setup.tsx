@@ -137,8 +137,7 @@ export function SetupPage() {
       const payload = validLibraries.map((library) => ({
         name:
           library.name.trim() ||
-          library.path.split(/[\\/]/).pop() ||
-          library.type,
+          (library.path.split(/[\\/]/).pop() ?? library.type),
         path: library.path.trim(),
         type: library.type
       }))
@@ -155,7 +154,7 @@ export function SetupPage() {
         throw new Error(data.error?.message ?? 'Setup failed')
       }
 
-      navigate('/scan')
+      void navigate('/scan')
     } catch (caughtError) {
       toast.error(
         caughtError instanceof Error ? caughtError.message : 'Setup failed'
