@@ -137,6 +137,17 @@ export function WatchPage() {
     }
   }, [isPlaying, resetHideTimer])
 
+  // Show controls on any keypress.
+  useEffect(() => {
+    const onKeyDown = () => resetHideTimer()
+
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [resetHideTimer])
+
   // Movie queries (only when !isEpisode)
   const {
     data: movie,
