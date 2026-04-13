@@ -100,6 +100,10 @@ export function VideoControls({
     }
 
     const saveProgress = async () => {
+      if (player.isDisposed()) {
+        return
+      }
+
       const currentTime = player.currentTime() ?? 0
       const duration = player.duration() ?? 0
 

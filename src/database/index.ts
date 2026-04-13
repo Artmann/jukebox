@@ -1,5 +1,3 @@
-import { readFileSync } from 'fs'
-
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
@@ -10,28 +8,6 @@ const sqlite = new Database('jukebox.db')
 
 export const db = drizzle(sqlite, { schema })
 
-try {
-  migrate(db, { migrationsFolder: './drizzle' })
-} catch (error) {
-  const cause = error instanceof Error && 'cause' in error ? error.cause : null
-  const isAlreadyExists =
-    (cause instanceof Error && cause.message.includes('already exists')) ||
-    (error instanceof Error && error.message.includes('already exists'))
-
-  if (!isAlreadyExists) {
-    throw error
-  }
-
-  // Database was created before migrations were adopted. Mark all as applied.
-  const journal = JSON.parse(
-    readFileSync('./drizzle/meta/_journal.json', 'utf-8')
-  ) as { entries: { tag: string; when: number }[] }
-
-  for (const entry of journal.entries) {
-    sqlite.exec(
-      `INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES ('${entry.tag}', ${entry.when})`
-    )
-  }
-}
+migrate(db, { migrationsFolder: './drizzle' })
 
 export { schema }
