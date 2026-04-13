@@ -1,6 +1,7 @@
-const TMDB_API_KEY = process.env.TMDB_API_KEY
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
-const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p'
+import { getConfig } from '../config'
+
+const tmdbBaseUrl = 'https://api.themoviedb.org/3'
+const tmdbImageBaseUrl = 'https://image.tmdb.org/t/p'
 
 export interface TMDBSearchResult {
   id: number
@@ -113,11 +114,14 @@ export interface EpisodeMetadata {
 }
 
 function getApiKey(): string {
-  if (!TMDB_API_KEY) {
-    throw new Error('TMDB_API_KEY environment variable is not set')
+  const config = getConfig()
+  const apiKey = config?.tmdbApiKey ?? process.env.TMDB_API_KEY ?? null
+
+  if (!apiKey) {
+    throw new Error('TMDB API key is not configured')
   }
 
-  return TMDB_API_KEY
+  return apiKey
 }
 
 export async function searchMovie(
@@ -136,7 +140,7 @@ export async function searchMovie(
   }
 
   const response = await fetch(
-    `${TMDB_BASE_URL}/search/movie?${params.toString()}`
+    `${tmdbBaseUrl}/search/movie?${params.toString()}`
   )
 
   if (!response.ok) {
@@ -158,7 +162,7 @@ export async function getMovieDetails(
   })
 
   const response = await fetch(
-    `${TMDB_BASE_URL}/movie/${tmdbId}?${params.toString()}`
+    `${tmdbBaseUrl}/movie/${tmdbId}?${params.toString()}`
   )
 
   if (!response.ok) {
@@ -176,7 +180,7 @@ export async function getMovieVideos(tmdbId: number): Promise<TMDBVideo[]> {
   })
 
   const response = await fetch(
-    `${TMDB_BASE_URL}/movie/${tmdbId}/videos?${params.toString()}`
+    `${tmdbBaseUrl}/movie/${tmdbId}/videos?${params.toString()}`
   )
 
   if (!response.ok) {
@@ -214,7 +218,7 @@ export function getPosterUrl(
   size: 'w92' | 'w154' | 'w185' | 'w342' | 'w500' | 'w780' | 'original' = 'w500'
 ): string | null {
   if (!posterPath) return null
-  return `${TMDB_IMAGE_BASE_URL}/${size}${posterPath}`
+  return `${tmdbImageBaseUrl}/${size}${posterPath}`
 }
 
 export function getBackdropUrl(
@@ -222,7 +226,7 @@ export function getBackdropUrl(
   size: 'w300' | 'w780' | 'w1280' | 'original' = 'w1280'
 ): string | null {
   if (!backdropPath) return null
-  return `${TMDB_IMAGE_BASE_URL}/${size}${backdropPath}`
+  return `${tmdbImageBaseUrl}/${size}${backdropPath}`
 }
 
 export async function fetchMovieMetadata(
@@ -282,7 +286,7 @@ export async function searchShow(
   }
 
   const response = await fetch(
-    `${TMDB_BASE_URL}/search/tv?${params.toString()}`
+    `${tmdbBaseUrl}/search/tv?${params.toString()}`
   )
 
   if (!response.ok) {
@@ -302,7 +306,7 @@ export async function getShowDetails(tmdbId: number): Promise<TMDBShowDetails> {
   })
 
   const response = await fetch(
-    `${TMDB_BASE_URL}/tv/${tmdbId}?${params.toString()}`
+    `${tmdbBaseUrl}/tv/${tmdbId}?${params.toString()}`
   )
 
   if (!response.ok) {
@@ -323,7 +327,7 @@ export async function getSeasonDetails(
   })
 
   const response = await fetch(
-    `${TMDB_BASE_URL}/tv/${tmdbId}/season/${seasonNumber}?${params.toString()}`
+    `${tmdbBaseUrl}/tv/${tmdbId}/season/${seasonNumber}?${params.toString()}`
   )
 
   if (!response.ok) {

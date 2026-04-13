@@ -6,6 +6,8 @@ import { episodeStreamRoutes } from './routes/episode-stream'
 import { helloRoutes } from './routes/hello'
 import { libraryRoutes } from './routes/library'
 import { progressRoutes } from './routes/progress'
+import { scanRoutes } from './routes/scan'
+import { setupRoutes } from './routes/setup'
 import { showRoutes } from './routes/shows'
 import { streamRoutes } from './routes/stream'
 
@@ -17,6 +19,8 @@ app.route('/api/library/shows', showRoutes)
 app.route('/api/library', libraryRoutes)
 app.route('/api/progress/episode', episodeProgressRoutes)
 app.route('/api/progress', progressRoutes)
+app.route('/api/scan', scanRoutes)
+app.route('/api/setup', setupRoutes)
 app.route('/api/stream/episode', episodeStreamRoutes)
 app.route('/api/stream', streamRoutes)
 app.get('/api', (c) => c.json({ message: 'Jukebox API' }))

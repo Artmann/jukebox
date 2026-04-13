@@ -42,11 +42,16 @@ async function* scanDirectory(dir: string): AsyncGenerator<string> {
 /**
  * Scan a library path and insert movies into the database
  */
-export async function scanLibrary(libraryPath: string): Promise<{
+export interface ScanProgress {
   added: number
-  updated: number
   total: number
-}> {
+  updated: number
+}
+
+export async function scanLibrary(
+  libraryPath: string,
+  onProgress?: (progress: ScanProgress) => void | Promise<void>
+): Promise<ScanProgress> {
   let added = 0
   let updated = 0
   let total = 0
@@ -124,6 +129,7 @@ export async function scanLibrary(libraryPath: string): Promise<{
         })
         .where(eq(schema.movies.filePath, filePath))
       updated++
+      await onProgress?.({ added, total, updated })
     } else {
       // Insert new movie - fetch TMDB metadata
       console.log(`  Fetching TMDB metadata for: ${title}`)
@@ -149,6 +155,7 @@ export async function scanLibrary(libraryPath: string): Promise<{
       }
       await db.insert(schema.movies).values(newMovie)
       added++
+      await onProgress?.({ added, total, updated })
     }
 
     console.log(`  Found: ${title}`)

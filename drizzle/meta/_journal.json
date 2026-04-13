@@ -15,6 +15,13 @@
       "when": 1776075541910,
       "tag": "0001_steady_puma",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1776086273393,
+      "tag": "0002_sloppy_betty_ross",
+      "breakpoints": true
     }
   ]
 }

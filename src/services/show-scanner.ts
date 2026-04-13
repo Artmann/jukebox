@@ -224,8 +224,15 @@ export async function discoverShows(
   return shows
 }
 
+export interface ShowScanProgress {
+  added: number
+  total: number
+  updated: number
+}
+
 export async function scanShowLibrary(
-  libraryPath: string
+  libraryPath: string,
+  onProgress?: (progress: ShowScanProgress) => void | Promise<void>
 ): Promise<{ added: number; updated: number; total: number }> {
   let added = 0
   let updated = 0
@@ -382,6 +389,7 @@ export async function scanShowLibrary(
             .where(eq(schema.episodes.filePath, scannedEpisode.filePath))
 
           updated++
+          await onProgress?.({ added, total, updated })
         } else {
           const newEpisode: NewEpisode = {
             showId,
@@ -403,6 +411,7 @@ export async function scanShowLibrary(
 
           await db.insert(schema.episodes).values(newEpisode)
           added++
+          await onProgress?.({ added, total, updated })
         }
       }
     }

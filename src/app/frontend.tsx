@@ -5,19 +5,39 @@
  * It is included in `src/index.html`.
  */
 
-import { StrictMode } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Outlet, Routes, Route } from 'react-router-dom'
 
+import { useSetupStatus } from './hooks/useSetupStatus'
 import { HomePage } from './pages/Home'
 import { MoviesPage } from './pages/Movies'
+import { ScanPage } from './pages/Scan'
+import { SetupPage } from './pages/Setup'
 import { ShowDetailPage } from './pages/ShowDetail'
 import { ShowsPage } from './pages/Shows'
-import { WatchPage } from './pages/Watch'
 import './index.css'
 
+const WatchPage = lazy(() =>
+  import('./pages/Watch').then((module) => ({ default: module.WatchPage }))
+)
+
 const queryClient = new QueryClient()
+
+function SetupGuard() {
+  const { data, isLoading } = useSetupStatus()
+
+  if (isLoading) {
+    return null
+  }
+
+  if (data?.needsSetup) {
+    return <Navigate to="/setup" replace />
+  }
+
+  return <Outlet />
+}
 
 const elem = document.getElementById('root')
 if (!elem) throw new Error('Root element not found')
@@ -27,30 +47,35 @@ const app = (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route
-            path="/"
-            element={<HomePage />}
-          />
-          <Route
-            path="/movies"
-            element={<MoviesPage />}
-          />
-          <Route
-            path="/shows"
-            element={<ShowsPage />}
-          />
-          <Route
-            path="/shows/:id"
-            element={<ShowDetailPage />}
-          />
-          <Route
-            path="/watch/:id"
-            element={<WatchPage />}
-          />
-          <Route
-            path="/watch/episode/:id"
-            element={<WatchPage />}
-          />
+          <Route path="/scan" element={<ScanPage />} />
+          <Route path="/setup" element={<SetupPage />} />
+
+          <Route element={<SetupGuard />}>
+            <Route
+              path="/"
+              element={<HomePage />}
+            />
+            <Route
+              path="/movies"
+              element={<MoviesPage />}
+            />
+            <Route
+              path="/shows"
+              element={<ShowsPage />}
+            />
+            <Route
+              path="/shows/:id"
+              element={<ShowDetailPage />}
+            />
+            <Route
+              path="/watch/:id"
+              element={<Suspense><WatchPage /></Suspense>}
+            />
+            <Route
+              path="/watch/episode/:id"
+              element={<Suspense><WatchPage /></Suspense>}
+            />
+          </Route>
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
