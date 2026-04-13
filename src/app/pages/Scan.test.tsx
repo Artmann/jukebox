@@ -30,9 +30,7 @@ class MockEventSource {
   }
 
   addEventListener(event: string, callback: (event: { data: string }) => void) {
-    if (!this.listeners[event]) {
-      this.listeners[event] = []
-    }
+    this.listeners[event] ??= []
 
     this.listeners[event].push(callback)
   }
@@ -63,7 +61,7 @@ describe('ScanPage', () => {
     })
   })
 
-  it('renders the scanning header', async () => {
+  it('renders the scanning header', () => {
     setFetchMock({ ok: true, json: () => Promise.resolve([]) })
 
     renderScan()

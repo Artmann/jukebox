@@ -24,10 +24,10 @@ setupRoutes.get('/', async (context) => {
 })
 
 setupRoutes.post('/complete', async (context) => {
-  const body = (await context.req.json()) as {
+  const body = await context.req.json<{
     libraries: Array<{ name: string; path: string; type: 'movies' | 'shows' }>
     tmdbApiKey: string
-  }
+  }>()
 
   if (!body.tmdbApiKey) {
     return context.json({ error: { message: 'TMDB API key is required' } }, 400)

@@ -22,9 +22,27 @@ vi.mock('../../config', () => ({
 import { setupRoutes } from './setup'
 import { getConfig, saveConfig } from '../../config'
 
+interface SetupStatusResponse {
+  config: { tmdbApiKey: string } | null
+  hasApiKey: boolean
+  libraries: Array<{ id: number; name: string; path: string; type: string }>
+  libraryCount: number
+  needsSetup: boolean
+}
+
+interface ErrorResponse {
+  error: { message: string }
+}
+
+interface SuccessResponse {
+  success: boolean
+}
+
+type ResponseBody = SetupStatusResponse & ErrorResponse & SuccessResponse
+
 async function request(path: string, options?: RequestInit) {
   const response = await setupRoutes.request(path, options)
-  const body = await response.json()
+  const body = (await response.json()) as ResponseBody
 
   return { status: response.status, body }
 }

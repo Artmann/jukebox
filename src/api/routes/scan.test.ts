@@ -32,7 +32,7 @@ describe('scan routes', () => {
       mockFrom.mockResolvedValue([])
 
       const response = await scanRoutes.request('/libraries')
-      const body = await response.json()
+      const body = (await response.json()) as unknown[]
 
       expect(response.status).toEqual(200)
       expect(body).toEqual([])
@@ -57,7 +57,7 @@ describe('scan routes', () => {
       ])
 
       const response = await scanRoutes.request('/libraries')
-      const body = await response.json()
+      const body = (await response.json()) as unknown[]
 
       expect(response.status).toEqual(200)
       expect(body).toEqual([
@@ -72,7 +72,7 @@ describe('scan routes', () => {
       mockFrom.mockResolvedValue([])
 
       const response = await scanRoutes.request('/stream')
-      const body = await response.json()
+      const body = (await response.json()) as { error: { message: string } }
 
       expect(response.status).toEqual(400)
       expect(body).toEqual({ error: { message: 'No libraries configured' } })
