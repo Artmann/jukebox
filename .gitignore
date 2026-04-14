@@ -1,6 +1,10 @@
 # dependencies (bun install)
 node_modules
 
+# bun's lockfile is platform-specific for optional deps (e.g. rollup binaries),
+# which breaks cross-platform CI. Let each environment resolve fresh.
+bun.lock
+
 # output
 out
 dist
