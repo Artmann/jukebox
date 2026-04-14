@@ -18,7 +18,9 @@ import { streamRoutes } from './routes/stream'
 
 const app = new Hono()
 
-app.use('*', logger())
+if (process.env.NODE_ENV !== 'production') {
+  app.use('*', logger())
+}
 
 app.onError((error, context) => {
   console.error('Unhandled error:', error)
@@ -86,11 +88,11 @@ export function setupViteProxy(vitePort: number) {
 
     const headers = new Headers()
 
-    for (const [key, value] of c.req.raw.headers.entries()) {
+    c.req.raw.headers.forEach((value, key) => {
       if (!hopByHopHeaders.has(key.toLowerCase())) {
         headers.set(key, value)
       }
-    }
+    })
 
     try {
       const response = await fetch(viteUrl, {

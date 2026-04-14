@@ -1,3 +1,7 @@
+import { readFileSync } from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
 import { serve } from '@hono/node-server'
 import { createServer } from 'vite'
 
@@ -6,6 +10,36 @@ import { app, setupStaticServing, setupViteProxy } from './api'
 const port = process.env.PORT ? Number(process.env.PORT) : 1990
 const vitePort = 5173
 const isDevelopment = process.env.NODE_ENV !== 'production'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+function readPackageVersion(): string {
+  // Try bundled location (dist/server/index.js → ../../package.json) first,
+  // then dev location (src/index.ts → ../package.json).
+  const candidates = [
+    path.resolve(__dirname, '../../package.json'),
+    path.resolve(__dirname, '../package.json'),
+  ]
+
+  for (const candidate of candidates) {
+    try {
+      const content = JSON.parse(readFileSync(candidate, 'utf-8')) as {
+        name?: string
+        version?: string
+      }
+
+      if (content.name === 'jukebox-media-server' && content.version) {
+        return content.version
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return 'unknown'
+}
+
+const version = readPackageVersion()
 
 let viteServer: Awaited<ReturnType<typeof createServer>> | null = null
 
@@ -19,7 +53,6 @@ if (isDevelopment) {
   })
 
   await viteServer.listen()
-  console.log(`Vite dev server running at http://localhost:${vitePort}`)
 
   setupViteProxy(vitePort)
 } else {
@@ -27,8 +60,27 @@ if (isDevelopment) {
 }
 
 const server = serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`Jukebox running at http://localhost:${info.port}`)
+  printWelcome(info.port)
 })
+
+function printWelcome(boundPort: number) {
+  const url = `http://localhost:${boundPort}`
+  const bold = '\x1b[1m'
+  const cyan = '\x1b[36m'
+  const dim = '\x1b[2m'
+  const reset = '\x1b[0m'
+
+  const lines = [
+    '',
+    `  ${bold}Jukebox${reset} ${dim}v${version}${reset}`,
+    '',
+    `  ${cyan}➜${reset}  Open ${cyan}${url}${reset} in your browser`,
+    `  ${dim}Press Ctrl+C to stop${reset}`,
+    '',
+  ]
+
+  console.log(lines.join('\n'))
+}
 
 function shutdown(signal: string) {
   console.log(`\nReceived ${signal}, shutting down...`)
