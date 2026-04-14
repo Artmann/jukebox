@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Self-hosted media server with a Netflix-style interface for browsing and streaming your personal movie and TV show collection.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Artmann/jukebox.git"
+  },
+  "homepage": "https://github.com/Artmann/jukebox#readme",
+  "bugs": {
+    "url": "https://github.com/Artmann/jukebox/issues"
+  },
   "type": "module",
   "bin": {
     "jukebox-media-server": "./bin/jukebox-media-server.js"

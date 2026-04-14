@@ -1,92 +1,112 @@
 # Jukebox
 
 A self-hosted media server with a Netflix-style interface for browsing and
-streaming your movie collection.
+streaming your personal movie and TV show collection.
+
+![Jukebox library view](docs/images/library.png)
 
 ## Features
 
-- **Netflix-style UI** - Browse your library with poster art, backdrops, and
-  movie details
-- **Automatic metadata** - Fetches movie info, posters, and trailers from TMDB
-- **Video streaming** - Stream any video format with seeking support
-- **Watch progress** - Automatically saves and resumes playback position
-- **Trailer previews** - Watch YouTube trailers directly in the movie details
-  modal
+- **Netflix-style UI** — browse your library with poster art, backdrops, and
+  rich metadata
+- **Movies and TV shows** — automatic detection of episodes, seasons, and series
+- **Automatic metadata** — fetches titles, posters, backdrops, ratings, and
+  trailers from TMDB
+- **Video streaming with seeking** — stream any common video format with full
+  range-request support
+- **Watch progress** — automatically saves and resumes playback position
+- **Trailer previews** — watch YouTube trailers directly from the details panel
+
+![Jukebox player](docs/images/player.png)
 
 ## Requirements
 
-- [Bun](https://bun.sh) (v1.0 or later)
-- [TMDB API Key](https://www.themoviedb.org/settings/api) (free)
+- [Node.js](https://nodejs.org/) 18 or later
+- A free [TMDB API key](https://www.themoviedb.org/settings/api)
 
-## Quick Start
+## Installation
 
-1. **Clone and install dependencies**
+Install globally from npm:
 
-   ```bash
-   git clone <repository-url>
-   cd jukebox
-   bun install
-   ```
+```bash
+npm install -g jukebox-media-server
+```
 
-2. **Configure environment**
+Or run it without installing:
 
-   Create a `.env` file in the project root:
+```bash
+npx jukebox-media-server
+```
 
-   ```
-   TMDB_API_KEY=your_api_key_here
-   ```
+## Getting Started
 
-3. **Scan your movie library**
+1. **Start Jukebox**
 
    ```bash
-   bun run scan "/path/to/your/movies"
+   jukebox-media-server
    ```
 
-4. **Start the server**
+   Then open `http://localhost:1990` in your browser.
 
-   ```bash
-   bun dev
-   ```
+2. **Add your TMDB API key**
 
-5. **Open in browser**
+   On first launch, the setup screen will ask for your TMDB API key. You can
+   create one for free at
+   [themoviedb.org](https://www.themoviedb.org/settings/api).
 
-   Navigate to `http://localhost:5173`
+3. **Scan your library**
+
+   Point Jukebox at the folder containing your movies and TV shows. It will
+   recursively scan for video files, parse titles and years from filenames, and
+   fetch metadata from TMDB.
+
+4. **Watch**
+
+   That's it — your library is ready.
 
 ## Configuration
 
-| Variable       | Description                  | Default |
-| -------------- | ---------------------------- | ------- |
-| `TMDB_API_KEY` | Your TMDB API key (required) | -       |
-| `PORT`         | Server port                  | `1990`  |
+Jukebox stores its configuration and database in `~/.jukebox/`:
 
-## Scanning Your Library
+- `~/.jukebox/config.json` — your TMDB API key and library paths
+- `~/.jukebox/jukebox.db` — SQLite database with metadata and watch progress
 
-The scanner recursively finds video files and fetches metadata from TMDB:
+Environment variables:
 
-```bash
-bun run scan "/path/to/movies"
-```
+| Variable | Description | Default |
+| -------- | ----------- | ------- |
+| `PORT`   | Server port | `1990`  |
 
-**Supported formats:** `.mp4`, `.mkv`, `.avi`, `.mov`, `.wmv`, `.m4v`, `.webm`,
-`.flv`, `.mpeg`, `.mpg`
+## Supported Formats
 
-**Naming tips for best results:**
+`.mp4`, `.mkv`, `.avi`, `.mov`, `.wmv`, `.m4v`, `.webm`, `.flv`, `.mpeg`,
+`.mpg`
+
+## File Naming
+
+Jukebox parses titles and years from filenames. For best results:
+
+**Movies:**
 
 - `Movie Title (2020).mkv`
 - `Movie.Title.2020.1080p.BluRay.mkv`
 - `Movie Title [2020].mp4`
 
-Re-run the scan command anytime you add new movies to your library.
+**TV shows:**
 
-## Production
+- `Show Name/Season 01/Show Name - S01E01 - Episode Title.mkv`
+- `Show Name/Season 1/Show.Name.S01E01.mkv`
 
-Build and run for production:
+## Updating Your Library
 
-```bash
-bun run build
-bun start
-```
+Re-run a scan from the UI any time you add new files. Jukebox only fetches
+metadata for files it hasn't seen before, so subsequent scans are fast.
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 
-MIT
+[MIT](LICENSE)

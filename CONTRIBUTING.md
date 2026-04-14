@@ -1,160 +1,142 @@
 # Contributing to Jukebox
 
-This guide covers everything developers need to know to work on this project.
+Thanks for your interest in contributing. This document covers how to set up a
+development environment, the project's tech stack, and how to ship changes.
 
 ## Tech Stack
 
-**Backend:**
+- **Runtime:** Node.js 18+
+- **Backend:** [Hono](https://hono.dev/) on
+  [`@hono/node-server`](https://github.com/honojs/node-server)
+- **Frontend:** React 19 + React Router, [TanStack React Query](https://tanstack.com/query),
+  [Video.js](https://videojs.com/)
+- **Database:** SQLite via [Drizzle ORM](https://orm.drizzle.team/) and
+  [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3)
+- **Styling:** [Tailwind CSS](https://tailwindcss.com/) +
+  [shadcn/ui](https://ui.shadcn.com/) (Radix primitives)
+- **Bundler:** [rolldown](https://rolldown.rs/) for the server bundle,
+  [Vite](https://vite.dev/) for the client
+- **Tests:** [Vitest](https://vitest.dev/) +
+  [Testing Library](https://testing-library.com/)
 
-- Hono - Web framework
-- Drizzle ORM - Database layer
-- SQLite - Database (via better-sqlite3)
+## Local Setup
 
-**Frontend:**
+1. **Clone and install**
 
-- React 19
-- React Router v7
-- TanStack React Query
-- Video.js - Video player
-- Tailwind CSS
-- Radix UI - Component primitives
+   ```bash
+   git clone git@github.com:Artmann/jukebox.git
+   cd jukebox
+   npm install
+   ```
 
-**Tooling:**
+2. **Run the dev server**
 
-- Bun - Runtime and package manager
-- Vite - Frontend bundler
-- TypeScript
+   ```bash
+   npm run dev
+   ```
 
-## Project Structure
+   This starts the Hono backend on port `1990` and the Vite dev server on port
+   `5173`. The backend proxies non-API requests to Vite, so open
+   `http://localhost:1990` to use the app with hot-reload.
+
+3. **Configure on first launch**
+
+   Open the app, paste in your
+   [TMDB API key](https://www.themoviedb.org/settings/api), and point Jukebox
+   at a folder containing some video files.
+
+## Project Layout
 
 ```
 src/
-├── api/                    # Hono API routes
-│   └── routes/
-│       ├── library.ts      # Movie listing endpoints
-│       ├── stream.ts       # Video streaming
-│       └── progress.ts     # Watch progress tracking
-│
-├── app/                    # React frontend
-│   ├── pages/              # Route pages
-│   ├── components/         # UI components
-│   └── hooks/              # React hooks
-│
-├── database/
-│   ├── schema.ts           # Drizzle schema
-│   └── index.ts            # Database setup
-│
-├── services/
-│   ├── scanner.ts          # Library scanning
-│   ├── tmdb.ts             # TMDB API integration
-│   └── filename-parser.ts  # Movie title extraction
-│
-├── components/ui/          # Shadcn components
-└── index.ts                # Server entry point
+  api/                # Hono routes
+    index.ts          # App setup, static serving, Vite proxy
+    routes/           # API endpoints (library, stream, scan, etc.)
+  app/                # React frontend
+    pages/            # Route components
+    components/       # Reusable UI
+    hooks/            # React hooks
+  config/             # Config file + paths (~/.jukebox/)
+  database/           # Drizzle schema + connection
+  scripts/            # CLI scripts (scan, migrate)
+  services/           # Business logic (scanner, TMDB, parsers)
+  index.ts            # Server entry point
+bin/                  # npm bin entry
+scripts/build.ts      # Build orchestration (Vite + rolldown)
+drizzle/              # SQL migrations
 ```
-
-## Development Setup
-
-1. Install dependencies:
-
-   ```bash
-   bun install
-   ```
-
-2. Create `.env` file:
-
-   ```
-   TMDB_API_KEY=your_api_key
-   ```
-
-3. Start development server:
-
-   ```bash
-   bun dev
-   ```
-
-   - Backend runs on port 1990
-   - Vite dev server runs on port 5173
 
 ## Scripts
 
-| Command               | Description                       |
-| --------------------- | --------------------------------- |
-| `bun dev`             | Start development server with HMR |
-| `bun start`           | Run production server             |
-| `bun run build`       | Build frontend assets             |
-| `bun run scan <path>` | Scan movie library                |
-| `bun run format`      | Format code with Prettier         |
-| `bun test`            | Run tests                         |
+| Command               | What it does                              |
+| --------------------- | ----------------------------------------- |
+| `npm run dev`         | Start the dev server (Hono + Vite)        |
+| `npm run build`       | Build client (Vite) and server (rolldown) |
+| `npm start`           | Run the production build                  |
+| `npm test`            | Run the Vitest suite                      |
+| `npm run typecheck`   | Type-check with `tsc --noEmit`            |
+| `npm run lint`        | Run ESLint                                |
+| `npm run lint:fix`    | Run ESLint with `--fix`                   |
+| `npm run format`      | Format with Prettier                      |
+| `npm run db:generate` | Generate a new Drizzle migration          |
+| `npm run db:migrate`  | Apply migrations                          |
+| `npm run db:studio`   | Launch Drizzle Studio                     |
 
 ## Code Style
 
-See `CODE_STYLE.md` for full guidelines. Key points:
+See [`CODE_STYLE.md`](CODE_STYLE.md) for the conventions enforced in this
+repo. The short version:
 
-- Use full variable names (`request` not `req`)
-- No `CONSTANT_CASE` - use `camelCase`
-- No `any` types - use proper types or `unknown`
-- Avoid non-null assertions (`!`)
-- Prefer nullish coalescing (`??` over `||`)
-- Single quotes, no semicolons
-- Always await or handle promises
+- No semicolons, single quotes
+- Full variable names (`request`, not `req`); no `CONSTANT_CASE`
+- No `any`, no non-null assertions, no floating promises
+- Use `??` over `||`
+- Alphabetical ordering by default
+- Whitespace to improve readability — blank lines around control flow and
+  before returns
+- Tests live next to their implementation; prefer `toEqual` over `toBe` and
+  compare whole objects
 
-**Formatting:**
+## Database Changes
 
-- Use whitespace to improve readability
-- Blank line after const groups and before returns
-- Order items alphabetically
-
-## Database
-
-**Schema:** Defined in `src/database/schema.ts`
-
-**Tables:**
-
-- `movies` - Movie metadata and file info
-- `watchProgress` - Playback position tracking
-
-**Migrations:**
+When you change `src/database/schema.ts`:
 
 ```bash
-# Generate migration after schema changes
-bunx drizzle-kit generate
-
-# Push changes to database
-bunx drizzle-kit push
+npm run db:generate
 ```
 
-## API Endpoints
+This produces a new SQL file under `drizzle/`. Commit it alongside your schema
+change. Migrations run automatically on server startup.
 
-**Library:**
-
-- `GET /api/library/movies` - List all movies
-- `GET /api/library/movies/:id` - Get movie details
-
-**Streaming:**
-
-- `GET /api/stream/:id` - Stream video (supports range requests)
-
-**Progress:**
-
-- `GET /api/progress/:movieId` - Get watch progress
-- `PUT /api/progress/:movieId` - Save watch progress
-
-## Testing
-
-- Place test files next to implementation (e.g., `parser.test.ts`)
-- Use `toEqual` over `toBe`
-- Compare entire objects in assertions
+## Building for Release
 
 ```bash
-bun test
+npm run build
 ```
 
-## Building
+This produces:
+
+- `dist/client/` — built frontend (Vite)
+- `dist/server/index.js` — bundled server (rolldown, ~260 KB)
+
+The `prepublishOnly` hook runs the build automatically when you `npm publish`.
+
+## Publishing to npm
 
 ```bash
-bun run build
+npm version <patch|minor|major>
+npm publish
+git push --follow-tags
 ```
 
-This builds frontend assets to `dist/` using Bun's bundler with Tailwind CSS
-support.
+## Reporting Bugs
+
+Open an issue with steps to reproduce, expected vs actual behavior, and your
+Node version. Logs from the terminal running `jukebox-media-server` are
+helpful.
+
+## Pull Requests
+
+- Keep changes focused — one concern per PR
+- Add tests when fixing bugs or adding behavior
+- Run `npm run typecheck`, `npm run lint`, and `npm test` before opening a PR
