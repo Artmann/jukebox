@@ -5,7 +5,7 @@ development environment, the project's tech stack, and how to ship changes.
 
 ## Tech Stack
 
-- **Runtime:** Node.js 18+
+- **Runtime:** Node.js 18+ (development uses [Bun](https://bun.sh/))
 - **Backend:** [Hono](https://hono.dev/) on
   [`@hono/node-server`](https://github.com/honojs/node-server)
 - **Frontend:** React 19 + React Router, [TanStack React Query](https://tanstack.com/query),
@@ -19,6 +19,9 @@ development environment, the project's tech stack, and how to ship changes.
 - **Tests:** [Vitest](https://vitest.dev/) +
   [Testing Library](https://testing-library.com/)
 
+> The published package is Node-compatible so end users can install it with
+> `npm` or `npx`. For local development, this project uses Bun.
+
 ## Local Setup
 
 1. **Clone and install**
@@ -26,13 +29,13 @@ development environment, the project's tech stack, and how to ship changes.
    ```bash
    git clone git@github.com:Artmann/jukebox.git
    cd jukebox
-   npm install
+   bun install
    ```
 
 2. **Run the dev server**
 
    ```bash
-   npm run dev
+   bun run dev
    ```
 
    This starts the Hono backend on port `1990` and the Vite dev server on port
@@ -70,17 +73,17 @@ drizzle/              # SQL migrations
 
 | Command               | What it does                              |
 | --------------------- | ----------------------------------------- |
-| `npm run dev`         | Start the dev server (Hono + Vite)        |
-| `npm run build`       | Build client (Vite) and server (rolldown) |
-| `npm start`           | Run the production build                  |
-| `npm test`            | Run the Vitest suite                      |
-| `npm run typecheck`   | Type-check with `tsc --noEmit`            |
-| `npm run lint`        | Run ESLint                                |
-| `npm run lint:fix`    | Run ESLint with `--fix`                   |
-| `npm run format`      | Format with Prettier                      |
-| `npm run db:generate` | Generate a new Drizzle migration          |
-| `npm run db:migrate`  | Apply migrations                          |
-| `npm run db:studio`   | Launch Drizzle Studio                     |
+| `bun run dev`         | Start the dev server (Hono + Vite)        |
+| `bun run build`       | Build client (Vite) and server (rolldown) |
+| `bun start`           | Run the production build                  |
+| `bun test`            | Run the Vitest suite                      |
+| `bun run typecheck`   | Type-check with `tsc --noEmit`            |
+| `bun run lint`        | Run ESLint                                |
+| `bun run lint:fix`    | Run ESLint with `--fix`                   |
+| `bun run format`      | Format with Prettier                      |
+| `bun run db:generate` | Generate a new Drizzle migration          |
+| `bun run db:migrate`  | Apply migrations                          |
+| `bun run db:studio`   | Launch Drizzle Studio                     |
 
 ## Code Style
 
@@ -102,7 +105,7 @@ repo. The short version:
 When you change `src/database/schema.ts`:
 
 ```bash
-npm run db:generate
+bun run db:generate
 ```
 
 This produces a new SQL file under `drizzle/`. Commit it alongside your schema
@@ -111,7 +114,7 @@ change. Migrations run automatically on server startup.
 ## Building for Release
 
 ```bash
-npm run build
+bun run build
 ```
 
 This produces:
@@ -119,15 +122,18 @@ This produces:
 - `dist/client/` — built frontend (Vite)
 - `dist/server/index.js` — bundled server (rolldown, ~260 KB)
 
-The `prepublishOnly` hook runs the build automatically when you `npm publish`.
+The `prepublishOnly` hook runs the build automatically when you publish.
 
 ## Publishing to npm
 
 ```bash
-npm version <patch|minor|major>
+bun pm version <patch|minor|major>
 npm publish
 git push --follow-tags
 ```
+
+`npm publish` is used here because publishing requires npm credentials, but
+everything else in the workflow is bun.
 
 ## Reporting Bugs
 
@@ -139,4 +145,4 @@ helpful.
 
 - Keep changes focused — one concern per PR
 - Add tests when fixing bugs or adding behavior
-- Run `npm run typecheck`, `npm run lint`, and `npm test` before opening a PR
+- Run `bun run typecheck`, `bun run lint`, and `bun test` before opening a PR

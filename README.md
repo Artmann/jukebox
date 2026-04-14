@@ -38,6 +38,12 @@ Or run it without installing:
 npx jukebox-media-server
 ```
 
+Using [Bun](https://bun.sh/)? It works too:
+
+```bash
+bunx jukebox-media-server
+```
+
 ## Getting Started
 
 1. **Start Jukebox**
