@@ -18,9 +18,7 @@ import { streamRoutes } from './routes/stream'
 
 const app = new Hono()
 
-if (process.env.NODE_ENV !== 'production') {
-  app.use('*', logger())
-}
+app.use('*', logger())
 
 app.onError((error, context) => {
   console.error('Unhandled error:', error)
