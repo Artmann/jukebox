@@ -124,16 +124,53 @@ This produces:
 
 The `prepublishOnly` hook runs the build automatically when you publish.
 
-## Publishing to npm
+## Releasing
 
-```bash
-bun pm version <patch|minor|major>
-npm publish
-git push --follow-tags
-```
+Releases are automated with
+[release-please](https://github.com/googleapis/release-please). You don't run
+`npm version` or `npm publish` by hand.
 
-`npm publish` is used here because publishing requires npm credentials, but
-everything else in the workflow is bun.
+### How it works
+
+1. You merge a PR with a [Conventional Commits](https://www.conventionalcommits.org/)
+   message — `feat:`, `fix:`, `chore:`, etc.
+2. release-please opens (or updates) a "Release PR" on `main` titled
+   `chore(main): release jukebox-media-server X.Y.Z`. The PR bumps
+   `package.json`, updates `CHANGELOG.md`, and bumps
+   `.release-please-manifest.json`.
+3. Review the release PR. When you're happy with the version bump and notes,
+   merge it.
+4. Merging the release PR triggers release-please to tag the commit and
+   create a GitHub Release.
+5. The `publish` job in `.github/workflows/release-please.yml` then builds
+   and publishes the package to npm with provenance.
+
+### Commit message format
+
+Use Conventional Commits so release-please can determine the right version
+bump and generate a changelog:
+
+| Prefix     | Bump  | Example                                |
+| ---------- | ----- | -------------------------------------- |
+| `fix:`     | patch | `fix: handle missing range header`     |
+| `feat:`    | minor | `feat: add subtitle support`           |
+| `feat!:`   | major | `feat!: rename config schema`          |
+| `docs:`    | none  | `docs: clarify install instructions`   |
+| `chore:`   | none  | `chore: bump dependencies`             |
+| `refactor:`| none  | `refactor: extract scanner module`     |
+| `test:`    | none  | `test: add filename parser cases`      |
+
+For breaking changes, add `!` after the type (`feat!:`) or include a
+`BREAKING CHANGE:` footer in the commit body.
+
+### First-time setup (one-time)
+
+These are already done, but documented for reference:
+
+- An `NPM_TOKEN` secret with publish access to `jukebox-media-server` is
+  configured in repo Settings → Secrets and variables → Actions.
+- `release-please-config.json` and `.release-please-manifest.json` track the
+  release configuration and current version.
 
 ## Reporting Bugs
 
