@@ -55,6 +55,16 @@
     "better-sqlite3": "^12.5.0",
     "dotenv": "^17.2.3"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "4.54.0",
+    "@rollup/rollup-darwin-x64": "4.54.0",
+    "@rollup/rollup-linux-arm64-gnu": "4.54.0",
+    "@rollup/rollup-linux-arm64-musl": "4.54.0",
+    "@rollup/rollup-linux-x64-gnu": "4.54.0",
+    "@rollup/rollup-linux-x64-musl": "4.54.0",
+    "@rollup/rollup-win32-arm64-msvc": "4.54.0",
+    "@rollup/rollup-win32-x64-msvc": "4.54.0"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@hono/node-server": "^1.19.14",
