@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
-import { useParams, Link, useLocation } from 'react-router-dom'
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { VideoControls } from '../components/VideoControls'
 import { EpisodePanel } from '../components/EpisodePanel'
+import { UpNextOverlay } from '../components/UpNextOverlay'
+import { useNextEpisode } from '../hooks/useNextEpisode'
 import type { Movie } from '../hooks/useMovies'
 import type { Episode, Show, ShowWithSeasons } from '../lib/media'
 import type Player from 'video.js/dist/types/player'
@@ -75,10 +78,13 @@ async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
 }
 
 const hideDelayMs = 3000
+const upNextPeekSeconds = 30
+const upNextCountdownSeconds = 10
 
 export function WatchPage() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
+  const navigate = useNavigate()
   const isEpisode = location.pathname.startsWith('/watch/episode/')
 
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -86,6 +92,9 @@ export function WatchPage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [episodePanelOpen, setEpisodePanelOpen] = useState(false)
   const [selectedSeason, setSelectedSeason] = useState(1)
+  const [upNextDismissed, setUpNextDismissed] = useState(false)
+  const [upNextVisible, setUpNextVisible] = useState(false)
+  const [isCountingDown, setIsCountingDown] = useState(false)
   const hasRestoredProgress = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -254,42 +263,85 @@ export function WatchPage() {
     }
   }, [player, savedProgress])
 
-  // Auto-advance to next episode when current one ends.
+  // Fetch the next unwatched episode from the server (endpoint-driven,
+  // replaces the old ad-hoc on-ended redirect).
+  const { data: nextEpisodeData } = useNextEpisode(
+    episodeShow?.id,
+    episode?.id,
+    { enabled: isEpisode }
+  )
+
+  const nextEpisode = nextEpisodeData?.episode ?? null
+  const nextEpisodeShow = nextEpisodeData?.show ?? null
+
+  // Reset overlay state every time the watched episode changes.
   useEffect(() => {
-    if (!player || !isEpisode || !show || !episode) return
+    setUpNextDismissed(false)
+    setUpNextVisible(false)
+    setIsCountingDown(false)
+  }, [episode?.id])
 
-    const onEnded = () => {
-      const currentSeason = show.seasons.find(
-        (season) => season.seasonNumber === episode.seasonNumber
-      )
+  const goToNextEpisode = useCallback(() => {
+    if (!nextEpisode) return
 
-      if (!currentSeason) return
+    navigate(`/watch/episode/${nextEpisode.id}`)
+  }, [nextEpisode, navigate])
 
-      const currentIndex = currentSeason.episodes.findIndex(
-        (episodeItem) => episodeItem.id === episode.id
-      )
-      let nextEpisode: Episode | undefined
+  // Track playback position to reveal the overlay in the last 30 seconds,
+  // and drive the countdown state based on the 10-second threshold or the
+  // `ended` event — whichever fires first.
+  useEffect(() => {
+    if (!player || !isEpisode) return
 
-      if (currentIndex < currentSeason.episodes.length - 1) {
-        nextEpisode = currentSeason.episodes[currentIndex + 1]
-      } else {
-        const nextSeason = show.seasons.find(
-          (season) => season.seasonNumber === episode.seasonNumber + 1
-        )
-        nextEpisode = nextSeason?.episodes[0]
+    const onTimeUpdate = () => {
+      const currentTime = player.currentTime() ?? 0
+      const duration = player.duration() ?? 0
+
+      if (duration <= 0) return
+
+      const remaining = duration - currentTime
+
+      if (remaining <= upNextPeekSeconds && !upNextDismissed && nextEpisode) {
+        setUpNextVisible(true)
       }
 
-      if (nextEpisode) {
-        window.location.href = `/watch/episode/${nextEpisode.id}`
+      if (remaining <= upNextCountdownSeconds && !upNextDismissed && nextEpisode) {
+        setIsCountingDown(true)
       }
     }
 
+    const onEnded = () => {
+      if (!nextEpisode) {
+        toast("You've finished all episodes.")
+        if (episodeShow) {
+          navigate(`/shows/${episodeShow.id}`)
+        }
+        return
+      }
+
+      if (upNextDismissed) {
+        return
+      }
+
+      setUpNextVisible(true)
+      setIsCountingDown(true)
+    }
+
+    player.on('timeupdate', onTimeUpdate)
     player.on('ended', onEnded)
 
     return () => {
+      player.off('timeupdate', onTimeUpdate)
       player.off('ended', onEnded)
     }
-  }, [player, isEpisode, show, episode])
+  }, [
+    player,
+    isEpisode,
+    nextEpisode,
+    upNextDismissed,
+    episodeShow,
+    navigate
+  ])
 
   const handleSelectEpisode = useCallback(
     (selectedEpisode: Episode) => {
@@ -358,6 +410,20 @@ export function WatchPage() {
           onReady={setPlayer}
         />
       </div>
+
+      {isEpisode && upNextVisible && nextEpisode && nextEpisodeShow && (
+        <UpNextOverlay
+          isCountingDown={isCountingDown}
+          nextEpisode={nextEpisode}
+          onCancel={() => {
+            setUpNextDismissed(true)
+            setUpNextVisible(false)
+            setIsCountingDown(false)
+          }}
+          onPlayNow={goToNextEpisode}
+          show={nextEpisodeShow}
+        />
+      )}
 
       {isEpisode && episodePanelOpen && show && episode && (
         <div className="absolute top-0 right-0 bottom-0 w-96 z-20">
