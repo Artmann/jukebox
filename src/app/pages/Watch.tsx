@@ -4,6 +4,11 @@ import { useParams, Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle
+} from '@/components/ui/sheet'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { VideoControls } from '../components/VideoControls'
 import { EpisodePanel } from '../components/EpisodePanel'
@@ -359,19 +364,54 @@ export function WatchPage() {
         />
       </div>
 
-      {isEpisode && episodePanelOpen && show && episode && (
-        <div className="absolute top-0 right-0 bottom-0 w-96 z-20">
-          <EpisodePanel
-            currentEpisodeId={episode.id}
-            onClose={() => setEpisodePanelOpen(false)}
-            onSelectEpisode={handleSelectEpisode}
-            onSelectSeason={setSelectedSeason}
-            progressMap={episodeProgressMap}
-            seasons={show.seasons}
-            selectedSeason={selectedSeason}
-            showTitle={show.title}
-          />
-        </div>
+      {isEpisode && show && episode && (
+        <>
+          {/* Desktop side panel */}
+          <div
+            className={`hidden sm:block absolute top-0 right-0 bottom-0 w-96 z-20 ${
+              episodePanelOpen ? '' : 'pointer-events-none opacity-0'
+            } transition-opacity duration-200`}
+          >
+            {episodePanelOpen && (
+              <EpisodePanel
+                currentEpisodeId={episode.id}
+                onClose={() => setEpisodePanelOpen(false)}
+                onSelectEpisode={handleSelectEpisode}
+                onSelectSeason={setSelectedSeason}
+                progressMap={episodeProgressMap}
+                seasons={show.seasons}
+                selectedSeason={selectedSeason}
+                showTitle={show.title}
+              />
+            )}
+          </div>
+
+          {/* Mobile bottom sheet */}
+          <Sheet
+            onOpenChange={setEpisodePanelOpen}
+            open={episodePanelOpen}
+          >
+            <SheetContent
+              className="sm:hidden h-[85vh] p-0 bg-black/95 border-white/10"
+              hideCloseButton
+              side="bottom"
+            >
+              <SheetTitle className="sr-only">
+                {show.title} episodes
+              </SheetTitle>
+              <EpisodePanel
+                currentEpisodeId={episode.id}
+                onClose={() => setEpisodePanelOpen(false)}
+                onSelectEpisode={handleSelectEpisode}
+                onSelectSeason={setSelectedSeason}
+                progressMap={episodeProgressMap}
+                seasons={show.seasons}
+                selectedSeason={selectedSeason}
+                showTitle={show.title}
+              />
+            </SheetContent>
+          </Sheet>
+        </>
       )}
 
       <div
