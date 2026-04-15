@@ -284,7 +284,7 @@ export function WatchPage() {
   const goToNextEpisode = useCallback(() => {
     if (!nextEpisode) return
 
-    navigate(`/watch/episode/${nextEpisode.id}`)
+    void navigate(`/watch/episode/${nextEpisode.id}`)
   }, [nextEpisode, navigate])
 
   // Track playback position to reveal the overlay in the last 30 seconds,
@@ -314,7 +314,7 @@ export function WatchPage() {
       if (!nextEpisode) {
         toast("You've finished all episodes.")
         if (episodeShow) {
-          navigate(`/shows/${episodeShow.id}`)
+          void navigate(`/shows/${episodeShow.id}`)
         }
         return
       }
