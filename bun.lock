@@ -6,6 +6,7 @@
       "name": "jukebox-media-server",
       "dependencies": {
         "better-sqlite3": "^12.5.0",
+        "dayjs": "^1.11.20",
         "dotenv": "^17.2.3",
       },
       "devDependencies": {
@@ -554,6 +555,8 @@
     "csstype": ["csstype@3.2.3", "", {}, ""],
 
     "data-urls": ["data-urls@6.0.0", "", { "dependencies": { "whatwg-mimetype": "^4.0.0", "whatwg-url": "^15.0.0" } }, ""],
+
+    "dayjs": ["dayjs@1.11.20", "", {}, "sha512-YbwwqR/uYpeoP4pu043q+LTDLFBLApUP6VxRihdfNTqu4ubqMlGDLd6ErXhEgsyvY0K6nCs7nggYumAN+9uEuQ=="],
 
     "debug": ["debug@4.4.3", "", { "dependencies": { "ms": "^2.1.3" } }, ""],
 
