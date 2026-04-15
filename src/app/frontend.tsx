@@ -21,6 +21,7 @@ import { useSetupStatus } from './hooks/useSetupStatus'
 import { HomePage } from './pages/Home'
 import { MoviesPage } from './pages/Movies'
 import { ScanPage } from './pages/Scan'
+import { SettingsProfilesPage } from './pages/SettingsProfiles'
 import { SetupPage } from './pages/Setup'
 import { ShowDetailPage } from './pages/ShowDetail'
 import { ShowsPage } from './pages/Shows'
@@ -84,6 +85,19 @@ const app = (
             <Route
               path="/shows/:id"
               element={<ShowDetailPage />}
+            />
+            <Route
+              path="/settings"
+              element={
+                <Navigate
+                  to="/settings/profiles"
+                  replace
+                />
+              }
+            />
+            <Route
+              path="/settings/profiles"
+              element={<SettingsProfilesPage />}
             />
             <Route
               path="/watch/:id"

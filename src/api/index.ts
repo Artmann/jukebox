@@ -6,6 +6,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 
+import { profileMiddleware } from './middleware/profile'
 import { episodeProgressRoutes } from './routes/episode-progress'
 import { episodeStreamRoutes } from './routes/episode-stream'
 import { helloRoutes } from './routes/hello'
@@ -13,12 +14,16 @@ import { libraryRoutes } from './routes/library'
 import { progressRoutes } from './routes/progress'
 import { scanRoutes } from './routes/scan'
 import { setupRoutes } from './routes/setup'
+import { profileRoutes } from './routes/profiles'
+import { favoriteRoutes } from './routes/favorites'
 import { showRoutes } from './routes/shows'
 import { streamRoutes } from './routes/stream'
 
 const app = new Hono()
 
 app.use('*', logger())
+
+app.use('/api/*', profileMiddleware)
 
 app.onError((error, context) => {
   console.error('Unhandled error:', error)
@@ -34,6 +39,8 @@ app.route('/api/library', libraryRoutes)
 app.route('/api/progress/episode', episodeProgressRoutes)
 app.route('/api/progress', progressRoutes)
 app.route('/api/scan', scanRoutes)
+app.route('/api/profiles', profileRoutes)
+app.route('/api/favorites', favoriteRoutes)
 app.route('/api/setup', setupRoutes)
 app.route('/api/stream/episode', episodeStreamRoutes)
 app.route('/api/stream', streamRoutes)

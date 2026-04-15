@@ -2,11 +2,13 @@ import { eq, gt, and, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
+import type { ProfileContext } from '../middleware/profile'
 
-const episodeProgressRoutes = new Hono()
+const episodeProgressRoutes = new Hono<ProfileContext>()
 
 // GET /show/:showId - Get progress for all episodes of a show
 episodeProgressRoutes.get('/show/:showId', async (context) => {
+  const profileId = context.get('profileId')
   const showId = parseInt(context.req.param('showId'), 10)
 
   if (isNaN(showId)) {
@@ -34,6 +36,7 @@ episodeProgressRoutes.get('/show/:showId', async (context) => {
     .from(schema.watchProgress)
     .where(
       and(
+        eq(schema.watchProgress.profileId, profileId),
         inArray(schema.watchProgress.episodeId, episodeIds),
         gt(schema.watchProgress.currentTime, 0)
       )
@@ -59,6 +62,7 @@ episodeProgressRoutes.get('/show/:showId', async (context) => {
 
 // GET /:episodeId
 episodeProgressRoutes.get('/:episodeId', async (context) => {
+  const profileId = context.get('profileId')
   const episodeId = parseInt(context.req.param('episodeId'), 10)
 
   if (isNaN(episodeId)) {
@@ -68,7 +72,12 @@ episodeProgressRoutes.get('/:episodeId', async (context) => {
   const [progress] = await db
     .select()
     .from(schema.watchProgress)
-    .where(eq(schema.watchProgress.episodeId, episodeId))
+    .where(
+      and(
+        eq(schema.watchProgress.profileId, profileId),
+        eq(schema.watchProgress.episodeId, episodeId)
+      )
+    )
     .limit(1)
 
   if (!progress) {
@@ -83,6 +92,7 @@ episodeProgressRoutes.get('/:episodeId', async (context) => {
 
 // PUT /:episodeId
 episodeProgressRoutes.put('/:episodeId', async (context) => {
+  const profileId = context.get('profileId')
   const episodeId = parseInt(context.req.param('episodeId'), 10)
 
   if (isNaN(episodeId)) {
@@ -101,7 +111,12 @@ episodeProgressRoutes.put('/:episodeId', async (context) => {
   const [existing] = await db
     .select()
     .from(schema.watchProgress)
-    .where(eq(schema.watchProgress.episodeId, episodeId))
+    .where(
+      and(
+        eq(schema.watchProgress.profileId, profileId),
+        eq(schema.watchProgress.episodeId, episodeId)
+      )
+    )
     .limit(1)
 
   const now = new Date()
@@ -114,9 +129,10 @@ episodeProgressRoutes.put('/:episodeId', async (context) => {
         duration: body.duration ? Math.floor(body.duration) : existing.duration,
         updatedAt: now
       })
-      .where(eq(schema.watchProgress.episodeId, episodeId))
+      .where(eq(schema.watchProgress.id, existing.id))
   } else {
     await db.insert(schema.watchProgress).values({
+      profileId,
       episodeId,
       currentTime: Math.floor(body.currentTime),
       duration: body.duration ? Math.floor(body.duration) : null,

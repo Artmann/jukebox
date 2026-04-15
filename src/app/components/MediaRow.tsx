@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { MediaItem } from '../lib/media'
+import { FavoriteButton } from './FavoriteButton'
 import { PosterImage } from './PosterImage'
 
 interface MediaRowProps {
@@ -35,13 +36,22 @@ export function MediaRow({ items, title }: MediaRowProps): ReactElement | null {
               key={id}
               to={link}
             >
-              <div className="w-full overflow-hidden rounded-sm">
+              <div className="relative w-full overflow-hidden rounded-sm">
                 <PosterImage
                   alt={mediaItem.item.title}
                   className="w-full transition-transform duration-200 group-hover:scale-105"
                   path={mediaItem.item.posterPath}
                   size="w342"
                   title={mediaItem.item.title}
+                />
+
+                <FavoriteButton
+                  className="absolute right-2 top-2"
+                  target={
+                    mediaItem.type === 'movie'
+                      ? { kind: 'movie', movieId: mediaItem.item.id }
+                      : { kind: 'show', showId: mediaItem.item.id }
+                  }
                 />
               </div>
 

@@ -1,4 +1,17 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  uniqueIndex
+} from 'drizzle-orm/sqlite-core'
+
+export const profiles = sqliteTable('profiles', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  emoji: text('emoji').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
+})
 
 export const libraries = sqliteTable('libraries', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -79,14 +92,51 @@ export const episodes = sqliteTable('episodes', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
 })
 
-export const watchProgress = sqliteTable('watch_progress', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  movieId: integer('movie_id').references(() => movies.id),
-  episodeId: integer('episode_id').references(() => episodes.id),
-  currentTime: integer('current_time').notNull(),
-  duration: integer('duration'),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
-})
+export const watchProgress = sqliteTable(
+  'watch_progress',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    profileId: integer('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    movieId: integer('movie_id').references(() => movies.id),
+    episodeId: integer('episode_id').references(() => episodes.id),
+    currentTime: integer('current_time').notNull(),
+    duration: integer('duration'),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
+  },
+  (table) => [
+    uniqueIndex('watch_progress_profile_movie_idx').on(
+      table.profileId,
+      table.movieId
+    ),
+    uniqueIndex('watch_progress_profile_episode_idx').on(
+      table.profileId,
+      table.episodeId
+    )
+  ]
+)
+
+export const favorites = sqliteTable(
+  'favorites',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    profileId: integer('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    movieId: integer('movie_id').references(() => movies.id, {
+      onDelete: 'cascade'
+    }),
+    showId: integer('show_id').references(() => shows.id, {
+      onDelete: 'cascade'
+    }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
+  },
+  (table) => [
+    uniqueIndex('favorites_profile_movie_idx').on(table.profileId, table.movieId),
+    uniqueIndex('favorites_profile_show_idx').on(table.profileId, table.showId)
+  ]
+)
 
 export type Library = typeof libraries.$inferSelect
 export type NewLibrary = typeof libraries.$inferInsert
@@ -100,3 +150,7 @@ export type Show = typeof shows.$inferSelect
 export type NewShow = typeof shows.$inferInsert
 export type WatchProgress = typeof watchProgress.$inferSelect
 export type NewWatchProgress = typeof watchProgress.$inferInsert
+export type Profile = typeof profiles.$inferSelect
+export type NewProfile = typeof profiles.$inferInsert
+export type Favorite = typeof favorites.$inferSelect
+export type NewFavorite = typeof favorites.$inferInsert

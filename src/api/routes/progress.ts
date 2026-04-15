@@ -2,12 +2,16 @@ import { and, eq, gt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
+import type { ProfileContext } from '../middleware/profile'
 
-const progressRoutes = new Hono()
+const progressRoutes = new Hono<ProfileContext>()
 
 // GET /api/progress/continue-watching - Get movies and episodes in progress
 progressRoutes.get('/continue-watching', async (context) => {
+  const profileId = context.get('profileId')
+
   const inProgressFilter = and(
+    eq(schema.watchProgress.profileId, profileId),
     gt(schema.watchProgress.currentTime, 0),
     sql`(${schema.watchProgress.duration} IS NULL OR ${schema.watchProgress.currentTime} < ${schema.watchProgress.duration} * 0.9)`
   )
@@ -60,6 +64,7 @@ progressRoutes.get('/continue-watching', async (context) => {
 
 // GET /api/progress/:movieId - Get saved progress for a movie
 progressRoutes.get('/:movieId', async (c) => {
+  const profileId = c.get('profileId')
   const movieId = parseInt(c.req.param('movieId'), 10)
 
   if (isNaN(movieId)) {
@@ -69,7 +74,12 @@ progressRoutes.get('/:movieId', async (c) => {
   const [progress] = await db
     .select()
     .from(schema.watchProgress)
-    .where(eq(schema.watchProgress.movieId, movieId))
+    .where(
+      and(
+        eq(schema.watchProgress.profileId, profileId),
+        eq(schema.watchProgress.movieId, movieId)
+      )
+    )
     .limit(1)
 
   if (!progress) {
@@ -84,6 +94,7 @@ progressRoutes.get('/:movieId', async (c) => {
 
 // PUT /api/progress/:movieId - Save/update progress
 progressRoutes.put('/:movieId', async (c) => {
+  const profileId = c.get('profileId')
   const movieId = parseInt(c.req.param('movieId'), 10)
 
   if (isNaN(movieId)) {
@@ -99,7 +110,12 @@ progressRoutes.put('/:movieId', async (c) => {
   const [existing] = await db
     .select()
     .from(schema.watchProgress)
-    .where(eq(schema.watchProgress.movieId, movieId))
+    .where(
+      and(
+        eq(schema.watchProgress.profileId, profileId),
+        eq(schema.watchProgress.movieId, movieId)
+      )
+    )
     .limit(1)
 
   const now = new Date()
@@ -112,9 +128,10 @@ progressRoutes.put('/:movieId', async (c) => {
         duration: body.duration ? Math.floor(body.duration) : existing.duration,
         updatedAt: now
       })
-      .where(eq(schema.watchProgress.movieId, movieId))
+      .where(eq(schema.watchProgress.id, existing.id))
   } else {
     await db.insert(schema.watchProgress).values({
+      profileId,
       movieId,
       currentTime: Math.floor(body.currentTime),
       duration: body.duration ? Math.floor(body.duration) : null,
