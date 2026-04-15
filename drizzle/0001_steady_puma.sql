@@ -59,7 +59,7 @@ CREATE TABLE `__new_watch_progress` (
 	FOREIGN KEY (`episode_id`) REFERENCES `episodes`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-INSERT INTO `__new_watch_progress`("id", "movie_id", "episode_id", "current_time", "duration", "updated_at") SELECT "id", "movie_id", "episode_id", "current_time", "duration", "updated_at" FROM `watch_progress`;--> statement-breakpoint
+INSERT INTO `__new_watch_progress`("id", "movie_id", "episode_id", "current_time", "duration", "updated_at") SELECT "id", "movie_id", NULL, "current_time", "duration", "updated_at" FROM `watch_progress`;--> statement-breakpoint
 DROP TABLE `watch_progress`;--> statement-breakpoint
 ALTER TABLE `__new_watch_progress` RENAME TO `watch_progress`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint

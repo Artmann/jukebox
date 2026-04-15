@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { ContinueWatchingRow } from '../components/ContinueWatchingRow'
+import { FavoritesRow } from '../components/FavoritesRow'
 import { MediaRow } from '../components/MediaRow'
 import { PageHeader } from '../components/PageHeader'
 import { SkeletonRow } from '../components/SkeletonRow'
@@ -102,6 +103,8 @@ export function HomePage() {
         {continueWatchingItems && continueWatchingItems.length > 0 && (
           <ContinueWatchingRow items={continueWatchingItems} />
         )}
+
+        <FavoritesRow />
 
         {genreRows.map(({ genre, items }) => (
           <MediaRow

@@ -2,6 +2,8 @@ import { cn } from '@/lib/utils'
 import { useEffect, useState, type ReactElement } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 
+import { ProfileSwitcher } from './ProfileSwitcher'
+
 export function PageHeader(): ReactElement {
   const [scrollY, setScrollY] = useState(0)
 
@@ -71,6 +73,10 @@ export function PageHeader(): ReactElement {
           >
             TV Shows
           </NavLink>
+        </div>
+
+        <div className="ml-auto flex items-center">
+          <ProfileSwitcher />
         </div>
       </nav>
     </header>

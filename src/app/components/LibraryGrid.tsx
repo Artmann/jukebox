@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 
 import type { Movie } from '../hooks/useMovies'
 import { Button } from '@/components/ui/button'
+import { FavoriteButton } from './FavoriteButton'
 import { PosterImage } from './PosterImage'
 
 export const LibraryGrid = memo(function LibraryGrid({
@@ -143,6 +144,11 @@ function GridItem({
           </div>
         </div>
       </Link>
+
+      <FavoriteButton
+        className="absolute right-2 top-2"
+        target={{ kind: 'movie', movieId: item.id }}
+      />
 
       <div className="mt-1 flex items-center gap-1">
         <Link
