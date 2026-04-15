@@ -9,6 +9,47 @@ interface VideoPlayerProps {
   onReady?: (player: Player) => void
 }
 
+function isSafari(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+
+  const userAgent = navigator.userAgent
+
+  return /^((?!chrome|android|crios|fxios).)*safari/i.test(userAgent)
+}
+
+function isIos(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+
+  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+}
+
+function pickSource(src: string): { src: string; type: string } {
+  // For Safari/iOS with an MKV source, rewrite to HLS transcode.
+  const isMkv = /\.mkv(\?|$)/i.test(src)
+
+  if (isMkv && (isSafari() || isIos())) {
+    // /api/stream/:id or /api/stream/episode/:id -> /api/transcode/<key>/index.m3u8
+    const match = src.match(/\/api\/stream\/(?:episode\/)?(\d+)/)
+
+    if (match) {
+      const isEpisode = src.includes('/episode/')
+      const id = match[1]
+      const fileId = isEpisode ? `episode-${id}` : `movie-${id}`
+
+      return {
+        src: `/api/transcode/${fileId}/index.m3u8`,
+        type: 'application/vnd.apple.mpegurl'
+      }
+    }
+  }
+
+  return { src, type: 'video/mp4' }
+}
+
 export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
   const videoRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
@@ -19,7 +60,14 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
 
       videoElement.classList.add('vjs-big-play-centered')
 
+      // Enable AirPlay on Safari/iOS.
+      videoElement.setAttribute('x-webkit-airplay', 'allow')
+      videoElement.setAttribute('airplay', 'allow')
+      videoElement.setAttribute('playsinline', '')
+
       videoRef.current.appendChild(videoElement)
+
+      const source = pickSource(src)
 
       playerRef.current = videojs(
         videoElement,
@@ -27,8 +75,13 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
           controls: false,
           autoplay: true,
           fill: true,
-          sources: [{ src, type: 'video/mp4' }],
-          poster
+          sources: [source],
+          poster,
+          html5: {
+            vhs: {
+              overrideNative: false
+            }
+          }
         },
         () => {
           const player = playerRef.current

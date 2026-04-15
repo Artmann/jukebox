@@ -15,6 +15,7 @@ import {
 } from 'react'
 import type Player from 'video.js/dist/types/player'
 import { formatTime } from '../lib/format'
+import { CastButton } from './CastButton'
 import { VideoTrackBar } from './VideoTrackBar'
 import { VolumeControl } from './VolumeControl'
 
@@ -25,6 +26,7 @@ interface VideoControlsProps {
   episodeId?: number
   onToggleEpisodes?: () => void
   showEpisodesButton?: boolean
+  streamUrl?: string
 }
 
 const skipSeconds = 10
@@ -36,7 +38,8 @@ export function VideoControls({
   movieId,
   episodeId,
   onToggleEpisodes,
-  showEpisodesButton
+  showEpisodesButton,
+  streamUrl
 }: VideoControlsProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -209,6 +212,15 @@ export function VideoControls({
         <div className="text-white text-sm truncate">{title}</div>
 
         <div className="flex gap-2 items-center">
+          {streamUrl && (
+            <CastButton
+              episodeId={episodeId}
+              movieId={movieId}
+              player={player}
+              streamUrl={streamUrl}
+              title={title}
+            />
+          )}
           {showEpisodesButton && onToggleEpisodes && (
             <IconButton
               aria-label="Browse episodes"

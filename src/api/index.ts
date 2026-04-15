@@ -18,6 +18,7 @@ import { profileRoutes } from './routes/profiles'
 import { favoriteRoutes } from './routes/favorites'
 import { showRoutes } from './routes/shows'
 import { streamRoutes } from './routes/stream'
+import { transcodeRoutes } from './routes/transcode'
 
 const app = new Hono()
 
@@ -44,6 +45,7 @@ app.route('/api/favorites', favoriteRoutes)
 app.route('/api/setup', setupRoutes)
 app.route('/api/stream/episode', episodeStreamRoutes)
 app.route('/api/stream', streamRoutes)
+app.route('/api/transcode', transcodeRoutes)
 app.get('/api', (c) => c.json({ message: 'Jukebox API' }))
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))

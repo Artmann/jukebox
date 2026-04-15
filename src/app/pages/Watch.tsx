@@ -383,6 +383,7 @@ export function WatchPage() {
           movieId={isEpisode ? undefined : movie?.id}
           episodeId={isEpisode ? episode?.id : undefined}
           showEpisodesButton={isEpisode}
+          streamUrl={streamUrl}
           onToggleEpisodes={() => setEpisodePanelOpen((open) => !open)}
         />
       </div>
