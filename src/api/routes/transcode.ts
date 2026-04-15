@@ -6,7 +6,7 @@ import { Readable } from 'stream'
 
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
-import invariant from 'tiny-invariant'
+
 import { db, schema } from '../../database'
 
 const logger = {
@@ -123,19 +123,17 @@ export function startTranscode({
 
   const spawner = spawnImplementation ?? spawn
 
-  let ffmpegProcess: ChildProcess | null = null
-
+  let ffmpegProcess: ChildProcess
   try {
     ffmpegProcess = spawner('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] })
   } catch (error) {
     logger.error(`Failed to spawn ffmpeg for ${fileId}:`, error)
 
     throw new Error(
-      "Couldn't prepare this file for casting. Check that ffmpeg is installed."
+      "Couldn't prepare this file for casting. Check that ffmpeg is installed.",
+      { cause: error }
     )
   }
-
-  invariant(ffmpegProcess, 'ffmpeg process should exist after spawn')
 
   ffmpegProcess.on('error', (error) => {
     logger.error(`ffmpeg process error for ${fileId}:`, error)
