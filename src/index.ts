@@ -3,7 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 import { serve } from '@hono/node-server'
-import { createServer } from 'vite'
+import type { ViteDevServer } from 'vite'
 
 import { app, setupStaticServing, setupViteProxy } from './api'
 
@@ -41,9 +41,11 @@ function readPackageVersion(): string {
 
 const version = readPackageVersion()
 
-let viteServer: Awaited<ReturnType<typeof createServer>> | null = null
+let viteServer: ViteDevServer | null = null
 
 if (isDevelopment) {
+  const { createServer } = await import('vite')
+
   viteServer = await createServer({
     configFile: './vite.config.ts',
     server: {
