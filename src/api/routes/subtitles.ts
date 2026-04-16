@@ -1,4 +1,5 @@
 import { readFile } from 'fs/promises'
+import path from 'path'
 
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -11,6 +12,33 @@ const subtitleRoutes = new Hono()
 
 const conversionFailedMessage =
   "Couldn't convert subtitle file. Check it's a valid SRT."
+
+const outsideLibraryMessage =
+  'Subtitle is outside the configured library paths. Rescan your libraries.'
+
+// Defense-in-depth: even though the scanner only writes sidecar paths that sit
+// under a configured library, confirm the stored path still resolves under one
+// of them before handing it to readFile. Guards against library removal,
+// manual DB edits, and path traversal via legacy rows.
+function subtitleIsInsideALibrary(
+  subtitleFilePath: string,
+  libraryPaths: string[]
+): boolean {
+  const resolvedSubtitle = path.resolve(subtitleFilePath)
+
+  for (const libraryPath of libraryPaths) {
+    const resolvedLibrary = path.resolve(libraryPath)
+    const libraryWithSeparator = resolvedLibrary.endsWith(path.sep)
+      ? resolvedLibrary
+      : `${resolvedLibrary}${path.sep}`
+
+    if (resolvedSubtitle.startsWith(libraryWithSeparator)) {
+      return true
+    }
+  }
+
+  return false
+}
 
 // GET /:id - Stream the subtitle file as WebVTT.
 //
@@ -33,6 +61,22 @@ subtitleRoutes.get('/:id', async (context) => {
 
   if (!subtitle) {
     return context.json({ error: { message: 'Subtitle not found' } }, 404)
+  }
+
+  const libraries = await db
+    .select({ path: schema.libraries.path })
+    .from(schema.libraries)
+
+  const libraryPaths = libraries.map((library) => library.path)
+
+  if (!subtitleIsInsideALibrary(subtitle.filePath, libraryPaths)) {
+    // Return 404 (not 500) so we don't disclose that the row exists but sits
+    // outside a configured library.
+    log.warn(
+      `Refusing to serve subtitle ${subtitle.id} — ${subtitle.filePath} is not inside any configured library. Rescan the library to clean up stale rows.`
+    )
+
+    return context.json({ error: { message: outsideLibraryMessage } }, 404)
   }
 
   if (subtitle.format === 'ass') {

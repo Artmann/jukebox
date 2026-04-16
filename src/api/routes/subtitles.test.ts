@@ -30,6 +30,14 @@ beforeEach(async () => {
 
   await testDb.db.delete(testDb.schema.subtitles)
   await testDb.db.delete(testDb.schema.movies)
+  await testDb.db.delete(testDb.schema.libraries)
+
+  await testDb.db.insert(testDb.schema.libraries).values({
+    name: 'Test Library',
+    path: workingDirectory,
+    type: 'movies',
+    createdAt: new Date(0)
+  })
 
   await testDb.db.insert(testDb.schema.movies).values({
     id: 100,
@@ -144,6 +152,50 @@ describe('GET /api/subtitles/:id', () => {
 
     expect(response.status).toEqual(415)
     expect(await response.text()).toContain('Convert the file to .srt or .vtt')
+  })
+
+  it('returns 404 with an actionable message when the subtitle path is outside every configured library', async () => {
+    // Allocate an outside-the-library directory. The default beforeEach only
+    // registers `workingDirectory` as a library, so anything outside it must
+    // be rejected regardless of whether the file on disk exists.
+    const outsideDirectory = await mkdtemp(
+      join(tmpdir(), 'jukebox-sub-outside-')
+    )
+
+    try {
+      const outsidePath = join(outsideDirectory, 'movie.en.srt')
+
+      await writeFile(outsidePath, 'dummy', 'utf-8')
+
+      const inserted = await testDb.db
+        .insert(testDb.schema.subtitles)
+        .values({
+          movieId: 100,
+          filePath: outsidePath,
+          format: 'srt',
+          language: 'en'
+        })
+        .returning({ id: testDb.schema.subtitles.id })
+
+      const id = inserted[0]?.id ?? 0
+      const app = buildApp()
+      const response = await app.request(`/${id}`)
+
+      expect(response.status).toEqual(404)
+
+      const payload = (await response.json()) as {
+        error: { message: string }
+      }
+
+      expect(payload).toEqual({
+        error: {
+          message:
+            'Subtitle is outside the configured library paths. Rescan your libraries.'
+        }
+      })
+    } finally {
+      await rm(outsideDirectory, { recursive: true, force: true })
+    }
   })
 
   it('returns 500 with the documented error text when the file is missing', async () => {
