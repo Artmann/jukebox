@@ -51,12 +51,12 @@ that can be specced individually later (brainstorm → spec → plan → execute
       password, scan schedule, and profile management into one `/settings`
       route. Replace or absorb `/setup`.
 
-- [ ] **Scan status visible in main UI.** Persistent scan indicator in the top
+- [x] **Scan status visible in main UI.** Persistent scan indicator in the top
       bar (spinner + "Scanning 42/310" + last-scan timestamp). Click opens scan
       detail/log. Trigger manual scan from there instead of navigating to
       `/scan`.
 
-- [ ] **Periodic background scans.** Scheduler runs `scanLibrary()` every N
+- [x] **Periodic background scans.** Scheduler runs `scanLibrary()` every N
       hours (default 6h, configurable in Settings). Skip if a scan is already
       running. Emit events the UI can subscribe to via SSE/WebSocket so the
       indicator updates live.
