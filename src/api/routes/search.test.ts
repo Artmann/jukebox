@@ -15,6 +15,17 @@ vi.mock('../../database', () => ({
 const { searchRoutes } = await import('./search')
 
 interface SearchResponse {
+  episodes: Array<{
+    episodeNumber: number
+    id: number
+    overview: string | null
+    seasonNumber: number
+    showId: number
+    showTitle: string
+    stillPath: string | null
+    title: string
+  }>
+  indexEmpty: boolean
   movies: Array<{
     backdropPath: string | null
     id: number
@@ -30,16 +41,6 @@ interface SearchResponse {
     posterPath: string | null
     title: string
     year: number | null
-  }>
-  episodes: Array<{
-    episodeNumber: number
-    id: number
-    overview: string | null
-    seasonNumber: number
-    showId: number
-    showTitle: string
-    stillPath: string | null
-    title: string
   }>
 }
 
@@ -200,14 +201,24 @@ describe('search routes', () => {
       const { body, status } = await search('')
 
       expect(status).toEqual(200)
-      expect(body).toEqual({ movies: [], shows: [], episodes: [] })
+      expect(body).toEqual({
+        episodes: [],
+        indexEmpty: false,
+        movies: [],
+        shows: []
+      })
     })
 
     it('returns empty groups for a whitespace query', async () => {
       const { body, status } = await search('   ')
 
       expect(status).toEqual(200)
-      expect(body).toEqual({ movies: [], shows: [], episodes: [] })
+      expect(body).toEqual({
+        episodes: [],
+        indexEmpty: false,
+        movies: [],
+        shows: []
+      })
     })
 
     it('returns 400 for a missing q parameter', async () => {
@@ -315,14 +326,24 @@ describe('search routes', () => {
       const { body, status } = await search('"foo* (bar) baz:qux')
 
       expect(status).toEqual(200)
-      expect(body).toEqual({ movies: [], shows: [], episodes: [] })
+      expect(body).toEqual({
+        episodes: [],
+        indexEmpty: false,
+        movies: [],
+        shows: []
+      })
     })
 
     it('survives a query consisting entirely of FTS punctuation', async () => {
       const { body, status } = await search('* () : ""')
 
       expect(status).toEqual(200)
-      expect(body).toEqual({ movies: [], shows: [], episodes: [] })
+      expect(body).toEqual({
+        episodes: [],
+        indexEmpty: false,
+        movies: [],
+        shows: []
+      })
     })
 
     it('respects the limit parameter', async () => {
@@ -352,6 +373,29 @@ describe('search routes', () => {
             '`limit` must be a positive integer between 1 and 50.'
         }
       })
+    })
+
+    it('flags an empty library so the UI can show "index not ready"', async () => {
+      await testDb.db.delete(testDb.schema.episodes)
+      await testDb.db.delete(testDb.schema.seasons)
+      await testDb.db.delete(testDb.schema.shows)
+      await testDb.db.delete(testDb.schema.movies)
+
+      const { body, status } = await search('anything')
+
+      expect(status).toEqual(200)
+      expect(body).toEqual({
+        episodes: [],
+        indexEmpty: true,
+        movies: [],
+        shows: []
+      })
+    })
+
+    it('does not flag indexEmpty when the library has rows but no matches', async () => {
+      const { body } = await search('zzznosuchterm')
+
+      expect(body.indexEmpty).toEqual(false)
     })
 
     it('reflects deletions through the FTS triggers', async () => {

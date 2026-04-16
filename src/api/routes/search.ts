@@ -39,6 +39,7 @@ interface EpisodeResult {
 
 interface SearchResponse {
   episodes: EpisodeResult[]
+  indexEmpty: boolean
   movies: MovieResult[]
   shows: ShowResult[]
 }
@@ -77,7 +78,12 @@ searchRoutes.get('/', (context) => {
   const matchExpression = buildFtsMatchQuery(queryParameter)
 
   if (matchExpression === null) {
-    const empty: SearchResponse = { movies: [], shows: [], episodes: [] }
+    const empty: SearchResponse = {
+      episodes: [],
+      indexEmpty: false,
+      movies: [],
+      shows: []
+    }
     return context.json(empty)
   }
 
@@ -86,7 +92,13 @@ searchRoutes.get('/', (context) => {
     const shows = searchShows(matchExpression, limit)
     const episodes = searchEpisodes(matchExpression, limit)
 
-    const response: SearchResponse = { movies, shows, episodes }
+    const indexEmpty =
+      movies.length === 0 &&
+      shows.length === 0 &&
+      episodes.length === 0 &&
+      isLibraryEmpty()
+
+    const response: SearchResponse = { episodes, indexEmpty, movies, shows }
 
     return context.json(response)
   } catch (error) {
@@ -103,6 +115,25 @@ searchRoutes.get('/', (context) => {
     )
   }
 })
+
+function isLibraryEmpty(): boolean {
+  const [movieCountRow] = db.all<{ count: number }>(sql`
+    SELECT COUNT(*) AS count FROM movies
+  `)
+  const [showCountRow] = db.all<{ count: number }>(sql`
+    SELECT COUNT(*) AS count FROM shows
+  `)
+  const [episodeCountRow] = db.all<{ count: number }>(sql`
+    SELECT COUNT(*) AS count FROM episodes
+  `)
+
+  const total =
+    (movieCountRow?.count ?? 0) +
+    (showCountRow?.count ?? 0) +
+    (episodeCountRow?.count ?? 0)
+
+  return total === 0
+}
 
 function parseLimit(raw: string | undefined): number | null {
   if (raw === undefined || raw.trim() === '') {

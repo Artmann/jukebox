@@ -31,6 +31,7 @@ export interface SearchEpisode {
 
 export interface SearchResults {
   episodes: SearchEpisode[]
+  indexEmpty: boolean
   movies: SearchMovie[]
   shows: SearchShow[]
 }

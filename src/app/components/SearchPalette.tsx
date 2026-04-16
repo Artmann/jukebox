@@ -55,7 +55,14 @@ export function SearchPalette({
     (data?.shows.length ?? 0) +
     (data?.episodes.length ?? 0)
 
-  const showEmptyState = hasQuery && !isFetching && !error && totalResults === 0
+  const showIndexEmptyState =
+    hasQuery && !isFetching && !error && (data?.indexEmpty ?? false)
+  const showEmptyState =
+    hasQuery &&
+    !isFetching &&
+    !error &&
+    totalResults === 0 &&
+    !showIndexEmptyState
 
   return (
     <Dialog.Root
@@ -103,6 +110,13 @@ export function SearchPalette({
               {error ? (
                 <PlaceholderMessage tone="error">
                   {error.message}
+                </PlaceholderMessage>
+              ) : null}
+
+              {showIndexEmptyState ? (
+                <PlaceholderMessage>
+                  Search index isn&rsquo;t ready yet. Try again after the next
+                  scan completes.
                 </PlaceholderMessage>
               ) : null}
 
