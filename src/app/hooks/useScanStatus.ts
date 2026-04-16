@@ -86,6 +86,10 @@ export function useScanStream(): void {
       void queryClient.invalidateQueries({ queryKey: scanStatusQueryKey })
     }
 
+    function invalidateSearch() {
+      void queryClient.invalidateQueries({ queryKey: ['search'] })
+    }
+
     const events = [
       'library-start',
       'file-scanned',
@@ -98,10 +102,17 @@ export function useScanStream(): void {
       eventSource.addEventListener(event, invalidate)
     }
 
+    // When a scan finishes the library may have new rows, so any cached
+    // search results are stale. Other hooks already invalidate their caches
+    // here — keep the search cache in sync too.
+    eventSource.addEventListener('scan-complete', invalidateSearch)
+
     return () => {
       for (const event of events) {
         eventSource.removeEventListener(event, invalidate)
       }
+
+      eventSource.removeEventListener('scan-complete', invalidateSearch)
 
       eventSource.close()
     }

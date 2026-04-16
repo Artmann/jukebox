@@ -7,6 +7,7 @@ import { buildFtsMatchQuery } from '../../services/fts-query-parser'
 
 const defaultLimit = 20
 const maxLimit = 50
+const maxQueryLength = 256
 
 interface MovieResult {
   backdropPath: string | null
@@ -55,6 +56,18 @@ searchRoutes.get('/', (context) => {
         error: {
           message:
             'Add a `q` query parameter to search. Example: /api/search?q=dune'
+        }
+      },
+      400
+    )
+  }
+
+  if (queryParameter.length > maxQueryLength) {
+    return context.json(
+      {
+        error: {
+          message:
+            'Search query is too long. Shorten it to under 256 characters.'
         }
       },
       400

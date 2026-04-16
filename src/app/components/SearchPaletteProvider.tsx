@@ -36,6 +36,12 @@ export function SearchPaletteProvider({
   useEffect(
     function registerSlashShortcut() {
       function onKeyDown(event: KeyboardEvent) {
+        // Ignore IME composition so picking a Japanese / Chinese candidate
+        // doesn't accidentally open the palette.
+        if (event.isComposing || event.keyCode === 229) {
+          return
+        }
+
         if (event.key !== '/') {
           return
         }

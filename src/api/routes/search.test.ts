@@ -361,6 +361,22 @@ describe('search routes', () => {
       expect(body.movies.length).toEqual(2)
     })
 
+    it('returns 400 when the query exceeds 256 characters', async () => {
+      const app = buildApp()
+      const longQuery = 'a'.repeat(257)
+      const params = new URLSearchParams({ q: longQuery })
+      const response = await app.request(`/?${params.toString()}`)
+      const body = (await response.json()) as { error: { message: string } }
+
+      expect(response.status).toEqual(400)
+      expect(body).toEqual({
+        error: {
+          message:
+            'Search query is too long. Shorten it to under 256 characters.'
+        }
+      })
+    })
+
     it('returns 400 when limit is not a positive integer', async () => {
       const app = buildApp()
       const response = await app.request('/?q=dune&limit=abc')
