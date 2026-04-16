@@ -95,6 +95,7 @@ export function WatchPage() {
   const [upNextDismissed, setUpNextDismissed] = useState(false)
   const [upNextVisible, setUpNextVisible] = useState(false)
   const [isCountingDown, setIsCountingDown] = useState(false)
+  const [isSwapping, setIsSwapping] = useState(false)
   const hasRestoredProgress = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -274,22 +275,35 @@ export function WatchPage() {
   const nextEpisode = nextEpisodeData?.episode ?? null
   const nextEpisodeShow = nextEpisodeData?.show ?? null
 
-  // Reset overlay state every time the watched episode changes.
+  // Reset overlay state and the progress-restore guard every time the
+  // watched episode changes. The player instance persists across episode
+  // swaps, so we have to clear this ref manually.
   useEffect(() => {
     setUpNextDismissed(false)
     setUpNextVisible(false)
     setIsCountingDown(false)
+    hasRestoredProgress.current = false
   }, [episode?.id])
+
+  // Drop the fade overlay as soon as the new source is actually playing.
+  useEffect(() => {
+    if (!player) return
+
+    const onPlaying = () => setIsSwapping(false)
+
+    player.on('playing', onPlaying)
+
+    return () => {
+      player.off('playing', onPlaying)
+    }
+  }, [player])
 
   const goToNextEpisode = useCallback(() => {
     if (!nextEpisode) return
 
-    // Full reload: SPA navigation keeps WatchPage mounted, which leaves the
-    // video.js player disposed mid-swap while child effects still hold the
-    // stale instance (throws "Invalid target for null#on"). Matches
-    // handleSelectEpisode below.
-    window.location.href = `/watch/episode/${nextEpisode.id}`
-  }, [nextEpisode])
+    setIsSwapping(true)
+    void navigate(`/watch/episode/${nextEpisode.id}`)
+  }, [nextEpisode, navigate])
 
   // Track playback position to reveal the overlay in the last 30 seconds,
   // and drive the countdown state based on the 10-second threshold or the
@@ -362,9 +376,10 @@ export function WatchPage() {
         })
       }
 
-      window.location.href = `/watch/episode/${selectedEpisode.id}`
+      setIsSwapping(true)
+      void navigate(`/watch/episode/${selectedEpisode.id}`)
     },
-    [player, episode]
+    [player, episode, navigate]
   )
 
   const isLoading = isEpisode ? isLoadingEpisode : isLoadingMovie
@@ -414,6 +429,20 @@ export function WatchPage() {
           onReady={setPlayer}
         />
       </div>
+
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 z-40 bg-black pointer-events-none transition-opacity duration-300 ${isSwapping ? 'opacity-100' : 'opacity-0'}`}
+      />
+
+      {isEpisode && upNextVisible && nextEpisode && (
+        <video
+          aria-hidden="true"
+          className="hidden"
+          preload="auto"
+          src={`/api/stream/episode/${nextEpisode.id}`}
+        />
+      )}
 
       {isEpisode && upNextVisible && nextEpisode && nextEpisodeShow && (
         <UpNextOverlay

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, type ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
 
 import type { Episode, Show } from '../lib/media'
@@ -13,12 +13,13 @@ interface UpNextOverlayProps {
   /**
    * When true the overlay is rendering its final countdown. While false it's
    * in "peek" mode (visible but not counting) so the viewer has context for
-   * the final 30 seconds before the automatic countdown starts.
+   * the final 90 seconds before the automatic countdown starts.
    */
   isCountingDown: boolean
 }
 
 const defaultCountdownSeconds = 10
+const holdMs = 1000
 
 export function UpNextOverlay({
   nextEpisode,
@@ -28,31 +29,41 @@ export function UpNextOverlay({
   countdownSeconds = defaultCountdownSeconds,
   isCountingDown
 }: UpNextOverlayProps): ReactElement {
-  const [remaining, setRemaining] = useState(countdownSeconds)
+  const fillRef = useRef<HTMLSpanElement>(null)
   const firedRef = useRef(false)
 
   useEffect(() => {
     if (!isCountingDown) {
-      setRemaining(countdownSeconds)
       firedRef.current = false
       return
     }
 
-    const interval = setInterval(() => {
-      setRemaining((value) => {
-        const nextValue = value - 1
+    const fillElement = fillRef.current
 
-        if (nextValue <= 0 && !firedRef.current) {
-          firedRef.current = true
-          onPlayNow()
-          return 0
-        }
+    if (!fillElement) return
 
-        return Math.max(0, nextValue)
-      })
-    }, 1000)
+    // Drive the fill with the Web Animations API so the bar animates
+    // independently of React re-renders and reliably resets on cancel.
+    const animation = fillElement.animate(
+      [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
+      {
+        duration: countdownSeconds * 1000,
+        easing: 'linear',
+        fill: 'forwards'
+      }
+    )
 
-    return () => clearInterval(interval)
+    const timeout = setTimeout(() => {
+      if (firedRef.current) return
+
+      firedRef.current = true
+      onPlayNow()
+    }, countdownSeconds * 1000 + holdMs)
+
+    return () => {
+      animation.cancel()
+      clearTimeout(timeout)
+    }
   }, [isCountingDown, countdownSeconds, onPlayNow])
 
   const subtitle = useMemo(
@@ -61,9 +72,12 @@ export function UpNextOverlay({
     [nextEpisode]
   )
 
-  const label = isCountingDown
-    ? `Playing in ${remaining}s`
-    : 'Up next'
+  const handlePlayNowClick = () => {
+    if (firedRef.current) return
+
+    firedRef.current = true
+    onPlayNow()
+  }
 
   return (
     <div
@@ -83,7 +97,7 @@ export function UpNextOverlay({
 
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="text-xs uppercase tracking-wide text-white/60">
-            {label}
+            Up next
           </span>
           <h3 className="mt-1 truncate text-sm font-semibold text-white">
             {show.title}
@@ -94,11 +108,17 @@ export function UpNextOverlay({
 
       <div className="mt-3 flex items-center gap-2">
         <Button
-          className="flex-1"
-          onClick={onPlayNow}
+          className="flex-1 relative overflow-hidden"
+          onClick={handlePlayNowClick}
           size="sm"
         >
-          Play now
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-0 left-0 w-full origin-left bg-white/30"
+            ref={fillRef}
+            style={{ transform: 'scaleX(0)' }}
+          />
+          <span className="relative">Next episode</span>
         </Button>
         <Button
           className="flex-1"
