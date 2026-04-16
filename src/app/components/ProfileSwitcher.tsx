@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { CheckIcon, SettingsIcon } from 'lucide-react'
+import { CheckIcon, SettingsIcon, UsersIcon } from 'lucide-react'
 import { type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -83,8 +83,18 @@ export function ProfileSwitcher(): ReactElement | null {
               className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground"
               to="/settings/profiles"
             >
-              <SettingsIcon className="size-4" />
+              <UsersIcon className="size-4" />
               Manage profiles
+            </Link>
+          </DropdownMenu.Item>
+
+          <DropdownMenu.Item asChild>
+            <Link
+              className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground"
+              to="/settings"
+            >
+              <SettingsIcon className="size-4" />
+              Settings
             </Link>
           </DropdownMenu.Item>
         </DropdownMenu.Content>
