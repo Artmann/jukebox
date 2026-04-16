@@ -83,6 +83,23 @@ Environment variables:
 | -------- | ----------- | ------- |
 | `PORT`   | Server port | `1990`  |
 
+## Casting
+
+Jukebox supports **Chromecast** (Chrome) and **AirPlay** (Safari/iOS) from
+the video player control bar.
+
+- **Chromecast**: your Chromecast must be on the same local network as the
+  machine running Jukebox, and the Jukebox server must be reachable from the
+  Chromecast by its IP/hostname (not `localhost`). Cast sessions load the
+  media directly from the Jukebox stream URL, so the Chromecast needs LAN
+  access to the server.
+- **AirPlay**: works natively on Safari and iOS. `.mkv` files are not
+  supported by AirPlay, so Jukebox transcodes them on the fly to HLS
+  (requires `ffmpeg` on the server's `PATH`).
+
+If casting fails with "Chromecast couldn't reach Jukebox", check that the
+Chromecast can reach the server's IP on the port Jukebox is listening on.
+
 ## Supported Formats
 
 `.mp4`, `.mkv`, `.avi`, `.mov`, `.wmv`, `.m4v`, `.webm`, `.flv`, `.mpeg`,
