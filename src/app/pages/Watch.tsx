@@ -2,9 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle
+} from '@/components/ui/sheet'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { VideoControls } from '../components/VideoControls'
 import { EpisodePanel } from '../components/EpisodePanel'
@@ -464,20 +469,63 @@ export function WatchPage() {
         />
       )}
 
-      {isEpisode && episodePanelOpen && show && episode && (
-        <div className="absolute top-0 right-0 bottom-0 w-96 z-20">
-          <EpisodePanel
-            currentEpisodeId={episode.id}
-            onClose={() => setEpisodePanelOpen(false)}
-            onSelectEpisode={handleSelectEpisode}
-            onSelectSeason={setSelectedSeason}
-            progressMap={episodeProgressMap}
-            seasons={show.seasons}
-            selectedSeason={selectedSeason}
-            showTitle={show.title}
-          />
-        </div>
+      {isEpisode && show && episode && (
+        <>
+          {/* Desktop side panel */}
+          <div
+            className={`hidden sm:block absolute top-0 right-0 bottom-0 w-96 z-20 ${
+              episodePanelOpen ? '' : 'pointer-events-none opacity-0'
+            } transition-opacity duration-200`}
+          >
+            {episodePanelOpen && (
+              <EpisodePanel
+                currentEpisodeId={episode.id}
+                onClose={() => setEpisodePanelOpen(false)}
+                onSelectEpisode={handleSelectEpisode}
+                onSelectSeason={setSelectedSeason}
+                progressMap={episodeProgressMap}
+                seasons={show.seasons}
+                selectedSeason={selectedSeason}
+                showTitle={show.title}
+              />
+            )}
+          </div>
+
+          {/* Mobile bottom sheet */}
+          <Sheet
+            onOpenChange={setEpisodePanelOpen}
+            open={episodePanelOpen}
+          >
+            <SheetContent
+              className="sm:hidden h-[85vh] p-0 bg-black/95 border-white/10"
+              hideCloseButton
+              side="bottom"
+            >
+              <SheetTitle className="sr-only">
+                {show.title} episodes
+              </SheetTitle>
+              <EpisodePanel
+                currentEpisodeId={episode.id}
+                onClose={() => setEpisodePanelOpen(false)}
+                onSelectEpisode={handleSelectEpisode}
+                onSelectSeason={setSelectedSeason}
+                progressMap={episodeProgressMap}
+                seasons={show.seasons}
+                selectedSeason={selectedSeason}
+                showTitle={show.title}
+              />
+            </SheetContent>
+          </Sheet>
+        </>
       )}
+
+      <Link
+        aria-label="Back to home"
+        className={`absolute top-4 left-4 z-30 flex items-center justify-center size-11 text-white/90 hover:text-white transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        to="/"
+      >
+        <ArrowLeft className="size-7" />
+      </Link>
 
       <div
         className={`absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-black/80 to-transparent pt-16 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}

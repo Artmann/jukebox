@@ -32,9 +32,9 @@ export function PageHeader(): ReactElement {
           : 'bg-transparent'
       )}
     >
-      <nav className="flex items-center gap-6 px-6 py-3 sm:py-4">
+      <nav className="flex items-center gap-3 px-4 py-2 sm:gap-6 sm:px-6 sm:py-4">
         <Link
-          className="flex items-center gap-2 text-xl font-bold tracking-tight text-primary"
+          className="flex min-h-11 items-center gap-2 text-lg font-bold tracking-tight text-primary sm:text-xl"
           to="/"
         >
           <img
@@ -42,14 +42,14 @@ export function PageHeader(): ReactElement {
             className="size-7"
             src="/images/jukebox-icon-28.png"
           />
-          Jukebox
+          <span className="hidden xs:inline sm:inline">Jukebox</span>
         </Link>
 
-        <div className="flex items-center gap-1 text-sm">
+        <div className="flex items-center gap-0.5 text-sm sm:gap-1">
           <NavLink
             className={({ isActive }) =>
               cn(
-                'rounded-md px-3 py-1.5 transition-colors',
+                'flex min-h-11 items-center rounded-md px-3 transition-colors',
                 isActive
                   ? 'text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
@@ -63,7 +63,7 @@ export function PageHeader(): ReactElement {
           <NavLink
             className={({ isActive }) =>
               cn(
-                'rounded-md px-3 py-1.5 transition-colors',
+                'flex min-h-11 items-center rounded-md px-3 transition-colors',
                 isActive
                   ? 'text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
@@ -71,7 +71,8 @@ export function PageHeader(): ReactElement {
             }
             to="/shows"
           >
-            TV Shows
+            <span className="hidden sm:inline">TV Shows</span>
+            <span className="sm:hidden">Shows</span>
           </NavLink>
         </div>
 

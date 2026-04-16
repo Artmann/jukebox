@@ -39,7 +39,7 @@ export function EpisodePanel({
         </span>
         <button
           aria-label="Close episode panel"
-          className="p-1 text-white/60 hover:text-white cursor-pointer flex-shrink-0 ml-2"
+          className="min-h-11 min-w-11 flex items-center justify-center text-white/60 hover:text-white cursor-pointer flex-shrink-0 ml-2"
           onClick={onClose}
         >
           <X className="size-5" />
@@ -50,7 +50,7 @@ export function EpisodePanel({
         {seasons.map((season) => (
           <button
             key={season.seasonNumber}
-            className={`px-3 py-1 rounded text-sm font-medium cursor-pointer transition-colors ${
+            className={`px-3 min-h-11 rounded text-sm font-medium cursor-pointer transition-colors ${
               season.seasonNumber === selectedSeason
                 ? 'bg-white text-black'
                 : 'text-white/60 hover:text-white hover:bg-white/10'

@@ -17,6 +17,8 @@ import {
 } from 'react-router-dom'
 import { Toaster } from 'sonner'
 
+import { registerSW } from 'virtual:pwa-register'
+
 import { useSetupStatus } from './hooks/useSetupStatus'
 import { HomePage } from './pages/Home'
 import { MoviesPage } from './pages/Movies'
@@ -32,6 +34,10 @@ const WatchPage = lazy(() =>
 )
 
 const queryClient = new QueryClient()
+
+// Register the service worker for PWA support. In development the plugin is
+// configured with devOptions.enabled: false, so this becomes a no-op.
+registerSW({ immediate: true })
 
 function SetupGuard() {
   const { data, isLoading } = useSetupStatus()

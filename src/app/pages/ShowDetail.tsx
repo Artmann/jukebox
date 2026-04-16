@@ -171,9 +171,9 @@ export function ShowDetailPage(): ReactElement {
     <>
       <PageHeader />
 
-      <div className="px-6 pt-6 pb-12">
-        <div className="flex gap-6 mb-8">
-          <div className="hidden sm:block flex-shrink-0 w-40">
+      <div className="px-4 pt-4 pb-12 sm:px-6 sm:pt-6">
+        <div className="flex flex-col gap-4 mb-8 sm:flex-row sm:gap-6">
+          <div className="flex-shrink-0 w-28 sm:w-40">
             <PosterImage
               alt={show.title}
               className="w-full rounded-lg"
@@ -182,8 +182,10 @@ export function ShowDetailPage(): ReactElement {
             />
           </div>
 
-          <div className="flex flex-col gap-3">
-            <h1 className="text-2xl font-bold text-foreground">{show.title}</h1>
+          <div className="flex flex-col gap-3 min-w-0">
+            <h1 className="text-xl font-bold text-foreground sm:text-2xl">
+              {show.title}
+            </h1>
 
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               {show.year && <span>{show.year}</span>}
@@ -208,7 +210,7 @@ export function ShowDetailPage(): ReactElement {
         <div className="flex flex-wrap gap-2 mb-6">
           {show.seasons.map((season) => (
             <button
-              className={`cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+              className={`cursor-pointer rounded-md px-4 min-h-11 text-sm font-medium transition-colors ${
                 season.seasonNumber === selectedSeason
                   ? 'bg-foreground text-background'
                   : 'bg-muted text-muted-foreground hover:text-foreground'
