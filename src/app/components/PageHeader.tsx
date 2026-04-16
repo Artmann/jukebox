@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactElement } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 
 import { ProfileSwitcher } from './ProfileSwitcher'
+import { ScanIndicator } from './ScanIndicator'
 
 export function PageHeader(): ReactElement {
   const [scrollY, setScrollY] = useState(0)
@@ -77,7 +78,8 @@ export function PageHeader(): ReactElement {
           </NavLink>
         </div>
 
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <ScanIndicator />
           <ProfileSwitcher />
         </div>
       </nav>
