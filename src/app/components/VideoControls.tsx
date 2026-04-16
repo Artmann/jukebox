@@ -45,7 +45,7 @@ export function VideoControls({
   const lastSavedTimeRef = useRef<number>(0)
 
   useEffect(() => {
-    if (!player) {
+    if (!player || player.isDisposed()) {
       return
     }
 
@@ -79,6 +79,7 @@ export function VideoControls({
     setIsPlaying(!player.paused())
 
     return () => {
+      if (player.isDisposed()) return
       player.off('play', onPlay)
       player.off('pause', onPause)
       player.off('timeupdate', onTimeUpdate)
@@ -183,9 +184,15 @@ export function VideoControls({
             onClick={handlePlayPause}
           >
             {isPlaying ? (
-              <PauseIcon className="size-7 hover:scale-125 text-white" />
+              <PauseIcon
+                className="size-7 hover:scale-125 text-white"
+                fill="currentColor"
+              />
             ) : (
-              <PlayIcon className="size-7 hover:scale-125 text-white" />
+              <PlayIcon
+                className="size-7 hover:scale-125 text-white"
+                fill="currentColor"
+              />
             )}
           </IconButton>
 

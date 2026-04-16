@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
-import { useParams, Link, useLocation } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle
+} from '@/components/ui/sheet'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { VideoControls } from '../components/VideoControls'
 import { EpisodePanel } from '../components/EpisodePanel'
+import { UpNextOverlay } from '../components/UpNextOverlay'
+import { VolumeIndicator } from '../components/VolumeIndicator'
+import { useNextEpisode } from '../hooks/useNextEpisode'
 import type { Movie } from '../hooks/useMovies'
 import type { Episode, Show, ShowWithSeasons } from '../lib/media'
 import type Player from 'video.js/dist/types/player'
@@ -75,10 +84,12 @@ async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
 }
 
 const hideDelayMs = 3000
+const upNextThresholdSeconds = 45
 
 export function WatchPage() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
+  const navigate = useNavigate()
   const isEpisode = location.pathname.startsWith('/watch/episode/')
 
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -86,8 +97,17 @@ export function WatchPage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [episodePanelOpen, setEpisodePanelOpen] = useState(false)
   const [selectedSeason, setSelectedSeason] = useState(1)
+  const [upNextDismissed, setUpNextDismissed] = useState(false)
+  const [upNextVisible, setUpNextVisible] = useState(false)
+  const [isCountingDown, setIsCountingDown] = useState(false)
+  const [isSwapping, setIsSwapping] = useState(false)
+  const [volumeIndicator, setVolumeIndicator] = useState<{
+    volume: number
+    muted: boolean
+  } | null>(null)
   const hasRestoredProgress = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const volumeHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const resetHideTimer = useCallback(() => {
     setControlsVisible(true)
@@ -103,9 +123,21 @@ export function WatchPage() {
     }
   }, [isPlaying])
 
+  const showVolumeIndicator = useCallback((volume: number, muted: boolean) => {
+    setVolumeIndicator({ volume, muted })
+
+    if (volumeHideTimerRef.current) {
+      clearTimeout(volumeHideTimerRef.current)
+    }
+
+    volumeHideTimerRef.current = setTimeout(() => {
+      setVolumeIndicator(null)
+    }, 1200)
+  }, [])
+
   // Track play/pause state for auto-hide logic.
   useEffect(() => {
-    if (!player) {
+    if (!player || player.isDisposed()) {
       return
     }
 
@@ -117,10 +149,39 @@ export function WatchPage() {
     setIsPlaying(!player.paused())
 
     return () => {
+      if (player.isDisposed()) return
       player.off('play', onPlay)
       player.off('pause', onPause)
     }
   }, [player])
+
+  // Show the volume indicator whenever volume or mute state changes.
+  useEffect(() => {
+    if (!player || player.isDisposed()) {
+      return
+    }
+
+    const onVolumeChange = () => {
+      if (player.isDisposed()) return
+      showVolumeIndicator(player.volume() ?? 1, player.muted() ?? false)
+    }
+
+    player.on('volumechange', onVolumeChange)
+
+    return () => {
+      if (player.isDisposed()) return
+      player.off('volumechange', onVolumeChange)
+    }
+  }, [player, showVolumeIndicator])
+
+  // Clear the volume indicator timer on unmount to avoid leaked timers.
+  useEffect(() => {
+    return () => {
+      if (volumeHideTimerRef.current) {
+        clearTimeout(volumeHideTimerRef.current)
+      }
+    }
+  }, [])
 
   // When paused, always show controls. When playing, start the hide timer.
   useEffect(() => {
@@ -183,6 +244,42 @@ export function WatchPage() {
     [player]
   )
 
+  // Increase volume with the up arrow.
+  useHotkeys(
+    'up',
+    (event) => {
+      event.preventDefault()
+
+      if (!player || player.isDisposed()) return
+
+      const current = player.volume() ?? 1
+      const next = Math.min(1, current + 0.05)
+
+      if (player.muted()) {
+        player.muted(false)
+      }
+
+      player.volume(next)
+    },
+    [player]
+  )
+
+  // Decrease volume with the down arrow.
+  useHotkeys(
+    'down',
+    (event) => {
+      event.preventDefault()
+
+      if (!player || player.isDisposed()) return
+
+      const current = player.volume() ?? 1
+      const next = Math.max(0, current - 0.05)
+
+      player.volume(next)
+    },
+    [player]
+  )
+
   // Movie queries (only when !isEpisode)
   const {
     data: movie,
@@ -191,7 +288,11 @@ export function WatchPage() {
   } = useQuery({
     queryKey: ['movie', id],
     queryFn: () => fetchMovie(id ?? ''),
-    enabled: !!id && !isEpisode
+    enabled: !!id && !isEpisode,
+    // Keep previous data so the player tree doesn't unmount while fetching
+    // the next movie — disposing the player mid-swap leaves consumers with
+    // stale references and throws "Invalid target for null#on".
+    placeholderData: keepPreviousData
   })
 
   // Episode queries (only when isEpisode)
@@ -202,7 +303,10 @@ export function WatchPage() {
   } = useQuery({
     queryKey: ['episode', id],
     queryFn: () => fetchEpisodeWithShow(id ?? ''),
-    enabled: !!id && isEpisode
+    enabled: !!id && isEpisode,
+    // Keep previous data so the player tree stays mounted across episode
+    // transitions (see note on the movie query above).
+    placeholderData: keepPreviousData
   })
 
   const episode = episodeData?.episode
@@ -254,42 +358,101 @@ export function WatchPage() {
     }
   }, [player, savedProgress])
 
-  // Auto-advance to next episode when current one ends.
+  // Fetch the next unwatched episode from the server (endpoint-driven,
+  // replaces the old ad-hoc on-ended redirect).
+  const { data: nextEpisodeData } = useNextEpisode(
+    episodeShow?.id,
+    episode?.id,
+    { enabled: isEpisode }
+  )
+
+  const nextEpisode = nextEpisodeData?.episode ?? null
+  const nextEpisodeShow = nextEpisodeData?.show ?? null
+
+  // Reset overlay state and the progress-restore guard every time the
+  // watched episode changes. The player instance persists across episode
+  // swaps, so we have to clear this ref manually.
   useEffect(() => {
-    if (!player || !isEpisode || !show || !episode) return
+    setUpNextDismissed(false)
+    setUpNextVisible(false)
+    setIsCountingDown(false)
+    hasRestoredProgress.current = false
+  }, [episode?.id])
 
-    const onEnded = () => {
-      const currentSeason = show.seasons.find(
-        (season) => season.seasonNumber === episode.seasonNumber
-      )
+  // Drop the fade overlay as soon as the new source is actually playing.
+  useEffect(() => {
+    if (!player || player.isDisposed()) return
 
-      if (!currentSeason) return
+    const onPlaying = () => setIsSwapping(false)
 
-      const currentIndex = currentSeason.episodes.findIndex(
-        (episodeItem) => episodeItem.id === episode.id
-      )
-      let nextEpisode: Episode | undefined
+    player.on('playing', onPlaying)
 
-      if (currentIndex < currentSeason.episodes.length - 1) {
-        nextEpisode = currentSeason.episodes[currentIndex + 1]
-      } else {
-        const nextSeason = show.seasons.find(
-          (season) => season.seasonNumber === episode.seasonNumber + 1
-        )
-        nextEpisode = nextSeason?.episodes[0]
-      }
+    return () => {
+      if (player.isDisposed()) return
+      player.off('playing', onPlaying)
+    }
+  }, [player])
 
-      if (nextEpisode) {
-        window.location.href = `/watch/episode/${nextEpisode.id}`
+  const goToNextEpisode = useCallback(() => {
+    if (!nextEpisode) return
+
+    setIsSwapping(true)
+    void navigate(`/watch/episode/${nextEpisode.id}`)
+  }, [nextEpisode, navigate])
+
+  // Track playback position to reveal the overlay in the last 30 seconds,
+  // and drive the countdown state based on the 10-second threshold or the
+  // `ended` event — whichever fires first.
+  useEffect(() => {
+    if (!player || player.isDisposed() || !isEpisode) return
+
+    const onTimeUpdate = () => {
+      const currentTime = player.currentTime() ?? 0
+      const duration = player.duration() ?? 0
+
+      if (duration <= 0) return
+
+      const remaining = duration - currentTime
+
+      if (remaining <= upNextThresholdSeconds && !upNextDismissed && nextEpisode) {
+        setUpNextVisible(true)
+        setIsCountingDown(true)
       }
     }
 
+    const onEnded = () => {
+      if (!nextEpisode) {
+        toast("You've finished all episodes.")
+        if (episodeShow) {
+          void navigate(`/shows/${episodeShow.id}`)
+        }
+        return
+      }
+
+      if (upNextDismissed) {
+        return
+      }
+
+      setUpNextVisible(true)
+      setIsCountingDown(true)
+    }
+
+    player.on('timeupdate', onTimeUpdate)
     player.on('ended', onEnded)
 
     return () => {
+      if (player.isDisposed()) return
+      player.off('timeupdate', onTimeUpdate)
       player.off('ended', onEnded)
     }
-  }, [player, isEpisode, show, episode])
+  }, [
+    player,
+    isEpisode,
+    nextEpisode,
+    upNextDismissed,
+    episodeShow,
+    navigate
+  ])
 
   const handleSelectEpisode = useCallback(
     (selectedEpisode: Episode) => {
@@ -306,9 +469,10 @@ export function WatchPage() {
         })
       }
 
-      window.location.href = `/watch/episode/${selectedEpisode.id}`
+      setIsSwapping(true)
+      void navigate(`/watch/episode/${selectedEpisode.id}`)
     },
-    [player, episode]
+    [player, episode, navigate]
   )
 
   const isLoading = isEpisode ? isLoadingEpisode : isLoadingMovie
@@ -359,20 +523,97 @@ export function WatchPage() {
         />
       </div>
 
-      {isEpisode && episodePanelOpen && show && episode && (
-        <div className="absolute top-0 right-0 bottom-0 w-96 z-20">
-          <EpisodePanel
-            currentEpisodeId={episode.id}
-            onClose={() => setEpisodePanelOpen(false)}
-            onSelectEpisode={handleSelectEpisode}
-            onSelectSeason={setSelectedSeason}
-            progressMap={episodeProgressMap}
-            seasons={show.seasons}
-            selectedSeason={selectedSeason}
-            showTitle={show.title}
-          />
-        </div>
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 z-40 bg-black pointer-events-none transition-opacity duration-300 ${isSwapping ? 'opacity-100' : 'opacity-0'}`}
+      />
+
+      <VolumeIndicator
+        muted={volumeIndicator?.muted ?? false}
+        visible={volumeIndicator !== null}
+        volume={volumeIndicator?.volume ?? 0}
+      />
+
+      {isEpisode && upNextVisible && nextEpisode && (
+        <video
+          aria-hidden="true"
+          className="hidden"
+          preload="auto"
+          src={`/api/stream/episode/${nextEpisode.id}`}
+        />
       )}
+
+      {isEpisode && upNextVisible && nextEpisode && nextEpisodeShow && (
+        <UpNextOverlay
+          isCountingDown={isCountingDown}
+          nextEpisode={nextEpisode}
+          onCancel={() => {
+            setUpNextDismissed(true)
+            setUpNextVisible(false)
+            setIsCountingDown(false)
+          }}
+          onPlayNow={goToNextEpisode}
+          show={nextEpisodeShow}
+        />
+      )}
+
+      {isEpisode && show && episode && (
+        <>
+          {/* Desktop side panel */}
+          <div
+            className={`hidden sm:block absolute top-0 right-0 bottom-0 w-96 z-20 ${
+              episodePanelOpen ? '' : 'pointer-events-none opacity-0'
+            } transition-opacity duration-200`}
+          >
+            {episodePanelOpen && (
+              <EpisodePanel
+                currentEpisodeId={episode.id}
+                onClose={() => setEpisodePanelOpen(false)}
+                onSelectEpisode={handleSelectEpisode}
+                onSelectSeason={setSelectedSeason}
+                progressMap={episodeProgressMap}
+                seasons={show.seasons}
+                selectedSeason={selectedSeason}
+                showTitle={show.title}
+              />
+            )}
+          </div>
+
+          {/* Mobile bottom sheet */}
+          <Sheet
+            onOpenChange={setEpisodePanelOpen}
+            open={episodePanelOpen}
+          >
+            <SheetContent
+              className="sm:hidden h-[85vh] p-0 bg-black/95 border-white/10"
+              hideCloseButton
+              side="bottom"
+            >
+              <SheetTitle className="sr-only">
+                {show.title} episodes
+              </SheetTitle>
+              <EpisodePanel
+                currentEpisodeId={episode.id}
+                onClose={() => setEpisodePanelOpen(false)}
+                onSelectEpisode={handleSelectEpisode}
+                onSelectSeason={setSelectedSeason}
+                progressMap={episodeProgressMap}
+                seasons={show.seasons}
+                selectedSeason={selectedSeason}
+                showTitle={show.title}
+              />
+            </SheetContent>
+          </Sheet>
+        </>
+      )}
+
+      <Link
+        aria-label="Back to home"
+        className={`absolute top-4 left-4 z-30 flex items-center justify-center size-11 text-white/90 hover:text-white transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        to="/"
+      >
+        <ArrowLeft className="size-7" />
+      </Link>
 
       <div
         className={`absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-black/80 to-transparent pt-16 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
