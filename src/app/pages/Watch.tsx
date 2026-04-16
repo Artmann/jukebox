@@ -284,8 +284,12 @@ export function WatchPage() {
   const goToNextEpisode = useCallback(() => {
     if (!nextEpisode) return
 
-    void navigate(`/watch/episode/${nextEpisode.id}`)
-  }, [nextEpisode, navigate])
+    // Full reload: SPA navigation keeps WatchPage mounted, which leaves the
+    // video.js player disposed mid-swap while child effects still hold the
+    // stale instance (throws "Invalid target for null#on"). Matches
+    // handleSelectEpisode below.
+    window.location.href = `/watch/episode/${nextEpisode.id}`
+  }, [nextEpisode])
 
   // Track playback position to reveal the overlay in the last 30 seconds,
   // and drive the countdown state based on the 10-second threshold or the
