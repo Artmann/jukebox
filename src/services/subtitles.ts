@@ -5,6 +5,7 @@ import {
   parseSubtitleFilename,
   type SubtitleFormat
 } from './filename-parser'
+import { isSubtitleFile } from './media-extensions'
 
 export type { SubtitleFormat } from './filename-parser'
 
@@ -13,8 +14,6 @@ export interface DiscoveredSubtitle {
   format: SubtitleFormat
   language: string
 }
-
-const subtitleExtensionSet = new Set(['.ass', '.srt', '.vtt'])
 
 const languageNames: Record<string, string> = {
   ar: 'Arabic',
@@ -85,9 +84,7 @@ export async function readSubtitleSiblings(
     return []
   }
 
-  return entries.filter((entry) =>
-    subtitleExtensionSet.has(extname(entry).toLowerCase())
-  )
+  return entries.filter((entry) => isSubtitleFile(entry))
 }
 
 /**

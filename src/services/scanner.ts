@@ -5,23 +5,9 @@ import { eq } from 'drizzle-orm'
 import type { NewMovie } from '../database/schema'
 import { fetchMovieMetadata, getMovieVideos, getTrailerUrl } from './tmdb'
 import { cleanTitle, extractYear } from './filename-parser'
+import { subtitleExtensions, videoExtensions } from './media-extensions'
 import { discoverSubtitlesForVideo } from './subtitles'
 import { syncSubtitlesForMovie } from './subtitle-sync'
-
-const VIDEO_EXTENSIONS = new Set([
-  '.mp4',
-  '.mkv',
-  '.avi',
-  '.mov',
-  '.wmv',
-  '.m4v',
-  '.webm',
-  '.flv',
-  '.mpeg',
-  '.mpg'
-])
-
-const SUBTITLE_EXTENSIONS = new Set(['.ass', '.srt', '.vtt'])
 
 interface ScannedVideo {
   filePath: string
@@ -52,9 +38,9 @@ async function* scanDirectory(dir: string): AsyncGenerator<ScannedVideo> {
 
     const extension = extname(entry.name).toLowerCase()
 
-    if (VIDEO_EXTENSIONS.has(extension)) {
+    if (videoExtensions.has(extension)) {
       videoFiles.push(entry.name)
-    } else if (SUBTITLE_EXTENSIONS.has(extension)) {
+    } else if (subtitleExtensions.has(extension)) {
       subtitleSiblings.push(entry.name)
     }
   }

@@ -6,6 +6,7 @@ import { and, eq } from 'drizzle-orm'
 import { db, schema } from '../database'
 import type { NewEpisode, NewSeason, NewShow } from '../database/schema'
 import { parseEpisodeFilename } from './episode-parser'
+import { subtitleExtensions, videoExtensions } from './media-extensions'
 import { normalizeShowName, parseSeasonFolder } from './show-parser'
 import { syncSubtitlesForEpisode } from './subtitle-sync'
 import { discoverSubtitlesForVideo } from './subtitles'
@@ -13,21 +14,6 @@ import { fetchSeasonMetadata, fetchShowMetadata } from './tmdb'
 
 export type { NormalizedShow } from './show-parser'
 export { normalizeShowName } from './show-parser'
-
-const videoExtensions = new Set([
-  '.mp4',
-  '.mkv',
-  '.avi',
-  '.mov',
-  '.wmv',
-  '.m4v',
-  '.webm',
-  '.flv',
-  '.mpeg',
-  '.mpg'
-])
-
-const subtitleExtensions = new Set(['.ass', '.srt', '.vtt'])
 
 export interface ScannedEpisode {
   filePath: string
