@@ -14,6 +14,7 @@ import { VideoPlayer } from '../components/VideoPlayer'
 import { VideoControls } from '../components/VideoControls'
 import { EpisodePanel } from '../components/EpisodePanel'
 import { UpNextOverlay } from '../components/UpNextOverlay'
+import { VolumeIndicator } from '../components/VolumeIndicator'
 import { useNextEpisode } from '../hooks/useNextEpisode'
 import type { Movie } from '../hooks/useMovies'
 import type { Episode, Show, ShowWithSeasons } from '../lib/media'
@@ -100,8 +101,13 @@ export function WatchPage() {
   const [upNextVisible, setUpNextVisible] = useState(false)
   const [isCountingDown, setIsCountingDown] = useState(false)
   const [isSwapping, setIsSwapping] = useState(false)
+  const [volumeIndicator, setVolumeIndicator] = useState<{
+    volume: number
+    muted: boolean
+  } | null>(null)
   const hasRestoredProgress = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const volumeHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const resetHideTimer = useCallback(() => {
     setControlsVisible(true)
@@ -116,6 +122,18 @@ export function WatchPage() {
       }, hideDelayMs)
     }
   }, [isPlaying])
+
+  const showVolumeIndicator = useCallback((volume: number, muted: boolean) => {
+    setVolumeIndicator({ volume, muted })
+
+    if (volumeHideTimerRef.current) {
+      clearTimeout(volumeHideTimerRef.current)
+    }
+
+    volumeHideTimerRef.current = setTimeout(() => {
+      setVolumeIndicator(null)
+    }, 1200)
+  }, [])
 
   // Track play/pause state for auto-hide logic.
   useEffect(() => {
@@ -136,6 +154,34 @@ export function WatchPage() {
       player.off('pause', onPause)
     }
   }, [player])
+
+  // Show the volume indicator whenever volume or mute state changes.
+  useEffect(() => {
+    if (!player || player.isDisposed()) {
+      return
+    }
+
+    const onVolumeChange = () => {
+      if (player.isDisposed()) return
+      showVolumeIndicator(player.volume() ?? 1, player.muted() ?? false)
+    }
+
+    player.on('volumechange', onVolumeChange)
+
+    return () => {
+      if (player.isDisposed()) return
+      player.off('volumechange', onVolumeChange)
+    }
+  }, [player, showVolumeIndicator])
+
+  // Clear the volume indicator timer on unmount to avoid leaked timers.
+  useEffect(() => {
+    return () => {
+      if (volumeHideTimerRef.current) {
+        clearTimeout(volumeHideTimerRef.current)
+      }
+    }
+  }, [])
 
   // When paused, always show controls. When playing, start the hide timer.
   useEffect(() => {
@@ -194,6 +240,42 @@ export function WatchPage() {
       const currentTime = player.currentTime() ?? 0
       const duration = player.duration() ?? 0
       player.currentTime(Math.min(duration, currentTime + 10))
+    },
+    [player]
+  )
+
+  // Increase volume with the up arrow.
+  useHotkeys(
+    'up',
+    (event) => {
+      event.preventDefault()
+
+      if (!player || player.isDisposed()) return
+
+      const current = player.volume() ?? 1
+      const next = Math.min(1, current + 0.05)
+
+      if (player.muted()) {
+        player.muted(false)
+      }
+
+      player.volume(next)
+    },
+    [player]
+  )
+
+  // Decrease volume with the down arrow.
+  useHotkeys(
+    'down',
+    (event) => {
+      event.preventDefault()
+
+      if (!player || player.isDisposed()) return
+
+      const current = player.volume() ?? 1
+      const next = Math.max(0, current - 0.05)
+
+      player.volume(next)
     },
     [player]
   )
@@ -444,6 +526,12 @@ export function WatchPage() {
       <div
         aria-hidden="true"
         className={`absolute inset-0 z-40 bg-black pointer-events-none transition-opacity duration-300 ${isSwapping ? 'opacity-100' : 'opacity-0'}`}
+      />
+
+      <VolumeIndicator
+        muted={volumeIndicator?.muted ?? false}
+        visible={volumeIndicator !== null}
+        volume={volumeIndicator?.volume ?? 0}
       />
 
       {isEpisode && upNextVisible && nextEpisode && (
