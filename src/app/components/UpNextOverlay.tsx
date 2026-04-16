@@ -18,7 +18,8 @@ interface UpNextOverlayProps {
   isCountingDown: boolean
 }
 
-const defaultCountdownSeconds = 10
+// 9s fill + 1s hold = 10s total from overlay appearing to transition.
+const defaultCountdownSeconds = 9
 const holdMs = 1000
 
 export function UpNextOverlay({
