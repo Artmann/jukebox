@@ -77,7 +77,7 @@ that can be specced individually later (brainstorm → spec → plan → execute
   - Start as a toggle/secondary mode; fall back to FTS if the model isn't
     loaded.
 
-- [ ] **Subtitle support.** Detect sidecar `.srt`/`.vtt`/`.ass` files next to
+- [x] **Subtitle support.** Detect sidecar `.srt`/`.vtt`/`.ass` files next to
       video files during scan. Expose as `<track>` elements in the player with a
       language selector. Convert `.srt` to `.vtt` on-the-fly if needed. Extract
       embedded subtitles from `.mkv` as a later enhancement.

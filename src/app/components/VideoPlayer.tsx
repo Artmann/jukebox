@@ -3,9 +3,12 @@ import videojs from 'video.js'
 import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 
+import type { SubtitleTrack } from '../lib/media'
+
 interface VideoPlayerProps {
   src: string
   poster?: string
+  subtitles?: SubtitleTrack[]
   onReady?: (player: Player) => void
 }
 
@@ -50,7 +53,12 @@ function pickSource(src: string): { src: string; type: string } {
   return { src, type: 'video/mp4' }
 }
 
-export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
+export function VideoPlayer({
+  src,
+  poster,
+  subtitles,
+  onReady
+}: VideoPlayerProps) {
   const videoRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
   const onReadyRef = useRef(onReady)
@@ -139,6 +147,48 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
 
     player.poster(poster)
   }, [poster])
+
+  // Sync remote text tracks (subtitles) with the current `subtitles` prop.
+  // Skipped for unsupported formats (.ass) — those are surfaced in the UI as
+  // disabled menu items but we never actually load them into the player.
+  useEffect(() => {
+    const player = playerRef.current
+
+    if (!player || player.isDisposed()) {
+      return
+    }
+
+    const tracks = subtitles ?? []
+    const supportedTracks = tracks.filter((track) => track.isSupported)
+    const addedElements: unknown[] = []
+
+    for (const track of supportedTracks) {
+      const trackElement = player.addRemoteTextTrack(
+        {
+          src: `/api/subtitles/${track.id}`,
+          srclang: track.language,
+          label: track.displayLanguage,
+          kind: 'subtitles',
+          default: false
+        },
+        false
+      )
+
+      addedElements.push(trackElement)
+    }
+
+    return () => {
+      if (player.isDisposed()) {
+        return
+      }
+
+      for (const element of addedElements) {
+        player.removeRemoteTextTrack(
+          element as Parameters<Player['removeRemoteTextTrack']>[0]
+        )
+      }
+    }
+  }, [subtitles])
 
   const handleClick = () => {
     if (!playerRef.current) {
