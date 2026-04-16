@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
 import { watchedThreshold } from '../../lib/watched'
+import { languageDisplayName } from '../../services/subtitles'
 import type { ProfileContext } from '../middleware/profile'
 
 const showRoutes = new Hono<ProfileContext>()
@@ -34,7 +35,7 @@ showRoutes.get('/', async (context) => {
   return context.json(showsWithCounts)
 })
 
-// GET /episodes/:id - Get single episode with its show
+// GET /episodes/:id - Get single episode with its show and available subtitles
 // NOTE: Must come before /:id to prevent 'episodes' from being parsed as a show ID.
 showRoutes.get('/episodes/:id', async (context) => {
   const id = parseInt(context.req.param('id'), 10)
@@ -59,7 +60,20 @@ showRoutes.get('/episodes/:id', async (context) => {
     .where(eq(schema.shows.id, episode.showId))
     .limit(1)
 
-  return context.json({ episode, show })
+  const subtitleRows = await db
+    .select()
+    .from(schema.subtitles)
+    .where(eq(schema.subtitles.episodeId, id))
+
+  const subtitles = subtitleRows.map((row) => ({
+    id: row.id,
+    displayLanguage: languageDisplayName(row.language),
+    format: row.format,
+    isSupported: row.format !== 'ass',
+    language: row.language
+  }))
+
+  return context.json({ episode, show, subtitles })
 })
 
 // GET /:showId/next-episode?afterEpisodeId=:id - Next unwatched episode for
