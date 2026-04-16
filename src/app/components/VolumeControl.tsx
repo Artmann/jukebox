@@ -41,7 +41,7 @@ export function VolumeControl({ player }: VolumeControlProps): ReactElement {
 
   // Initialize from localStorage and sync with player
   useEffect(() => {
-    if (!player) {
+    if (!player || player.isDisposed()) {
       return
     }
 
@@ -62,19 +62,20 @@ export function VolumeControl({ player }: VolumeControlProps): ReactElement {
     player.on('volumechange', onVolumeChange)
 
     return () => {
+      if (player.isDisposed()) return
       player.off('volumechange', onVolumeChange)
     }
   }, [player])
 
   const toggleMute = () => {
-    if (!player) {
+    if (!player || player.isDisposed()) {
       return
     }
     player.muted(!muted)
   }
 
   const handleSliderClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (!sliderRef.current || !player) {
+    if (!sliderRef.current || !player || player.isDisposed()) {
       return
     }
 

@@ -45,6 +45,9 @@ export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
         poster: initialPosterRef.current
       },
       () => {
+        // StrictMode can dispose this instance before the ready callback
+        // fires. Don't hand a disposed player to the parent.
+        if (player.isDisposed()) return
         onReadyRef.current?.(player)
       }
     )

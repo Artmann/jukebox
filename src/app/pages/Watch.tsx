@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -115,7 +115,7 @@ export function WatchPage() {
 
   // Track play/pause state for auto-hide logic.
   useEffect(() => {
-    if (!player) {
+    if (!player || player.isDisposed()) {
       return
     }
 
@@ -127,6 +127,7 @@ export function WatchPage() {
     setIsPlaying(!player.paused())
 
     return () => {
+      if (player.isDisposed()) return
       player.off('play', onPlay)
       player.off('pause', onPause)
     }
@@ -201,7 +202,11 @@ export function WatchPage() {
   } = useQuery({
     queryKey: ['movie', id],
     queryFn: () => fetchMovie(id ?? ''),
-    enabled: !!id && !isEpisode
+    enabled: !!id && !isEpisode,
+    // Keep previous data so the player tree doesn't unmount while fetching
+    // the next movie — disposing the player mid-swap leaves consumers with
+    // stale references and throws "Invalid target for null#on".
+    placeholderData: keepPreviousData
   })
 
   // Episode queries (only when isEpisode)
@@ -212,7 +217,10 @@ export function WatchPage() {
   } = useQuery({
     queryKey: ['episode', id],
     queryFn: () => fetchEpisodeWithShow(id ?? ''),
-    enabled: !!id && isEpisode
+    enabled: !!id && isEpisode,
+    // Keep previous data so the player tree stays mounted across episode
+    // transitions (see note on the movie query above).
+    placeholderData: keepPreviousData
   })
 
   const episode = episodeData?.episode
@@ -287,13 +295,14 @@ export function WatchPage() {
 
   // Drop the fade overlay as soon as the new source is actually playing.
   useEffect(() => {
-    if (!player) return
+    if (!player || player.isDisposed()) return
 
     const onPlaying = () => setIsSwapping(false)
 
     player.on('playing', onPlaying)
 
     return () => {
+      if (player.isDisposed()) return
       player.off('playing', onPlaying)
     }
   }, [player])
@@ -309,7 +318,7 @@ export function WatchPage() {
   // and drive the countdown state based on the 10-second threshold or the
   // `ended` event — whichever fires first.
   useEffect(() => {
-    if (!player || !isEpisode) return
+    if (!player || player.isDisposed() || !isEpisode) return
 
     const onTimeUpdate = () => {
       const currentTime = player.currentTime() ?? 0
@@ -349,6 +358,7 @@ export function WatchPage() {
     player.on('ended', onEnded)
 
     return () => {
+      if (player.isDisposed()) return
       player.off('timeupdate', onTimeUpdate)
       player.off('ended', onEnded)
     }
