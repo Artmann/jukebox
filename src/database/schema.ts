@@ -173,6 +173,19 @@ export const scanJobs = sqliteTable('scan_jobs', {
   errorMessage: text('error_message')
 })
 
+export const subtitles = sqliteTable('subtitles', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  movieId: integer('movie_id').references(() => movies.id, {
+    onDelete: 'cascade'
+  }),
+  episodeId: integer('episode_id').references(() => episodes.id, {
+    onDelete: 'cascade'
+  }),
+  filePath: text('file_path').notNull(),
+  language: text('language').notNull(), // ISO-639-1 code, or 'und' when unknown
+  format: text('format').notNull() // 'srt' | 'vtt' | 'ass'
+})
+
 export type AuthConfig = typeof authConfig.$inferSelect
 export type NewAuthConfig = typeof authConfig.$inferInsert
 export type Session = typeof sessions.$inferSelect
@@ -197,3 +210,5 @@ export type Setting = typeof settings.$inferSelect
 export type NewSetting = typeof settings.$inferInsert
 export type ScanJob = typeof scanJobs.$inferSelect
 export type NewScanJob = typeof scanJobs.$inferInsert
+export type Subtitle = typeof subtitles.$inferSelect
+export type NewSubtitle = typeof subtitles.$inferInsert
