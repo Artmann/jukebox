@@ -43,6 +43,13 @@
       "when": 1776364767918,
       "tag": "0005_settings_table",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1776366140436,
+      "tag": "0006_watch_progress_cascade",
+      "breakpoints": true
     }
   ]
 }

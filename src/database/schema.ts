@@ -99,8 +99,12 @@ export const watchProgress = sqliteTable(
     profileId: integer('profile_id')
       .notNull()
       .references(() => profiles.id, { onDelete: 'cascade' }),
-    movieId: integer('movie_id').references(() => movies.id),
-    episodeId: integer('episode_id').references(() => episodes.id),
+    movieId: integer('movie_id').references(() => movies.id, {
+      onDelete: 'cascade'
+    }),
+    episodeId: integer('episode_id').references(() => episodes.id, {
+      onDelete: 'cascade'
+    }),
     currentTime: integer('current_time').notNull(),
     duration: integer('duration'),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()

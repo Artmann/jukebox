@@ -1,7 +1,8 @@
 import { access } from 'fs/promises'
 import { constants } from 'fs'
+import path from 'path'
 
-import { eq } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
@@ -12,10 +13,21 @@ import {
   isScanScheduleValue,
   scanScheduleSettingKey,
   setSetting,
-  setTmdbApiKey
+  setTmdbApiKey,
+  tmdbApiKeySettingKey
 } from '../../services/settings'
 
 const tmdbConfigurationUrl = 'https://api.themoviedb.org/3/configuration'
+
+// Keys that have dedicated routes with their own validation. The generic
+// /:key handlers must not read or write these or they bypass those
+// validators (e.g. writing "garbage" to scanSchedule).
+const reservedKeys = new Set<string>([tmdbApiKeySettingKey, scanScheduleSettingKey])
+
+const reservedKeyRoute: Record<string, string> = {
+  [tmdbApiKeySettingKey]: '/api/settings/tmdb-key',
+  [scanScheduleSettingKey]: '/api/settings/scan-schedule'
+}
 
 interface LibraryInput {
   name: string
@@ -52,10 +64,10 @@ function validateLibraryInput(input: unknown): LibraryInput | string {
 
   const record = input as Record<string, unknown>
   const name = typeof record.name === 'string' ? record.name.trim() : ''
-  const path = typeof record.path === 'string' ? record.path.trim() : ''
+  const libraryPath = typeof record.path === 'string' ? record.path.trim() : ''
   const type = record.type
 
-  if (path.length === 0) {
+  if (libraryPath.length === 0) {
     return 'Library path is required.'
   }
 
@@ -63,7 +75,27 @@ function validateLibraryInput(input: unknown): LibraryInput | string {
     return 'Library type must be "movies" or "shows".'
   }
 
-  return { name, path, type }
+  return { name, path: libraryPath, type }
+}
+
+/**
+ * Build the LIKE pattern that matches any file path under the given library
+ * root. Escapes SQL LIKE wildcards so a path containing `%` or `_` doesn't
+ * accidentally match siblings.
+ */
+function libraryPathPrefixPattern(libraryPath: string): string {
+  const resolved = path.resolve(libraryPath)
+  const withSeparator = resolved.endsWith(path.sep)
+    ? resolved
+    : `${resolved}${path.sep}`
+
+  // Escape LIKE meta-characters (`%`, `_`) and the escape character itself.
+  const escaped = withSeparator
+    .replace(/\\/g, '\\\\')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_')
+
+  return `${escaped}%`
 }
 
 const settingsRoutes = new Hono()
@@ -232,9 +264,10 @@ settingsRoutes.delete('/libraries/:id', async (context) => {
 
   const url = new URL(context.req.url)
   const force = url.searchParams.get('force') === 'true'
+  const pattern = libraryPathPrefixPattern(existing.path)
 
   if (!force) {
-    const referenceCount = await countLibraryReferences(existing)
+    const referenceCount = countLibraryReferences(existing, pattern)
 
     if (referenceCount > 0) {
       const noun =
@@ -256,77 +289,101 @@ settingsRoutes.delete('/libraries/:id', async (context) => {
         409
       )
     }
+
+    db.delete(schema.libraries).where(eq(schema.libraries.id, id)).run()
+
+    return context.json({ success: true })
   }
 
-  if (force) {
-    await deleteLibraryReferences(existing)
-  }
+  // Force remove: cascade-delete the library's rows and the library itself
+  // atomically so a crash mid-flight can't leave orphans. `db.transaction`
+  // requires a synchronous callback for better-sqlite3, so every query uses
+  // `.run()` / `.all()` (no `await`).
+  db.transaction((tx) => {
+    if (existing.type === 'movies') {
+      const movieIds = tx
+        .select({ id: schema.movies.id })
+        .from(schema.movies)
+        .where(
+          sql`${schema.movies.filePath} LIKE ${pattern} ESCAPE '\\'`
+        )
+        .all()
+        .map((row) => row.id)
 
-  await db.delete(schema.libraries).where(eq(schema.libraries.id, id))
+      if (movieIds.length > 0) {
+        tx.delete(schema.watchProgress)
+          .where(inArray(schema.watchProgress.movieId, movieIds))
+          .run()
+
+        tx.delete(schema.movies)
+          .where(inArray(schema.movies.id, movieIds))
+          .run()
+      }
+    } else {
+      const showIds = tx
+        .select({ id: schema.shows.id })
+        .from(schema.shows)
+        .where(
+          sql`${schema.shows.folderPath} LIKE ${pattern} ESCAPE '\\'`
+        )
+        .all()
+        .map((row) => row.id)
+
+      if (showIds.length > 0) {
+        const episodeIds = tx
+          .select({ id: schema.episodes.id })
+          .from(schema.episodes)
+          .where(inArray(schema.episodes.showId, showIds))
+          .all()
+          .map((row) => row.id)
+
+        if (episodeIds.length > 0) {
+          tx.delete(schema.watchProgress)
+            .where(inArray(schema.watchProgress.episodeId, episodeIds))
+            .run()
+
+          tx.delete(schema.episodes)
+            .where(inArray(schema.episodes.id, episodeIds))
+            .run()
+        }
+
+        tx.delete(schema.seasons)
+          .where(inArray(schema.seasons.showId, showIds))
+          .run()
+
+        tx.delete(schema.shows)
+          .where(inArray(schema.shows.id, showIds))
+          .run()
+      }
+    }
+
+    tx.delete(schema.libraries).where(eq(schema.libraries.id, id)).run()
+  })
 
   return context.json({ success: true })
 })
 
-function pathIsUnderLibrary(subject: string, libraryPath: string): boolean {
-  if (subject === libraryPath) {
-    return true
-  }
-
-  const normalizedLibrary = libraryPath.endsWith('/') || libraryPath.endsWith('\\')
-    ? libraryPath
-    : `${libraryPath}${libraryPath.includes('\\') ? '\\' : '/'}`
-
-  return subject.startsWith(normalizedLibrary)
-}
-
-async function countLibraryReferences(
-  library: schema.Library
-): Promise<number> {
+function countLibraryReferences(
+  library: schema.Library,
+  pattern: string
+): number {
   if (library.type === 'movies') {
-    const rows = await db.select().from(schema.movies)
+    const [row] = db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.movies)
+      .where(sql`${schema.movies.filePath} LIKE ${pattern} ESCAPE '\\'`)
+      .all()
 
-    return rows.filter((movie) =>
-      pathIsUnderLibrary(movie.filePath, library.path)
-    ).length
+    return row?.count ?? 0
   }
 
-  const rows = await db.select().from(schema.shows)
+  const [row] = db
+    .select({ count: sql<number>`count(*)` })
+    .from(schema.shows)
+    .where(sql`${schema.shows.folderPath} LIKE ${pattern} ESCAPE '\\'`)
+    .all()
 
-  return rows.filter((show) =>
-    pathIsUnderLibrary(show.folderPath, library.path)
-  ).length
-}
-
-async function deleteLibraryReferences(
-  library: schema.Library
-): Promise<void> {
-  if (library.type === 'movies') {
-    const rows = await db.select().from(schema.movies)
-
-    for (const movie of rows) {
-      if (pathIsUnderLibrary(movie.filePath, library.path)) {
-        await db.delete(schema.movies).where(eq(schema.movies.id, movie.id))
-      }
-    }
-
-    return
-  }
-
-  const rows = await db.select().from(schema.shows)
-
-  for (const show of rows) {
-    if (!pathIsUnderLibrary(show.folderPath, library.path)) {
-      continue
-    }
-
-    await db
-      .delete(schema.episodes)
-      .where(eq(schema.episodes.showId, show.id))
-    await db
-      .delete(schema.seasons)
-      .where(eq(schema.seasons.showId, show.id))
-    await db.delete(schema.shows).where(eq(schema.shows.id, show.id))
-  }
+  return row?.count ?? 0
 }
 
 settingsRoutes.get('/scan-schedule', async (context) => {
@@ -366,8 +423,21 @@ settingsRoutes.put('/scan-schedule', async (context) => {
   return context.json({ schedule })
 })
 
+// keep generic /:key routes last — Hono matches in declaration order
 settingsRoutes.get('/:key', async (context) => {
   const key = context.req.param('key')
+
+  if (reservedKeys.has(key)) {
+    return context.json(
+      {
+        error: {
+          message: `Use GET ${reservedKeyRoute[key]} for this key.`
+        }
+      },
+      400
+    )
+  }
+
   const value = await getSetting(key)
 
   if (value === null) {
@@ -379,6 +449,18 @@ settingsRoutes.get('/:key', async (context) => {
 
 settingsRoutes.put('/:key', async (context) => {
   const key = context.req.param('key')
+
+  if (reservedKeys.has(key)) {
+    return context.json(
+      {
+        error: {
+          message: `Use PUT ${reservedKeyRoute[key]} for this key.`
+        }
+      },
+      400
+    )
+  }
+
   let body: { value?: unknown }
 
   try {

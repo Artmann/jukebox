@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import path, { join } from 'path'
 
 import { Hono } from 'hono'
 import { beforeEach, afterEach, beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
@@ -32,11 +32,14 @@ function buildApp(): Hono {
 
 async function reset() {
   await testDb.db.delete(testDb.schema.settings)
+  await testDb.db.delete(testDb.schema.watchProgress)
+  await testDb.db.delete(testDb.schema.favorites)
   await testDb.db.delete(testDb.schema.episodes)
   await testDb.db.delete(testDb.schema.seasons)
   await testDb.db.delete(testDb.schema.shows)
   await testDb.db.delete(testDb.schema.movies)
   await testDb.db.delete(testDb.schema.libraries)
+  await testDb.db.delete(testDb.schema.profiles)
 }
 
 // Use the real fetch() only for tmdb verification. Stub globally with a
@@ -298,11 +301,14 @@ describe('DELETE /libraries/:id', () => {
   })
 
   it('refuses to remove a library that still has movies unless forced', async () => {
+    const libraryPath = path.resolve('/media/movies')
+    const moviePath = path.join(libraryPath, 'test.mp4')
+
     const [library] = await testDb.db
       .insert(testDb.schema.libraries)
       .values({
         name: 'Movies',
-        path: '/media/movies',
+        path: libraryPath,
         type: 'movies',
         createdAt: new Date()
       })
@@ -310,7 +316,7 @@ describe('DELETE /libraries/:id', () => {
 
     await testDb.db.insert(testDb.schema.movies).values({
       title: 'Test',
-      filePath: '/media/movies/test.mp4',
+      filePath: moviePath,
       fileName: 'test.mp4',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -329,22 +335,53 @@ describe('DELETE /libraries/:id', () => {
     expect(body.error.message).toContain("Force remove")
   })
 
-  it('force-removes library and cascades movies', async () => {
+  it('force-removes library and cascades movies plus watch progress', async () => {
+    const libraryPath = path.resolve('/media/movies')
+    const moviePath = path.join(libraryPath, 'test.mp4')
+    const otherMoviePath = path.resolve('/other/elsewhere.mp4')
+
     const [library] = await testDb.db
       .insert(testDb.schema.libraries)
       .values({
         name: 'Movies',
-        path: '/media/movies',
+        path: libraryPath,
         type: 'movies',
         createdAt: new Date()
       })
       .returning()
 
-    await testDb.db.insert(testDb.schema.movies).values({
-      title: 'Test',
-      filePath: '/media/movies/test.mp4',
-      fileName: 'test.mp4',
-      createdAt: new Date(),
+    const [insertedMovie] = await testDb.db
+      .insert(testDb.schema.movies)
+      .values({
+        title: 'Test',
+        filePath: moviePath,
+        fileName: 'test.mp4',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning()
+
+    // Movie in a different library — must survive the cascade.
+    const [unrelatedMovie] = await testDb.db
+      .insert(testDb.schema.movies)
+      .values({
+        title: 'Other',
+        filePath: otherMoviePath,
+        fileName: 'elsewhere.mp4',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning()
+
+    const [profile] = await testDb.db
+      .insert(testDb.schema.profiles)
+      .values({ name: 'tester', emoji: '🍿', createdAt: new Date() })
+      .returning()
+
+    await testDb.db.insert(testDb.schema.watchProgress).values({
+      profileId: profile?.id ?? 0,
+      movieId: insertedMovie?.id ?? 0,
+      currentTime: 42,
       updatedAt: new Date()
     })
 
@@ -357,7 +394,14 @@ describe('DELETE /libraries/:id', () => {
     expect(response.status).toEqual(200)
 
     const remainingMovies = await testDb.db.select().from(testDb.schema.movies)
-    expect(remainingMovies).toEqual([])
+    expect(remainingMovies.map((movie) => movie.id)).toEqual([
+      unrelatedMovie?.id ?? -1
+    ])
+
+    const remainingProgress = await testDb.db
+      .select()
+      .from(testDb.schema.watchProgress)
+    expect(remainingProgress).toEqual([])
   })
 })
 
@@ -435,5 +479,55 @@ describe('generic GET / PUT /:key', () => {
     })
 
     expect(response.status).toEqual(400)
+  })
+
+  it('rejects reads on reserved keys and points at the specific route', async () => {
+    const app = buildApp()
+
+    const scheduleResponse = await app.request('/scanSchedule')
+    const scheduleBody = (await scheduleResponse.json()) as {
+      error: { message: string }
+    }
+
+    expect(scheduleResponse.status).toEqual(400)
+    expect(scheduleBody.error.message).toContain('/api/settings/scan-schedule')
+
+    const tmdbResponse = await app.request('/tmdbApiKey')
+    const tmdbBody = (await tmdbResponse.json()) as {
+      error: { message: string }
+    }
+
+    expect(tmdbResponse.status).toEqual(400)
+    expect(tmdbBody.error.message).toContain('/api/settings/tmdb-key')
+  })
+
+  it('rejects writes on reserved keys so their validators cannot be bypassed', async () => {
+    const app = buildApp()
+
+    const scheduleResponse = await app.request('/scanSchedule', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ value: 'garbage' })
+    })
+    const scheduleBody = (await scheduleResponse.json()) as {
+      error: { message: string }
+    }
+
+    expect(scheduleResponse.status).toEqual(400)
+    expect(scheduleBody.error.message).toContain('/api/settings/scan-schedule')
+    expect(await getSetting(scanScheduleSettingKey, testDb.db)).toEqual(null)
+
+    const tmdbResponse = await app.request('/tmdbApiKey', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ value: 'unverified' })
+    })
+    const tmdbBody = (await tmdbResponse.json()) as {
+      error: { message: string }
+    }
+
+    expect(tmdbResponse.status).toEqual(400)
+    expect(tmdbBody.error.message).toContain('/api/settings/tmdb-key')
+    expect(await getSetting(tmdbApiKeySettingKey, testDb.db)).toEqual(null)
   })
 })

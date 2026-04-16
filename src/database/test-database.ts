@@ -14,6 +14,11 @@ export type TestDatabase = ReturnType<typeof createTestDatabase>['db']
 
 export function createTestDatabase() {
   const sqlite = new Database(':memory:')
+
+  // Mirror the production connection setup so cascade deletes and other FK
+  // behaviors are exercised by tests the same way they behave at runtime.
+  sqlite.pragma('foreign_keys = ON')
+
   const db = drizzle(sqlite, { schema })
 
   migrate(db, { migrationsFolder })
