@@ -17,10 +17,15 @@ import {
 } from 'react-router-dom'
 import { Toaster } from 'sonner'
 
+import { registerSW } from 'virtual:pwa-register'
+
+import { useAuthStatus } from './hooks/useAuth'
 import { useSetupStatus } from './hooks/useSetupStatus'
 import { HomePage } from './pages/Home'
+import { LoginPage } from './pages/Login'
 import { MoviesPage } from './pages/Movies'
 import { ScanPage } from './pages/Scan'
+import { SettingsAuthPage } from './pages/SettingsAuth'
 import { SettingsProfilesPage } from './pages/SettingsProfiles'
 import { SetupPage } from './pages/Setup'
 import { ShowDetailPage } from './pages/ShowDetail'
@@ -32,6 +37,29 @@ const WatchPage = lazy(() =>
 )
 
 const queryClient = new QueryClient()
+
+// Register the service worker for PWA support. In development the plugin is
+// configured with devOptions.enabled: false, so this becomes a no-op.
+registerSW({ immediate: true })
+
+function AuthGuard() {
+  const { data, isLoading } = useAuthStatus()
+
+  if (isLoading) {
+    return null
+  }
+
+  if (data?.enabled && !data.authenticated) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    )
+  }
+
+  return <Outlet />
+}
 
 function SetupGuard() {
   const { data, isLoading } = useSetupStatus()
@@ -61,60 +89,71 @@ const app = (
       <BrowserRouter>
         <Routes>
           <Route
-            path="/scan"
-            element={<ScanPage />}
-          />
-          <Route
-            path="/setup"
-            element={<SetupPage />}
+            path="/login"
+            element={<LoginPage />}
           />
 
-          <Route element={<SetupGuard />}>
+          <Route element={<AuthGuard />}>
             <Route
-              path="/"
-              element={<HomePage />}
+              path="/scan"
+              element={<ScanPage />}
             />
             <Route
-              path="/movies"
-              element={<MoviesPage />}
+              path="/setup"
+              element={<SetupPage />}
             />
-            <Route
-              path="/shows"
-              element={<ShowsPage />}
-            />
-            <Route
-              path="/shows/:id"
-              element={<ShowDetailPage />}
-            />
-            <Route
-              path="/settings"
-              element={
-                <Navigate
-                  to="/settings/profiles"
-                  replace
-                />
-              }
-            />
-            <Route
-              path="/settings/profiles"
-              element={<SettingsProfilesPage />}
-            />
-            <Route
-              path="/watch/:id"
-              element={
-                <Suspense>
-                  <WatchPage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/watch/episode/:id"
-              element={
-                <Suspense>
-                  <WatchPage />
-                </Suspense>
-              }
-            />
+
+            <Route element={<SetupGuard />}>
+              <Route
+                path="/"
+                element={<HomePage />}
+              />
+              <Route
+                path="/movies"
+                element={<MoviesPage />}
+              />
+              <Route
+                path="/shows"
+                element={<ShowsPage />}
+              />
+              <Route
+                path="/shows/:id"
+                element={<ShowDetailPage />}
+              />
+              <Route
+                path="/settings"
+                element={
+                  <Navigate
+                    to="/settings/profiles"
+                    replace
+                  />
+                }
+              />
+              <Route
+                path="/settings/profiles"
+                element={<SettingsProfilesPage />}
+              />
+              <Route
+                path="/settings/auth"
+                element={<SettingsAuthPage />}
+              />
+              <Route
+                path="/watch/:id"
+                element={
+                  <Suspense>
+                    <WatchPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/watch/episode/:id"
+                element={
+                  <Suspense>
+                    <WatchPage />
+                  </Suspense>
+                }
+              />
+            </Route>
           </Route>
         </Routes>
       </BrowserRouter>

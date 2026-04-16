@@ -29,6 +29,13 @@
       "when": 1776285169591,
       "tag": "0003_public_speedball",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1776287931154,
+      "tag": "0004_motionless_bug",
+      "breakpoints": true
     }
   ]
 }

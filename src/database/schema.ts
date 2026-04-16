@@ -138,6 +138,24 @@ export const favorites = sqliteTable(
   ]
 )
 
+export const authConfig = sqliteTable('auth_config', {
+  id: integer('id').primaryKey(),
+  passwordHash: text('password_hash'),
+  updatedAt: integer('updated_at').notNull()
+})
+
+export const sessions = sqliteTable('sessions', {
+  id: text('id').primaryKey(),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  lastSeenAt: integer('last_seen_at').notNull(),
+  userAgent: text('user_agent')
+})
+
+export type AuthConfig = typeof authConfig.$inferSelect
+export type NewAuthConfig = typeof authConfig.$inferInsert
+export type Session = typeof sessions.$inferSelect
+export type NewSession = typeof sessions.$inferInsert
 export type Library = typeof libraries.$inferSelect
 export type NewLibrary = typeof libraries.$inferInsert
 export type Movie = typeof movies.$inferSelect

@@ -16,7 +16,7 @@ export function MediaRow({ items, title }: MediaRowProps): ReactElement | null {
   }
 
   return (
-    <section className="px-6 py-4">
+    <section className="px-4 py-4 sm:px-6">
       <h2 className="text-lg font-semibold text-foreground mb-3">{title}</h2>
 
       <div className="flex gap-2 overflow-x-auto scroll-smooth pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">

@@ -53,53 +53,92 @@ function pickSource(src: string): { src: string; type: string } {
 export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
   const videoRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
+  const onReadyRef = useRef(onReady)
+  const initialSrcRef = useRef(src)
+  const initialPosterRef = useRef(poster)
 
   useEffect(() => {
-    if (!playerRef.current && videoRef.current) {
-      const videoElement = document.createElement('video-js')
+    onReadyRef.current = onReady
+  }, [onReady])
 
-      videoElement.classList.add('vjs-big-play-centered')
+  // Create the player once on mount and dispose on unmount. Source/poster
+  // changes are handled by the effects below so the same player instance
+  // survives episode transitions — consumers (Watch, VideoControls,
+  // VolumeControl) keep the same reference and never see a disposed player.
+  useEffect(() => {
+    if (!videoRef.current) {
+      return
+    }
 
-      // Enable AirPlay on Safari/iOS.
-      videoElement.setAttribute('x-webkit-airplay', 'allow')
-      videoElement.setAttribute('airplay', 'allow')
-      videoElement.setAttribute('playsinline', '')
+    const videoElement = document.createElement('video-js')
 
-      videoRef.current.appendChild(videoElement)
+    videoElement.classList.add('vjs-big-play-centered')
 
-      const source = pickSource(src)
+    // Enable AirPlay on Safari/iOS.
+    videoElement.setAttribute('x-webkit-airplay', 'allow')
+    videoElement.setAttribute('airplay', 'allow')
+    videoElement.setAttribute('playsinline', '')
 
-      playerRef.current = videojs(
-        videoElement,
-        {
-          controls: false,
-          autoplay: true,
-          fill: true,
-          sources: [source],
-          poster,
-          html5: {
-            vhs: {
-              overrideNative: false
-            }
-          }
-        },
-        () => {
-          const player = playerRef.current
+    videoRef.current.appendChild(videoElement)
 
-          if (player) {
-            onReady?.(player)
+    const player = videojs(
+      videoElement,
+      {
+        controls: false,
+        autoplay: true,
+        fill: true,
+        sources: [pickSource(initialSrcRef.current)],
+        poster: initialPosterRef.current,
+        html5: {
+          vhs: {
+            overrideNative: false
           }
         }
-      )
-    }
+      },
+      () => {
+        // StrictMode can dispose this instance before the ready callback
+        // fires. Don't hand a disposed player to the parent.
+        if (player.isDisposed()) return
+        onReadyRef.current?.(player)
+      }
+    )
+
+    playerRef.current = player
 
     return () => {
-      if (playerRef.current) {
-        playerRef.current.dispose()
-        playerRef.current = null
-      }
+      player.dispose()
+      playerRef.current = null
     }
-  }, [src, poster, onReady])
+  }, [])
+
+  // Swap the source in-place on prop change.
+  useEffect(() => {
+    const player = playerRef.current
+
+    if (!player) {
+      return
+    }
+
+    if (src === initialSrcRef.current) {
+      return
+    }
+
+    player.src(pickSource(src))
+  }, [src])
+
+  useEffect(() => {
+    const player = playerRef.current
+
+    if (!player || poster === undefined) {
+      return
+    }
+
+    if (poster === initialPosterRef.current) {
+      return
+    }
+
+    player.poster(poster)
+  }, [poster])
 
   const handleClick = () => {
     if (!playerRef.current) {

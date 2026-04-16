@@ -8,7 +8,10 @@ interface SettingsLayoutProps {
   children: ReactNode
 }
 
-const sections = [{ to: '/settings/profiles', label: 'Profiles' }]
+const sections = [
+  { to: '/settings/profiles', label: 'Profiles' },
+  { to: '/settings/auth', label: 'Auth' }
+]
 
 export function SettingsLayout({
   children
