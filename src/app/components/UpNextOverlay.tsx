@@ -116,17 +116,17 @@ export function UpNextOverlay({
 
       <div className="mt-3 flex items-center gap-2">
         <Button
-          className="flex-1 relative overflow-hidden"
+          className="flex-1 relative overflow-hidden bg-white/15 text-white hover:bg-white/25"
           onClick={handlePlayNowClick}
           size="sm"
         >
           <span
             aria-hidden="true"
-            className="absolute inset-y-0 left-0 w-full origin-left bg-white/30"
+            className="absolute inset-y-0 left-0 w-full origin-left bg-white"
             ref={fillRef}
             style={{ transform: 'scaleX(0)' }}
           />
-          <span className="relative">Next episode</span>
+          <span className="relative mix-blend-difference">Next episode</span>
         </Button>
         <Button
           className="flex-1"
