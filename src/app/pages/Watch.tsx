@@ -78,7 +78,7 @@ async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
 }
 
 const hideDelayMs = 3000
-const upNextPeekSeconds = 30
+const upNextPeekSeconds = 90
 const upNextCountdownSeconds = 10
 
 export function WatchPage() {
