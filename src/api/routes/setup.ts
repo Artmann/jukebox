@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 
-import { getConfig, saveConfig } from '../../config'
+import { getConfig } from '../../config'
 import { db, schema } from '../../database'
+import { setTmdbApiKey } from '../../services/settings'
 
 const setupRoutes = new Hono()
 
@@ -40,7 +41,7 @@ setupRoutes.post('/complete', async (context) => {
     )
   }
 
-  await saveConfig({ tmdbApiKey: body.tmdbApiKey })
+  await setTmdbApiKey(body.tmdbApiKey)
 
   // Replace all libraries with the new set
   await db.delete(schema.libraries)

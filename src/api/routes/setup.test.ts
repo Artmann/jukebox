@@ -19,8 +19,13 @@ vi.mock('../../config', () => ({
   saveConfig: vi.fn()
 }))
 
+vi.mock('../../services/settings', () => ({
+  setTmdbApiKey: vi.fn()
+}))
+
 import { setupRoutes } from './setup'
-import { getConfig, saveConfig } from '../../config'
+import { getConfig } from '../../config'
+import { setTmdbApiKey } from '../../services/settings'
 
 interface SetupStatusResponse {
   config: { tmdbApiKey: string } | null
@@ -144,7 +149,7 @@ describe('setup routes', () => {
 
       expect(status).toEqual(200)
       expect(body).toEqual({ success: true })
-      expect(saveConfig).toHaveBeenCalledWith({ tmdbApiKey: 'test-key' })
+      expect(setTmdbApiKey).toHaveBeenCalledWith('test-key')
     })
   })
 })
