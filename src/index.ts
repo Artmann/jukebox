@@ -6,6 +6,8 @@ import { serve } from '@hono/node-server'
 import type { ViteDevServer } from 'vite'
 
 import { app, setupStaticServing, setupViteProxy } from './api'
+import { scanManager } from './services/scan-manager'
+import { scheduler } from './services/scheduler'
 
 const port = process.env.PORT ? Number(process.env.PORT) : 1990
 const vitePort = 5173
@@ -61,6 +63,12 @@ if (isDevelopment) {
   setupStaticServing()
 }
 
+// The scan manager recovers any scan_jobs rows left in `running` state from a
+// previous crash by marking them as `error`. The scheduler then reads the
+// persisted schedule and arms the first tick.
+await scanManager.recoverInterruptedJobs()
+await scheduler.start()
+
 const server = serve({ fetch: app.fetch, port }, (info) => {
   printWelcome(info.port)
 })
@@ -89,6 +97,8 @@ function shutdown(signal: string) {
 
   // Force exit after 2 seconds if graceful shutdown hangs
   setTimeout(() => process.exit(1), 2000).unref()
+
+  scheduler.stop()
 
   server.close(() => {
     if (viteServer) {
