@@ -47,7 +47,7 @@ that can be specced individually later (brainstorm → spec → plan → execute
 
 ## Medium priority
 
-- [ ] **Settings page.** Consolidate TMDB API key, library paths, shared
+- [x] **Settings page.** Consolidate TMDB API key, library paths, shared
       password, scan schedule, and profile management into one `/settings`
       route. Replace or absorb `/setup`.
 
