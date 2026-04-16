@@ -31,6 +31,15 @@ export function UpNextOverlay({
 }: UpNextOverlayProps): ReactElement {
   const fillRef = useRef<HTMLSpanElement>(null)
   const firedRef = useRef(false)
+  const onPlayNowRef = useRef(onPlayNow)
+
+  // Stash the latest callback in a ref so the countdown effect doesn't need
+  // it as a dependency. Without this, a new callback identity during the
+  // countdown would cancel the animation and clear the auto-fire timeout,
+  // which is why the bar appeared frozen and auto-advance never fired.
+  useEffect(() => {
+    onPlayNowRef.current = onPlayNow
+  }, [onPlayNow])
 
   useEffect(() => {
     if (!isCountingDown) {
@@ -42,8 +51,6 @@ export function UpNextOverlay({
 
     if (!fillElement) return
 
-    // Drive the fill with the Web Animations API so the bar animates
-    // independently of React re-renders and reliably resets on cancel.
     const animation = fillElement.animate(
       [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
       {
@@ -57,14 +64,14 @@ export function UpNextOverlay({
       if (firedRef.current) return
 
       firedRef.current = true
-      onPlayNow()
+      onPlayNowRef.current()
     }, countdownSeconds * 1000 + holdMs)
 
     return () => {
       animation.cancel()
       clearTimeout(timeout)
     }
-  }, [isCountingDown, countdownSeconds, onPlayNow])
+  }, [isCountingDown, countdownSeconds])
 
   const subtitle = useMemo(
     () =>
