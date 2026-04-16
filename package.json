@@ -53,6 +53,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.5.0",
+    "dayjs": "^1.11.20",
     "dotenv": "^17.2.3"
   },
   "optionalDependencies": {

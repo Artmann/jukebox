@@ -6,7 +6,9 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 
+import { authMiddleware } from './middleware/auth'
 import { profileMiddleware } from './middleware/profile'
+import { authRoutes } from './routes/auth'
 import { episodeProgressRoutes } from './routes/episode-progress'
 import { episodeStreamRoutes } from './routes/episode-stream'
 import { helloRoutes } from './routes/hello'
@@ -24,6 +26,7 @@ const app = new Hono()
 
 app.use('*', logger())
 
+app.use('/api/*', authMiddleware)
 app.use('/api/*', profileMiddleware)
 
 app.onError((error, context) => {
@@ -34,6 +37,7 @@ app.onError((error, context) => {
 
   return context.json({ error: { message } }, 500)
 })
+app.route('/api/auth', authRoutes)
 app.route('/api/hello', helloRoutes)
 app.route('/api/library/shows', showRoutes)
 app.route('/api/library/up-next', upNextRoutes)
