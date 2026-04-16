@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { log } from 'tiny-typescript-logger'
 
 import { getConfig, saveConfig } from '../config'
 import { db, schema } from '../database'
@@ -44,6 +45,9 @@ export async function getSetting(
 
 /**
  * Upsert a setting value.
+ *
+ * Uses a single INSERT ... ON CONFLICT so two concurrent callers don't both
+ * read null, both INSERT, and fail with a UNIQUE constraint on the second.
  */
 export async function setSetting(
   key: string,
@@ -51,22 +55,14 @@ export async function setSetting(
   database: typeof db = db
 ): Promise<void> {
   const now = Date.now()
-  const existing = await getSetting(key, database)
-
-  if (existing === null) {
-    await database.insert(schema.settings).values({
-      key,
-      value,
-      updatedAt: now
-    })
-
-    return
-  }
 
   await database
-    .update(schema.settings)
-    .set({ value, updatedAt: now })
-    .where(eq(schema.settings.key, key))
+    .insert(schema.settings)
+    .values({ key, value, updatedAt: now })
+    .onConflictDoUpdate({
+      target: schema.settings.key,
+      set: { value, updatedAt: now }
+    })
 }
 
 /**
@@ -112,9 +108,15 @@ export async function setTmdbApiKey(
 
   try {
     await saveConfig({ tmdbApiKey: apiKey })
-  } catch {
+  } catch (error) {
     // Saving to the JSON file is best-effort — the DB is the source of
-    // truth after the first migration. Swallow the error so a read-only
-    // config directory doesn't break settings updates.
+    // truth after the first migration. Don't re-throw so a read-only
+    // config directory doesn't break settings updates, but do log so the
+    // user has a signal that rollback safety to an older server build is
+    // degraded.
+    log.warn(
+      "Couldn't mirror TMDB key to config.json — rollback safety is degraded. Check permissions on ~/.jukebox/.",
+      error
+    )
   }
 }

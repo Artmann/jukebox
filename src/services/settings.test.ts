@@ -63,6 +63,17 @@ describe('setSetting', () => {
 
     expect(await getSetting('scanSchedule', testDb.db)).toEqual('24h')
   })
+
+  it('handles concurrent writes without UNIQUE constraint errors', async () => {
+    await Promise.all([
+      setSetting('scanSchedule', '6h', testDb.db),
+      setSetting('scanSchedule', '24h', testDb.db)
+    ])
+
+    const stored = await getSetting('scanSchedule', testDb.db)
+
+    expect(['6h', '24h']).toContain(stored)
+  })
 })
 
 describe('getTmdbApiKey', () => {
