@@ -36,3 +36,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 jukebox.db.superpowers/
 dist/
 jukebox.db
+
+# Claude Code worktrees
+.claude/worktrees/

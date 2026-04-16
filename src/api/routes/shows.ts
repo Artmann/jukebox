@@ -1,9 +1,11 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
+import { watchedThreshold } from '../../lib/watched'
+import type { ProfileContext } from '../middleware/profile'
 
-const showRoutes = new Hono()
+const showRoutes = new Hono<ProfileContext>()
 
 // GET / - List all shows with season and episode counts
 showRoutes.get('/', async (context) => {
@@ -58,6 +60,128 @@ showRoutes.get('/episodes/:id', async (context) => {
     .limit(1)
 
   return context.json({ episode, show })
+})
+
+// GET /:showId/next-episode?afterEpisodeId=:id - Next unwatched episode for
+// the active profile, in (seasonNumber, episodeNumber) order after the given
+// episode. 404 when no candidate remains.
+showRoutes.get('/:showId/next-episode', async (context) => {
+  const profileId = context.get('profileId')
+  const showId = parseInt(context.req.param('showId'), 10)
+  const afterEpisodeIdParam = context.req.query('afterEpisodeId')
+  const afterEpisodeId = afterEpisodeIdParam
+    ? parseInt(afterEpisodeIdParam, 10)
+    : NaN
+
+  if (isNaN(showId) || isNaN(afterEpisodeId)) {
+    return context.json(
+      {
+        error: {
+          message:
+            'Provide a numeric showId and a numeric afterEpisodeId query parameter.'
+        }
+      },
+      400
+    )
+  }
+
+  const [currentEpisode] = await db
+    .select()
+    .from(schema.episodes)
+    .where(
+      and(
+        eq(schema.episodes.id, afterEpisodeId),
+        eq(schema.episodes.showId, showId)
+      )
+    )
+    .limit(1)
+
+  if (!currentEpisode) {
+    return context.json(
+      {
+        error: {
+          message:
+            'That episode does not belong to this show. Double-check the showId and afterEpisodeId.'
+        }
+      },
+      404
+    )
+  }
+
+  const allEpisodes = await db
+    .select()
+    .from(schema.episodes)
+    .where(eq(schema.episodes.showId, showId))
+    .orderBy(schema.episodes.seasonNumber, schema.episodes.episodeNumber)
+
+  const laterEpisodes = allEpisodes.filter((candidate) => {
+    if (candidate.seasonNumber > currentEpisode.seasonNumber) {
+      return true
+    }
+
+    if (candidate.seasonNumber < currentEpisode.seasonNumber) {
+      return false
+    }
+
+    return candidate.episodeNumber > currentEpisode.episodeNumber
+  })
+
+  if (laterEpisodes.length === 0) {
+    return context.json(
+      { error: { message: 'No more episodes after this one.' } },
+      404
+    )
+  }
+
+  const laterIds = laterEpisodes.map((candidate) => candidate.id)
+
+  const progressRows = await db
+    .select()
+    .from(schema.watchProgress)
+    .where(eq(schema.watchProgress.profileId, profileId))
+
+  const progressByEpisodeId = new Map<
+    number,
+    { currentTime: number; duration: number | null }
+  >()
+
+  for (const row of progressRows) {
+    if (row.episodeId !== null && laterIds.includes(row.episodeId)) {
+      progressByEpisodeId.set(row.episodeId, {
+        currentTime: row.currentTime,
+        duration: row.duration
+      })
+    }
+  }
+
+  const nextEpisode = laterEpisodes.find((candidate) => {
+    const progress = progressByEpisodeId.get(candidate.id)
+
+    if (!progress) {
+      return true
+    }
+
+    if (!progress.duration || progress.duration <= 0) {
+      return true
+    }
+
+    return progress.currentTime / progress.duration < watchedThreshold
+  })
+
+  if (!nextEpisode) {
+    return context.json(
+      { error: { message: 'No more episodes after this one.' } },
+      404
+    )
+  }
+
+  const [show] = await db
+    .select()
+    .from(schema.shows)
+    .where(eq(schema.shows.id, showId))
+    .limit(1)
+
+  return context.json({ episode: nextEpisode, show })
 })
 
 // GET /:id - Get single show with nested seasons and episodes

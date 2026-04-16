@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
-import { useParams, Link, useLocation } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -12,6 +13,8 @@ import {
 import { VideoPlayer } from '../components/VideoPlayer'
 import { VideoControls } from '../components/VideoControls'
 import { EpisodePanel } from '../components/EpisodePanel'
+import { UpNextOverlay } from '../components/UpNextOverlay'
+import { useNextEpisode } from '../hooks/useNextEpisode'
 import type { Movie } from '../hooks/useMovies'
 import type { Episode, Show, ShowWithSeasons } from '../lib/media'
 import type Player from 'video.js/dist/types/player'
@@ -80,10 +83,12 @@ async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
 }
 
 const hideDelayMs = 3000
+const upNextThresholdSeconds = 45
 
 export function WatchPage() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
+  const navigate = useNavigate()
   const isEpisode = location.pathname.startsWith('/watch/episode/')
 
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -91,6 +96,10 @@ export function WatchPage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [episodePanelOpen, setEpisodePanelOpen] = useState(false)
   const [selectedSeason, setSelectedSeason] = useState(1)
+  const [upNextDismissed, setUpNextDismissed] = useState(false)
+  const [upNextVisible, setUpNextVisible] = useState(false)
+  const [isCountingDown, setIsCountingDown] = useState(false)
+  const [isSwapping, setIsSwapping] = useState(false)
   const hasRestoredProgress = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -110,7 +119,7 @@ export function WatchPage() {
 
   // Track play/pause state for auto-hide logic.
   useEffect(() => {
-    if (!player) {
+    if (!player || player.isDisposed()) {
       return
     }
 
@@ -122,6 +131,7 @@ export function WatchPage() {
     setIsPlaying(!player.paused())
 
     return () => {
+      if (player.isDisposed()) return
       player.off('play', onPlay)
       player.off('pause', onPause)
     }
@@ -196,7 +206,11 @@ export function WatchPage() {
   } = useQuery({
     queryKey: ['movie', id],
     queryFn: () => fetchMovie(id ?? ''),
-    enabled: !!id && !isEpisode
+    enabled: !!id && !isEpisode,
+    // Keep previous data so the player tree doesn't unmount while fetching
+    // the next movie — disposing the player mid-swap leaves consumers with
+    // stale references and throws "Invalid target for null#on".
+    placeholderData: keepPreviousData
   })
 
   // Episode queries (only when isEpisode)
@@ -207,7 +221,10 @@ export function WatchPage() {
   } = useQuery({
     queryKey: ['episode', id],
     queryFn: () => fetchEpisodeWithShow(id ?? ''),
-    enabled: !!id && isEpisode
+    enabled: !!id && isEpisode,
+    // Keep previous data so the player tree stays mounted across episode
+    // transitions (see note on the movie query above).
+    placeholderData: keepPreviousData
   })
 
   const episode = episodeData?.episode
@@ -259,42 +276,101 @@ export function WatchPage() {
     }
   }, [player, savedProgress])
 
-  // Auto-advance to next episode when current one ends.
+  // Fetch the next unwatched episode from the server (endpoint-driven,
+  // replaces the old ad-hoc on-ended redirect).
+  const { data: nextEpisodeData } = useNextEpisode(
+    episodeShow?.id,
+    episode?.id,
+    { enabled: isEpisode }
+  )
+
+  const nextEpisode = nextEpisodeData?.episode ?? null
+  const nextEpisodeShow = nextEpisodeData?.show ?? null
+
+  // Reset overlay state and the progress-restore guard every time the
+  // watched episode changes. The player instance persists across episode
+  // swaps, so we have to clear this ref manually.
   useEffect(() => {
-    if (!player || !isEpisode || !show || !episode) return
+    setUpNextDismissed(false)
+    setUpNextVisible(false)
+    setIsCountingDown(false)
+    hasRestoredProgress.current = false
+  }, [episode?.id])
 
-    const onEnded = () => {
-      const currentSeason = show.seasons.find(
-        (season) => season.seasonNumber === episode.seasonNumber
-      )
+  // Drop the fade overlay as soon as the new source is actually playing.
+  useEffect(() => {
+    if (!player || player.isDisposed()) return
 
-      if (!currentSeason) return
+    const onPlaying = () => setIsSwapping(false)
 
-      const currentIndex = currentSeason.episodes.findIndex(
-        (episodeItem) => episodeItem.id === episode.id
-      )
-      let nextEpisode: Episode | undefined
+    player.on('playing', onPlaying)
 
-      if (currentIndex < currentSeason.episodes.length - 1) {
-        nextEpisode = currentSeason.episodes[currentIndex + 1]
-      } else {
-        const nextSeason = show.seasons.find(
-          (season) => season.seasonNumber === episode.seasonNumber + 1
-        )
-        nextEpisode = nextSeason?.episodes[0]
-      }
+    return () => {
+      if (player.isDisposed()) return
+      player.off('playing', onPlaying)
+    }
+  }, [player])
 
-      if (nextEpisode) {
-        window.location.href = `/watch/episode/${nextEpisode.id}`
+  const goToNextEpisode = useCallback(() => {
+    if (!nextEpisode) return
+
+    setIsSwapping(true)
+    void navigate(`/watch/episode/${nextEpisode.id}`)
+  }, [nextEpisode, navigate])
+
+  // Track playback position to reveal the overlay in the last 30 seconds,
+  // and drive the countdown state based on the 10-second threshold or the
+  // `ended` event — whichever fires first.
+  useEffect(() => {
+    if (!player || player.isDisposed() || !isEpisode) return
+
+    const onTimeUpdate = () => {
+      const currentTime = player.currentTime() ?? 0
+      const duration = player.duration() ?? 0
+
+      if (duration <= 0) return
+
+      const remaining = duration - currentTime
+
+      if (remaining <= upNextThresholdSeconds && !upNextDismissed && nextEpisode) {
+        setUpNextVisible(true)
+        setIsCountingDown(true)
       }
     }
 
+    const onEnded = () => {
+      if (!nextEpisode) {
+        toast("You've finished all episodes.")
+        if (episodeShow) {
+          void navigate(`/shows/${episodeShow.id}`)
+        }
+        return
+      }
+
+      if (upNextDismissed) {
+        return
+      }
+
+      setUpNextVisible(true)
+      setIsCountingDown(true)
+    }
+
+    player.on('timeupdate', onTimeUpdate)
     player.on('ended', onEnded)
 
     return () => {
+      if (player.isDisposed()) return
+      player.off('timeupdate', onTimeUpdate)
       player.off('ended', onEnded)
     }
-  }, [player, isEpisode, show, episode])
+  }, [
+    player,
+    isEpisode,
+    nextEpisode,
+    upNextDismissed,
+    episodeShow,
+    navigate
+  ])
 
   const handleSelectEpisode = useCallback(
     (selectedEpisode: Episode) => {
@@ -311,9 +387,10 @@ export function WatchPage() {
         })
       }
 
-      window.location.href = `/watch/episode/${selectedEpisode.id}`
+      setIsSwapping(true)
+      void navigate(`/watch/episode/${selectedEpisode.id}`)
     },
-    [player, episode]
+    [player, episode, navigate]
   )
 
   const isLoading = isEpisode ? isLoadingEpisode : isLoadingMovie
@@ -363,6 +440,34 @@ export function WatchPage() {
           onReady={setPlayer}
         />
       </div>
+
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 z-40 bg-black pointer-events-none transition-opacity duration-300 ${isSwapping ? 'opacity-100' : 'opacity-0'}`}
+      />
+
+      {isEpisode && upNextVisible && nextEpisode && (
+        <video
+          aria-hidden="true"
+          className="hidden"
+          preload="auto"
+          src={`/api/stream/episode/${nextEpisode.id}`}
+        />
+      )}
+
+      {isEpisode && upNextVisible && nextEpisode && nextEpisodeShow && (
+        <UpNextOverlay
+          isCountingDown={isCountingDown}
+          nextEpisode={nextEpisode}
+          onCancel={() => {
+            setUpNextDismissed(true)
+            setUpNextVisible(false)
+            setIsCountingDown(false)
+          }}
+          onPlayNow={goToNextEpisode}
+          show={nextEpisodeShow}
+        />
+      )}
 
       {isEpisode && show && episode && (
         <>

@@ -8,9 +8,11 @@ import { FavoritesRow } from '../components/FavoritesRow'
 import { MediaRow } from '../components/MediaRow'
 import { PageHeader } from '../components/PageHeader'
 import { SkeletonRow } from '../components/SkeletonRow'
+import { UpNextRow } from '../components/UpNextRow'
 import { useContinueWatching } from '../hooks/useContinueWatching'
 import { useMovies } from '../hooks/useMovies'
 import { useShows } from '../hooks/useShows'
+import { useUpNext } from '../hooks/useUpNext'
 import { buildGenreRows } from '../lib/genres'
 import { mergeMedia, type MediaItem } from '../lib/media'
 
@@ -22,9 +24,13 @@ export function HomePage() {
   const { data: shows, isLoading: isLoadingShows } = useShows()
   const { data: continueWatchingItems, isLoading: isLoadingContinueWatching } =
     useContinueWatching()
+  const { data: upNextItems, isLoading: isLoadingUpNext } = useUpNext()
 
   const isLoading =
-    isLoadingMovies || isLoadingShows || isLoadingContinueWatching
+    isLoadingMovies ||
+    isLoadingShows ||
+    isLoadingContinueWatching ||
+    isLoadingUpNext
 
   const allMedia = useMemo(
     () => mergeMedia(movies ?? [], shows ?? []),
@@ -102,6 +108,10 @@ export function HomePage() {
       <div className="pt-2 pb-8">
         {continueWatchingItems && continueWatchingItems.length > 0 && (
           <ContinueWatchingRow items={continueWatchingItems} />
+        )}
+
+        {upNextItems && upNextItems.length > 0 && (
+          <UpNextRow items={upNextItems} />
         )}
 
         <FavoritesRow />

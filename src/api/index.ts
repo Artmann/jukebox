@@ -18,6 +18,7 @@ import { profileRoutes } from './routes/profiles'
 import { favoriteRoutes } from './routes/favorites'
 import { showRoutes } from './routes/shows'
 import { streamRoutes } from './routes/stream'
+import { upNextRoutes } from './routes/up-next'
 
 const app = new Hono()
 
@@ -35,6 +36,7 @@ app.onError((error, context) => {
 })
 app.route('/api/hello', helloRoutes)
 app.route('/api/library/shows', showRoutes)
+app.route('/api/library/up-next', upNextRoutes)
 app.route('/api/library', libraryRoutes)
 app.route('/api/progress/episode', episodeProgressRoutes)
 app.route('/api/progress', progressRoutes)

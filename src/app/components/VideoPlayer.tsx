@@ -12,41 +12,82 @@ interface VideoPlayerProps {
 export function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
   const videoRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
+  const onReadyRef = useRef(onReady)
+  const initialSrcRef = useRef(src)
+  const initialPosterRef = useRef(poster)
 
   useEffect(() => {
-    if (!playerRef.current && videoRef.current) {
-      const videoElement = document.createElement('video-js')
+    onReadyRef.current = onReady
+  }, [onReady])
 
-      videoElement.classList.add('vjs-big-play-centered')
-
-      videoRef.current.appendChild(videoElement)
-
-      playerRef.current = videojs(
-        videoElement,
-        {
-          controls: false,
-          autoplay: true,
-          fill: true,
-          sources: [{ src, type: 'video/mp4' }],
-          poster
-        },
-        () => {
-          const player = playerRef.current
-
-          if (player) {
-            onReady?.(player)
-          }
-        }
-      )
+  // Create the player once on mount and dispose on unmount. Source/poster
+  // changes are handled by the effects below so the same player instance
+  // survives episode transitions — consumers (Watch, VideoControls,
+  // VolumeControl) keep the same reference and never see a disposed player.
+  useEffect(() => {
+    if (!videoRef.current) {
+      return
     }
+
+    const videoElement = document.createElement('video-js')
+
+    videoElement.classList.add('vjs-big-play-centered')
+
+    videoRef.current.appendChild(videoElement)
+
+    const player = videojs(
+      videoElement,
+      {
+        controls: false,
+        autoplay: true,
+        fill: true,
+        sources: [{ src: initialSrcRef.current, type: 'video/mp4' }],
+        poster: initialPosterRef.current
+      },
+      () => {
+        // StrictMode can dispose this instance before the ready callback
+        // fires. Don't hand a disposed player to the parent.
+        if (player.isDisposed()) return
+        onReadyRef.current?.(player)
+      }
+    )
+
+    playerRef.current = player
 
     return () => {
-      if (playerRef.current) {
-        playerRef.current.dispose()
-        playerRef.current = null
-      }
+      player.dispose()
+      playerRef.current = null
     }
-  }, [src, poster, onReady])
+  }, [])
+
+  // Swap the source in-place on prop change.
+  useEffect(() => {
+    const player = playerRef.current
+
+    if (!player) {
+      return
+    }
+
+    if (src === initialSrcRef.current) {
+      return
+    }
+
+    player.src({ src, type: 'video/mp4' })
+  }, [src])
+
+  useEffect(() => {
+    const player = playerRef.current
+
+    if (!player || poster === undefined) {
+      return
+    }
+
+    if (poster === initialPosterRef.current) {
+      return
+    }
+
+    player.poster(poster)
+  }, [poster])
 
   const handleClick = () => {
     if (!playerRef.current) {

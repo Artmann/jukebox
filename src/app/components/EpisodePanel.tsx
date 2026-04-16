@@ -81,7 +81,10 @@ export function EpisodePanel({
                   ? 'bg-white/10 border-red-600'
                   : 'border-transparent hover:bg-white/5'
               }`}
-              onClick={() => onSelectEpisode(episode)}
+              onClick={() => {
+                onSelectEpisode(episode)
+                onClose()
+              }}
             >
               <div className="text-white/60 text-xs mb-1">
                 E{episode.episodeNumber}
