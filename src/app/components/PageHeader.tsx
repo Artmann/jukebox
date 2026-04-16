@@ -35,6 +35,7 @@ export function PageHeader(): ReactElement {
       <nav className="flex items-center gap-3 px-4 py-2 sm:gap-6 sm:px-6 sm:py-4">
         <Link
           className="flex min-h-11 items-center gap-2 text-lg font-bold tracking-tight text-primary sm:text-xl"
+          tabIndex={-1}
           to="/"
         >
           <img
