@@ -78,7 +78,6 @@ async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
 }
 
 const hideDelayMs = 3000
-const upNextPeekSeconds = 90
 const upNextCountdownSeconds = 10
 
 export function WatchPage() {
@@ -328,11 +327,8 @@ export function WatchPage() {
 
       const remaining = duration - currentTime
 
-      if (remaining <= upNextPeekSeconds && !upNextDismissed && nextEpisode) {
-        setUpNextVisible(true)
-      }
-
       if (remaining <= upNextCountdownSeconds && !upNextDismissed && nextEpisode) {
+        setUpNextVisible(true)
         setIsCountingDown(true)
       }
     }
