@@ -150,11 +150,16 @@ export function useRemoveLibrary() {
   })
 }
 
+export interface ScanScheduleStatus {
+  nextRunAt: string | null
+  schedule: ScanSchedule
+}
+
 export function useScanSchedule() {
   return useQuery({
     queryKey: ['settings', 'scan-schedule'],
     queryFn: () =>
-      getJson<{ schedule: ScanSchedule }>('/api/settings/scan-schedule')
+      getJson<ScanScheduleStatus>('/api/settings/scan-schedule')
   })
 }
 
@@ -173,7 +178,7 @@ export function useSaveScanSchedule() {
         throw new Error(await readError(response))
       }
 
-      return (await response.json()) as { schedule: ScanSchedule }
+      return (await response.json()) as ScanScheduleStatus
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({

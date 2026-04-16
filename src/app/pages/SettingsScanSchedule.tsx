@@ -1,3 +1,5 @@
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
 import { useEffect, useState, type ReactElement } from 'react'
 import { toast } from 'sonner'
 
@@ -16,6 +18,8 @@ import {
   type ScanSchedule
 } from '../hooks/useSettings'
 import { SettingsLayout } from './Settings'
+
+dayjs.extend(relativeTime)
 
 const scheduleLabels: Record<ScanSchedule, string> = {
   off: 'Off',
@@ -99,8 +103,11 @@ export function SettingsScanSchedulePage(): ReactElement {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Schedule changes take effect when the scheduler ships (coming soon).
-          Until then, trigger scans manually from the Scan page.
+          {schedule === 'off'
+            ? 'Automatic scans are off. Trigger scans manually from the Scan page.'
+            : data?.nextRunAt
+              ? `Next scheduled scan ${dayjs(data.nextRunAt).fromNow()}.`
+              : 'Schedule will start on the next server boot.'}
         </p>
 
         <div>
