@@ -184,9 +184,15 @@ export function VideoControls({
             onClick={handlePlayPause}
           >
             {isPlaying ? (
-              <PauseIcon className="size-7 hover:scale-125 text-white" />
+              <PauseIcon
+                className="size-7 hover:scale-125 text-white"
+                fill="currentColor"
+              />
             ) : (
-              <PlayIcon className="size-7 hover:scale-125 text-white" />
+              <PlayIcon
+                className="size-7 hover:scale-125 text-white"
+                fill="currentColor"
+              />
             )}
           </IconButton>
 
