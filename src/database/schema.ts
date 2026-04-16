@@ -152,6 +152,12 @@ export const sessions = sqliteTable('sessions', {
   userAgent: text('user_agent')
 })
 
+export const settings = sqliteTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull()
+})
+
 export type AuthConfig = typeof authConfig.$inferSelect
 export type NewAuthConfig = typeof authConfig.$inferInsert
 export type Session = typeof sessions.$inferSelect
@@ -172,3 +178,5 @@ export type Profile = typeof profiles.$inferSelect
 export type NewProfile = typeof profiles.$inferInsert
 export type Favorite = typeof favorites.$inferSelect
 export type NewFavorite = typeof favorites.$inferInsert
+export type Setting = typeof settings.$inferSelect
+export type NewSetting = typeof settings.$inferInsert
