@@ -65,7 +65,7 @@ that can be specced individually later (brainstorm → spec → plan → execute
       library paths; debounce events and trigger a targeted rescan of the
       changed directory. Complements periodic scans rather than replacing them.
 
-- [ ] **Search.** Full-text search across movies, shows, and episodes (title,
+- [x] **Search.** Full-text search across movies, shows, and episodes (title,
       overview, cast). SQLite FTS5 virtual table populated during scan. Keyboard
       shortcut (`/`) + search bar in top nav.
 

@@ -15,6 +15,7 @@ import { helloRoutes } from './routes/hello'
 import { libraryRoutes } from './routes/library'
 import { progressRoutes } from './routes/progress'
 import { scanRoutes } from './routes/scan'
+import { searchRoutes } from './routes/search'
 import { settingsRoutes } from './routes/settings'
 import { setupRoutes } from './routes/setup'
 import { profileRoutes } from './routes/profiles'
@@ -47,6 +48,7 @@ app.route('/api/library', libraryRoutes)
 app.route('/api/progress/episode', episodeProgressRoutes)
 app.route('/api/progress', progressRoutes)
 app.route('/api/scan', scanRoutes)
+app.route('/api/search', searchRoutes)
 app.route('/api/profiles', profileRoutes)
 app.route('/api/favorites', favoriteRoutes)
 app.route('/api/settings', settingsRoutes)
