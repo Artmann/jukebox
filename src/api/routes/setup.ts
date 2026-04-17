@@ -1,17 +1,20 @@
 import { Hono } from 'hono'
 
-import { getConfig, saveConfig } from '../../config'
 import { db, schema } from '../../database'
+import { getTmdbApiKey, setTmdbApiKey } from '../../services/settings'
 
 const setupRoutes = new Hono()
 
 setupRoutes.get('/', async (context) => {
-  const config = getConfig()
+  // Read the TMDB key from the same source-of-truth as `/api/settings`
+  // so users who update it via the settings page don't see stale
+  // JSON-sourced values if they bounce through /setup later.
+  const apiKey = await getTmdbApiKey()
   const libraries = await db.select().from(schema.libraries)
 
   return context.json({
-    config: config ? { tmdbApiKey: config.tmdbApiKey } : null,
-    hasApiKey: config?.tmdbApiKey !== undefined && config.tmdbApiKey !== '',
+    config: apiKey !== null ? { tmdbApiKey: apiKey } : null,
+    hasApiKey: apiKey !== null && apiKey !== '',
     libraries: libraries.map((library) => ({
       id: library.id,
       name: library.name,
@@ -40,7 +43,7 @@ setupRoutes.post('/complete', async (context) => {
     )
   }
 
-  await saveConfig({ tmdbApiKey: body.tmdbApiKey })
+  await setTmdbApiKey(body.tmdbApiKey)
 
   // Replace all libraries with the new set
   await db.delete(schema.libraries)

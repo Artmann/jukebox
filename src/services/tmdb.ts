@@ -1,4 +1,4 @@
-import { getConfig } from '../config'
+import { getTmdbApiKey } from './settings'
 
 const tmdbBaseUrl = 'https://api.themoviedb.org/3'
 const tmdbImageBaseUrl = 'https://image.tmdb.org/t/p'
@@ -113,9 +113,9 @@ export interface EpisodeMetadata {
   stillPath: string | null
 }
 
-function getApiKey(): string {
-  const config = getConfig()
-  const apiKey = config?.tmdbApiKey ?? process.env.TMDB_API_KEY ?? null
+async function getApiKey(): Promise<string> {
+  const stored = await getTmdbApiKey()
+  const apiKey = stored ?? process.env.TMDB_API_KEY ?? null
 
   if (!apiKey) {
     throw new Error('TMDB API key is not configured')
@@ -128,7 +128,7 @@ export async function searchMovie(
   title: string,
   year?: number
 ): Promise<TMDBSearchResult[]> {
-  const apiKey = getApiKey()
+  const apiKey = await getApiKey()
 
   const params = new URLSearchParams({
     api_key: apiKey,
@@ -155,7 +155,7 @@ export async function searchMovie(
 export async function getMovieDetails(
   tmdbId: number
 ): Promise<TMDBMovieDetails> {
-  const apiKey = getApiKey()
+  const apiKey = await getApiKey()
 
   const params = new URLSearchParams({
     api_key: apiKey
@@ -173,7 +173,7 @@ export async function getMovieDetails(
 }
 
 export async function getMovieVideos(tmdbId: number): Promise<TMDBVideo[]> {
-  const apiKey = getApiKey()
+  const apiKey = await getApiKey()
 
   const params = new URLSearchParams({
     api_key: apiKey
@@ -234,7 +234,7 @@ export async function fetchMovieMetadata(
   year?: number
 ): Promise<MovieMetadata | null> {
   try {
-    getApiKey()
+    await getApiKey()
   } catch {
     return null
   }
@@ -274,7 +274,7 @@ export async function searchShow(
   title: string,
   year?: number
 ): Promise<TMDBShowSearchResult[]> {
-  const apiKey = getApiKey()
+  const apiKey = await getApiKey()
 
   const params = new URLSearchParams({
     api_key: apiKey,
@@ -297,7 +297,7 @@ export async function searchShow(
 }
 
 export async function getShowDetails(tmdbId: number): Promise<TMDBShowDetails> {
-  const apiKey = getApiKey()
+  const apiKey = await getApiKey()
 
   const params = new URLSearchParams({
     api_key: apiKey
@@ -318,7 +318,7 @@ export async function getSeasonDetails(
   tmdbId: number,
   seasonNumber: number
 ): Promise<TMDBSeasonDetails> {
-  const apiKey = getApiKey()
+  const apiKey = await getApiKey()
 
   const params = new URLSearchParams({
     api_key: apiKey
@@ -340,7 +340,7 @@ export async function fetchShowMetadata(
   year?: number
 ): Promise<ShowMetadata | null> {
   try {
-    getApiKey()
+    await getApiKey()
   } catch {
     return null
   }
@@ -376,7 +376,7 @@ export async function fetchSeasonMetadata(
   seasonNumber: number
 ): Promise<SeasonMetadata | null> {
   try {
-    getApiKey()
+    await getApiKey()
   } catch {
     return null
   }

@@ -11,6 +11,12 @@ ensureConfigDirectory()
 
 const sqlite = new Database(databasePath)
 
+// SQLite disables foreign key enforcement by default, so cascades on references
+// in the schema are silently ignored until this pragma is turned on per
+// connection. Enable it here so every query that flows through Drizzle honors
+// ON DELETE CASCADE (and rejects dangling references).
+sqlite.pragma('foreign_keys = ON')
+
 export const db = drizzle(sqlite, { schema })
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))

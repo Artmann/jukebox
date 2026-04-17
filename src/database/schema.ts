@@ -99,8 +99,12 @@ export const watchProgress = sqliteTable(
     profileId: integer('profile_id')
       .notNull()
       .references(() => profiles.id, { onDelete: 'cascade' }),
-    movieId: integer('movie_id').references(() => movies.id),
-    episodeId: integer('episode_id').references(() => episodes.id),
+    movieId: integer('movie_id').references(() => movies.id, {
+      onDelete: 'cascade'
+    }),
+    episodeId: integer('episode_id').references(() => episodes.id, {
+      onDelete: 'cascade'
+    }),
     currentTime: integer('current_time').notNull(),
     duration: integer('duration'),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
@@ -152,6 +156,12 @@ export const sessions = sqliteTable('sessions', {
   userAgent: text('user_agent')
 })
 
+export const settings = sqliteTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull()
+})
+
 export type AuthConfig = typeof authConfig.$inferSelect
 export type NewAuthConfig = typeof authConfig.$inferInsert
 export type Session = typeof sessions.$inferSelect
@@ -172,3 +182,5 @@ export type Profile = typeof profiles.$inferSelect
 export type NewProfile = typeof profiles.$inferInsert
 export type Favorite = typeof favorites.$inferSelect
 export type NewFavorite = typeof favorites.$inferInsert
+export type Setting = typeof settings.$inferSelect
+export type NewSetting = typeof settings.$inferInsert

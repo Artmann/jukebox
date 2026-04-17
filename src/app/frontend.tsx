@@ -26,7 +26,10 @@ import { LoginPage } from './pages/Login'
 import { MoviesPage } from './pages/Movies'
 import { ScanPage } from './pages/Scan'
 import { SettingsAuthPage } from './pages/SettingsAuth'
+import { SettingsLibrariesPage } from './pages/SettingsLibraries'
 import { SettingsProfilesPage } from './pages/SettingsProfiles'
+import { SettingsScanSchedulePage } from './pages/SettingsScanSchedule'
+import { SettingsTmdbPage } from './pages/SettingsTmdb'
 import { SetupPage } from './pages/Setup'
 import { ShowDetailPage } from './pages/ShowDetail'
 import { ShowsPage } from './pages/Shows'
@@ -132,6 +135,18 @@ const app = (
               <Route
                 path="/settings/profiles"
                 element={<SettingsProfilesPage />}
+              />
+              <Route
+                path="/settings/libraries"
+                element={<SettingsLibrariesPage />}
+              />
+              <Route
+                path="/settings/tmdb"
+                element={<SettingsTmdbPage />}
+              />
+              <Route
+                path="/settings/scan-schedule"
+                element={<SettingsScanSchedulePage />}
               />
               <Route
                 path="/settings/auth"

@@ -19,8 +19,13 @@ vi.mock('../../config', () => ({
   saveConfig: vi.fn()
 }))
 
+vi.mock('../../services/settings', () => ({
+  getTmdbApiKey: vi.fn(),
+  setTmdbApiKey: vi.fn()
+}))
+
 import { setupRoutes } from './setup'
-import { getConfig, saveConfig } from '../../config'
+import { getTmdbApiKey, setTmdbApiKey } from '../../services/settings'
 
 interface SetupStatusResponse {
   config: { tmdbApiKey: string } | null
@@ -52,11 +57,12 @@ describe('setup routes', () => {
     vi.clearAllMocks()
     mockFrom.mockResolvedValue([])
     mockValues.mockResolvedValue(undefined)
+    vi.mocked(getTmdbApiKey).mockResolvedValue(null)
   })
 
   describe('GET /', () => {
     it('returns needsSetup true when no libraries', async () => {
-      vi.mocked(getConfig).mockReturnValue(null)
+      vi.mocked(getTmdbApiKey).mockResolvedValue(null)
       mockFrom.mockResolvedValue([])
 
       const { status, body } = await request('/')
@@ -72,7 +78,7 @@ describe('setup routes', () => {
     })
 
     it('returns needsSetup false when libraries exist', async () => {
-      vi.mocked(getConfig).mockReturnValue({ tmdbApiKey: 'key' })
+      vi.mocked(getTmdbApiKey).mockResolvedValue('key')
       mockFrom.mockResolvedValue([
         {
           id: 1,
@@ -95,8 +101,8 @@ describe('setup routes', () => {
       ])
     })
 
-    it('returns hasApiKey true when config has key', async () => {
-      vi.mocked(getConfig).mockReturnValue({ tmdbApiKey: 'my-key' })
+    it('returns hasApiKey true when the settings source has a key', async () => {
+      vi.mocked(getTmdbApiKey).mockResolvedValue('my-key')
       mockFrom.mockResolvedValue([])
 
       const { body } = await request('/')
@@ -144,7 +150,7 @@ describe('setup routes', () => {
 
       expect(status).toEqual(200)
       expect(body).toEqual({ success: true })
-      expect(saveConfig).toHaveBeenCalledWith({ tmdbApiKey: 'test-key' })
+      expect(setTmdbApiKey).toHaveBeenCalledWith('test-key')
     })
   })
 })
