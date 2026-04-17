@@ -15,6 +15,7 @@ import { VideoControls } from '../components/VideoControls'
 import { EpisodePanel } from '../components/EpisodePanel'
 import { UpNextOverlay } from '../components/UpNextOverlay'
 import { VolumeIndicator } from '../components/VolumeIndicator'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useNextEpisode } from '../hooks/useNextEpisode'
 import type { Movie } from '../hooks/useMovies'
 import type { Episode, Show, ShowWithSeasons } from '../lib/media'
@@ -96,6 +97,7 @@ export function WatchPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [player, setPlayer] = useState<Player | null>(null)
   const [episodePanelOpen, setEpisodePanelOpen] = useState(false)
+  const isMobile = useMediaQuery('(max-width: 639px)')
   const [selectedSeason, setSelectedSeason] = useState(1)
   const [upNextDismissed, setUpNextDismissed] = useState(false)
   const [upNextVisible, setUpNextVisible] = useState(false)
@@ -580,31 +582,32 @@ export function WatchPage() {
           </div>
 
           {/* Mobile bottom sheet */}
-          <Sheet
-            onOpenChange={setEpisodePanelOpen}
-            open={episodePanelOpen}
-          >
-            <SheetContent
-              className="sm:hidden h-[85vh] p-0 bg-black/95 border-white/10"
-              hideCloseButton
-              overlayClassName="sm:hidden"
-              side="bottom"
+          {isMobile && (
+            <Sheet
+              onOpenChange={setEpisodePanelOpen}
+              open={episodePanelOpen}
             >
-              <SheetTitle className="sr-only">
-                {show.title} episodes
-              </SheetTitle>
-              <EpisodePanel
-                currentEpisodeId={episode.id}
-                onClose={() => setEpisodePanelOpen(false)}
-                onSelectEpisode={handleSelectEpisode}
-                onSelectSeason={setSelectedSeason}
-                progressMap={episodeProgressMap}
-                seasons={show.seasons}
-                selectedSeason={selectedSeason}
-                showTitle={show.title}
-              />
-            </SheetContent>
-          </Sheet>
+              <SheetContent
+                className="h-[85vh] p-0 bg-black/95 border-white/10"
+                hideCloseButton
+                side="bottom"
+              >
+                <SheetTitle className="sr-only">
+                  {show.title} episodes
+                </SheetTitle>
+                <EpisodePanel
+                  currentEpisodeId={episode.id}
+                  onClose={() => setEpisodePanelOpen(false)}
+                  onSelectEpisode={handleSelectEpisode}
+                  onSelectSeason={setSelectedSeason}
+                  progressMap={episodeProgressMap}
+                  seasons={show.seasons}
+                  selectedSeason={selectedSeason}
+                  showTitle={show.title}
+                />
+              </SheetContent>
+            </Sheet>
+          )}
         </>
       )}
 
