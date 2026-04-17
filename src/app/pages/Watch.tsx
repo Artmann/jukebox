@@ -587,6 +587,7 @@ export function WatchPage() {
             <SheetContent
               className="sm:hidden h-[85vh] p-0 bg-black/95 border-white/10"
               hideCloseButton
+              overlayClassName="sm:hidden"
               side="bottom"
             >
               <SheetTitle className="sr-only">
