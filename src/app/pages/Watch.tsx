@@ -19,6 +19,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useNextEpisode } from '../hooks/useNextEpisode'
 import type { Movie } from '../hooks/useMovies'
 import type { Episode, Show, ShowWithSeasons } from '../lib/media'
+import { watchedThreshold } from '../../lib/watched'
 import type Player from 'video.js/dist/types/player'
 
 async function fetchMovie(id: string): Promise<Movie> {
@@ -357,16 +358,32 @@ export function WatchPage() {
   }, [episode])
 
   // Restore progress when both player and savedProgress are available.
+  // If the saved progress indicates the media was already finished, start from
+  // the beginning instead so re-watching a completed episode doesn't drop the
+  // viewer straight into the credits.
   useEffect(() => {
     if (
-      player &&
-      savedProgress &&
-      savedProgress.currentTime > 0 &&
-      !hasRestoredProgress.current
+      !player ||
+      !savedProgress ||
+      savedProgress.currentTime <= 0 ||
+      hasRestoredProgress.current
     ) {
-      hasRestoredProgress.current = true
-      player.currentTime(savedProgress.currentTime)
+      return
     }
+
+    hasRestoredProgress.current = true
+
+    const { currentTime, duration } = savedProgress
+    const isFinished =
+      duration !== null &&
+      duration > 0 &&
+      currentTime / duration >= watchedThreshold
+
+    if (isFinished) {
+      return
+    }
+
+    player.currentTime(currentTime)
   }, [player, savedProgress])
 
   // Fetch the next unwatched episode from the server (endpoint-driven,

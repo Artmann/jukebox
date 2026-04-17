@@ -227,7 +227,7 @@ describe('GET /api/library/shows/:showId/next-episode', () => {
     expect(body.episode.id).toEqual(1002)
   })
 
-  it('skips episodes already watched past the threshold', async () => {
+  it('returns the literal next episode even if it has been watched', async () => {
     const app = buildShowsApp()
 
     await testDb.db.insert(testDb.schema.watchProgress).values({
@@ -243,7 +243,7 @@ describe('GET /api/library/shows/:showId/next-episode', () => {
     })
 
     const body = (await response.json()) as NextEpisodeResponse
-    expect(body.episode.id).toEqual(1003)
+    expect(body.episode.id).toEqual(1002)
   })
 
   it('returns 404 when there is no next episode', async () => {
