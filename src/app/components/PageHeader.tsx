@@ -1,12 +1,16 @@
-import { cn } from '@/lib/utils'
+import { Search } from 'lucide-react'
 import { useEffect, useState, type ReactElement } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 
+import { cn } from '@/lib/utils'
+
 import { ProfileSwitcher } from './ProfileSwitcher'
 import { ScanIndicator } from './ScanIndicator'
+import { useSearchPalette } from './SearchPaletteProvider'
 
 export function PageHeader(): ReactElement {
   const [scrollY, setScrollY] = useState(0)
+  const searchPalette = useSearchPalette()
 
   useEffect(function updateScrollPosition() {
     function onScroll() {
@@ -79,6 +83,20 @@ export function PageHeader(): ReactElement {
         </div>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <button
+            aria-label="Search (press / to focus)"
+            className="inline-flex h-11 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => searchPalette.open()}
+            type="button"
+          >
+            <Search
+              aria-hidden
+              className="size-4"
+            />
+            <kbd className="hidden rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-xs text-muted-foreground sm:inline">
+              /
+            </kbd>
+          </button>
           <ScanIndicator />
           <ProfileSwitcher />
         </div>

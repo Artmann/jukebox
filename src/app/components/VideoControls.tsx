@@ -7,6 +7,7 @@ import {
   PlayIcon,
   RotateCcw,
   RotateCw,
+  SkipForward,
   Subtitles
 } from 'lucide-react'
 import {
@@ -32,6 +33,8 @@ interface VideoControlsProps {
   player: Player | null
   movieId?: number
   episodeId?: number
+  onFullscreen?: () => void
+  onNextEpisode?: () => void
   onToggleEpisodes?: () => void
   showEpisodesButton?: boolean
   streamUrl?: string
@@ -50,6 +53,8 @@ export function VideoControls({
   player,
   movieId,
   episodeId,
+  onFullscreen,
+  onNextEpisode,
   onToggleEpisodes,
   showEpisodesButton,
   streamUrl,
@@ -263,15 +268,6 @@ export function VideoControls({
     player.currentTime(Math.min(duration, currentTime + skipSeconds))
   }
 
-  const handleFullscreen = () => {
-    if (!player) return
-    if (player.isFullscreen()) {
-      void player.exitFullscreen()
-    } else {
-      void player.requestFullscreen()
-    }
-  }
-
   const handleSeek = (position: number) => {
     if (!player) return
     const duration = player.duration() ?? 0
@@ -348,6 +344,17 @@ export function VideoControls({
               unsupportedSubtitles={unsupportedSubtitles}
             />
           )}
+          {onNextEpisode && (
+            <IconButton
+              aria-label="Next episode"
+              onClick={onNextEpisode}
+            >
+              <SkipForward
+                className="size-7 hover:scale-125 text-white"
+                fill="currentColor"
+              />
+            </IconButton>
+          )}
           {showEpisodesButton && onToggleEpisodes && (
             <IconButton
               aria-label="Browse episodes"
@@ -356,12 +363,14 @@ export function VideoControls({
               <List className="size-7 hover:scale-125 text-white" />
             </IconButton>
           )}
-          <IconButton
-            aria-label="Toggle fullscreen"
-            onClick={handleFullscreen}
-          >
-            <Maximize className="size-7 hover:scale-125 text-white" />
-          </IconButton>
+          {onFullscreen && (
+            <IconButton
+              aria-label="Toggle fullscreen"
+              onClick={onFullscreen}
+            >
+              <Maximize className="size-7 hover:scale-125 text-white" />
+            </IconButton>
+          )}
         </div>
       </div>
     </div>

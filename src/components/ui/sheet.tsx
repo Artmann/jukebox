@@ -69,6 +69,7 @@ type SheetSide = 'top' | 'right' | 'bottom' | 'left'
 interface SheetContentProps
   extends React.ComponentProps<typeof SheetPrimitive.Content> {
   hideCloseButton?: boolean
+  overlayClassName?: string
   side?: SheetSide
 }
 
@@ -76,6 +77,7 @@ function SheetContent({
   children,
   className,
   hideCloseButton,
+  overlayClassName,
   side = 'right',
   ...props
 }: SheetContentProps) {
@@ -90,7 +92,7 @@ function SheetContent({
 
   return (
     <SheetPortal>
-      <SheetOverlay />
+      <SheetOverlay className={overlayClassName} />
       <SheetPrimitive.Content
         className={cn(
           'fixed z-50 flex flex-col bg-background shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300',

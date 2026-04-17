@@ -2,7 +2,6 @@ import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
-import { watchedThreshold } from '../../lib/watched'
 import { languageDisplayName } from '../../services/subtitles'
 import type { ProfileContext } from '../middleware/profile'
 
@@ -76,11 +75,10 @@ showRoutes.get('/episodes/:id', async (context) => {
   return context.json({ episode, show, subtitles })
 })
 
-// GET /:showId/next-episode?afterEpisodeId=:id - Next unwatched episode for
-// the active profile, in (seasonNumber, episodeNumber) order after the given
-// episode. 404 when no candidate remains.
+// GET /:showId/next-episode?afterEpisodeId=:id - The next episode in
+// (seasonNumber, episodeNumber) order after the given episode, regardless of
+// watched status. 404 when no later episode exists.
 showRoutes.get('/:showId/next-episode', async (context) => {
-  const profileId = context.get('profileId')
   const showId = parseInt(context.req.param('showId'), 10)
   const afterEpisodeIdParam = context.req.query('afterEpisodeId')
   const afterEpisodeId = afterEpisodeIdParam
@@ -128,7 +126,7 @@ showRoutes.get('/:showId/next-episode', async (context) => {
     .where(eq(schema.episodes.showId, showId))
     .orderBy(schema.episodes.seasonNumber, schema.episodes.episodeNumber)
 
-  const laterEpisodes = allEpisodes.filter((candidate) => {
+  const nextEpisode = allEpisodes.find((candidate) => {
     if (candidate.seasonNumber > currentEpisode.seasonNumber) {
       return true
     }
@@ -138,48 +136,6 @@ showRoutes.get('/:showId/next-episode', async (context) => {
     }
 
     return candidate.episodeNumber > currentEpisode.episodeNumber
-  })
-
-  if (laterEpisodes.length === 0) {
-    return context.json(
-      { error: { message: 'No more episodes after this one.' } },
-      404
-    )
-  }
-
-  const laterIds = laterEpisodes.map((candidate) => candidate.id)
-
-  const progressRows = await db
-    .select()
-    .from(schema.watchProgress)
-    .where(eq(schema.watchProgress.profileId, profileId))
-
-  const progressByEpisodeId = new Map<
-    number,
-    { currentTime: number; duration: number | null }
-  >()
-
-  for (const row of progressRows) {
-    if (row.episodeId !== null && laterIds.includes(row.episodeId)) {
-      progressByEpisodeId.set(row.episodeId, {
-        currentTime: row.currentTime,
-        duration: row.duration
-      })
-    }
-  }
-
-  const nextEpisode = laterEpisodes.find((candidate) => {
-    const progress = progressByEpisodeId.get(candidate.id)
-
-    if (!progress) {
-      return true
-    }
-
-    if (!progress.duration || progress.duration <= 0) {
-      return true
-    }
-
-    return progress.currentTime / progress.duration < watchedThreshold
   })
 
   if (!nextEpisode) {

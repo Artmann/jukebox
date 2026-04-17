@@ -1,6 +1,6 @@
 {
   "name": "jukebox-media-server",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Self-hosted media server with a Netflix-style interface for browsing and streaming your personal movie and TV show collection.",
   "license": "MIT",
   "repository": {
@@ -53,6 +53,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.5.0",
+    "cmdk": "^1.1.1",
     "dayjs": "^1.11.20",
     "dotenv": "^17.2.3"
   },
