@@ -110,6 +110,15 @@ export function WatchPage() {
   const hasRestoredProgress = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const volumeHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  const handleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+    } else {
+      void wrapperRef.current?.requestFullscreen()
+    }
+  }, [])
 
   const resetHideTimer = useCallback(() => {
     setControlsVisible(true)
@@ -515,6 +524,7 @@ export function WatchPage() {
 
   return (
     <div
+      ref={wrapperRef}
       className={`bg-black w-full h-screen relative ${controlsVisible ? '' : 'cursor-none'}`}
       onMouseMove={resetHideTimer}
     >
@@ -629,6 +639,10 @@ export function WatchPage() {
           episodeId={isEpisode ? episode?.id : undefined}
           showEpisodesButton={isEpisode}
           streamUrl={streamUrl}
+          onFullscreen={handleFullscreen}
+          onNextEpisode={
+            isEpisode && nextEpisode ? goToNextEpisode : undefined
+          }
           onToggleEpisodes={() => setEpisodePanelOpen((open) => !open)}
         />
       </div>
