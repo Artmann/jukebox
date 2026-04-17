@@ -18,13 +18,13 @@ that can be specced individually later (brainstorm → spec → plan → execute
     to reference it; add `favorites` table keyed by profile.
   - UI: profile picker on first load; avatar in top bar to switch.
 
-- [ ] **Shared-password auth.** Single password gates the whole server (login
+- [x] **Shared-password auth.** Single password gates the whole server (login
       screen → signed cookie/session). Configurable from Settings. Intended for
       exposing Jukebox outside the LAN.
   - Rate-limit login attempts.
   - Session persists long (30+ days) since this is a personal server.
 
-- [ ] **Next Up / auto-advance for TV.** After an episode ends (or near the
+- [x] **Next Up / auto-advance for TV.** After an episode ends (or near the
       end), show a "Next Episode" card and auto-play. "Next up" row on home that
       surfaces the next unwatched episode of shows the profile is mid-way
       through.
@@ -32,14 +32,14 @@ that can be specced individually later (brainstorm → spec → plan → execute
     episode.
   - Player: end-of-video overlay with countdown + skip button.
 
-- [ ] **Casting (Chromecast / AirPlay / DLNA).** At minimum AirPlay + Chromecast
+- [x] **Casting (Chromecast / AirPlay / DLNA).** At minimum AirPlay + Chromecast
       from the web player. DLNA is nice-to-have.
   - AirPlay: `x-webkit-airplay="allow"` + compatible stream (may force
     transcoding for `.mkv`).
   - Chromecast: Cast sender SDK + receiver app or default media receiver with
     direct stream URL.
 
-- [ ] **Mobile-friendly UI / PWA.** Responsive layouts for all pages,
+- [x] **Mobile-friendly UI / PWA.** Responsive layouts for all pages,
       touch-friendly player controls, installable PWA with app icon and offline
       shell (not offline video).
   - Audit existing pages for `md:`/`lg:` breakpoints.
@@ -49,7 +49,7 @@ that can be specced individually later (brainstorm → spec → plan → execute
 
 - [x] **Settings page.** Consolidate TMDB API key, library paths, shared
       password, scan schedule, and profile management into one `/settings`
-      route. Replace or absorb `/setup`.
+      route.
 
 - [x] **Scan status visible in main UI.** Persistent scan indicator in the top
       bar (spinner + "Scanning 42/310" + last-scan timestamp). Click opens scan

@@ -15,9 +15,11 @@ import { VideoControls } from '../components/VideoControls'
 import { EpisodePanel } from '../components/EpisodePanel'
 import { UpNextOverlay } from '../components/UpNextOverlay'
 import { VolumeIndicator } from '../components/VolumeIndicator'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useNextEpisode } from '../hooks/useNextEpisode'
 import type { Movie } from '../hooks/useMovies'
 import type { Episode, Show, ShowWithSeasons } from '../lib/media'
+import { watchedThreshold } from '../../lib/watched'
 import type Player from 'video.js/dist/types/player'
 
 async function fetchMovie(id: string): Promise<Movie> {
@@ -96,6 +98,7 @@ export function WatchPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [player, setPlayer] = useState<Player | null>(null)
   const [episodePanelOpen, setEpisodePanelOpen] = useState(false)
+  const isMobile = useMediaQuery('(max-width: 639px)')
   const [selectedSeason, setSelectedSeason] = useState(1)
   const [upNextDismissed, setUpNextDismissed] = useState(false)
   const [upNextVisible, setUpNextVisible] = useState(false)
@@ -108,6 +111,15 @@ export function WatchPage() {
   const hasRestoredProgress = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const volumeHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  const handleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+    } else {
+      void wrapperRef.current?.requestFullscreen()
+    }
+  }, [])
 
   const resetHideTimer = useCallback(() => {
     setControlsVisible(true)
@@ -346,16 +358,32 @@ export function WatchPage() {
   }, [episode])
 
   // Restore progress when both player and savedProgress are available.
+  // If the saved progress indicates the media was already finished, start from
+  // the beginning instead so re-watching a completed episode doesn't drop the
+  // viewer straight into the credits.
   useEffect(() => {
     if (
-      player &&
-      savedProgress &&
-      savedProgress.currentTime > 0 &&
-      !hasRestoredProgress.current
+      !player ||
+      !savedProgress ||
+      savedProgress.currentTime <= 0 ||
+      hasRestoredProgress.current
     ) {
-      hasRestoredProgress.current = true
-      player.currentTime(savedProgress.currentTime)
+      return
     }
+
+    hasRestoredProgress.current = true
+
+    const { currentTime, duration } = savedProgress
+    const isFinished =
+      duration !== null &&
+      duration > 0 &&
+      currentTime / duration >= watchedThreshold
+
+    if (isFinished) {
+      return
+    }
+
+    player.currentTime(currentTime)
   }, [player, savedProgress])
 
   // Fetch the next unwatched episode from the server (endpoint-driven,
@@ -513,6 +541,7 @@ export function WatchPage() {
 
   return (
     <div
+      ref={wrapperRef}
       className={`bg-black w-full h-screen relative ${controlsVisible ? '' : 'cursor-none'}`}
       onMouseMove={resetHideTimer}
     >
@@ -580,30 +609,32 @@ export function WatchPage() {
           </div>
 
           {/* Mobile bottom sheet */}
-          <Sheet
-            onOpenChange={setEpisodePanelOpen}
-            open={episodePanelOpen}
-          >
-            <SheetContent
-              className="sm:hidden h-[85vh] p-0 bg-black/95 border-white/10"
-              hideCloseButton
-              side="bottom"
+          {isMobile && (
+            <Sheet
+              onOpenChange={setEpisodePanelOpen}
+              open={episodePanelOpen}
             >
-              <SheetTitle className="sr-only">
-                {show.title} episodes
-              </SheetTitle>
-              <EpisodePanel
-                currentEpisodeId={episode.id}
-                onClose={() => setEpisodePanelOpen(false)}
-                onSelectEpisode={handleSelectEpisode}
-                onSelectSeason={setSelectedSeason}
-                progressMap={episodeProgressMap}
-                seasons={show.seasons}
-                selectedSeason={selectedSeason}
-                showTitle={show.title}
-              />
-            </SheetContent>
-          </Sheet>
+              <SheetContent
+                className="h-[85vh] p-0 bg-black/95 border-white/10"
+                hideCloseButton
+                side="bottom"
+              >
+                <SheetTitle className="sr-only">
+                  {show.title} episodes
+                </SheetTitle>
+                <EpisodePanel
+                  currentEpisodeId={episode.id}
+                  onClose={() => setEpisodePanelOpen(false)}
+                  onSelectEpisode={handleSelectEpisode}
+                  onSelectSeason={setSelectedSeason}
+                  progressMap={episodeProgressMap}
+                  seasons={show.seasons}
+                  selectedSeason={selectedSeason}
+                  showTitle={show.title}
+                />
+              </SheetContent>
+            </Sheet>
+          )}
         </>
       )}
 
@@ -625,6 +656,10 @@ export function WatchPage() {
           episodeId={isEpisode ? episode?.id : undefined}
           showEpisodesButton={isEpisode}
           streamUrl={streamUrl}
+          onFullscreen={handleFullscreen}
+          onNextEpisode={
+            isEpisode && nextEpisode ? goToNextEpisode : undefined
+          }
           onToggleEpisodes={() => setEpisodePanelOpen((open) => !open)}
         />
       </div>

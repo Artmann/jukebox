@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactElement } from 'react'
+import type { PointerEvent, ReactElement } from 'react'
 import { useRef } from 'react'
 
 interface VideoTrackBarProps {
@@ -13,21 +13,52 @@ export function VideoTrackBar({
   onSeek
 }: VideoTrackBarProps): ReactElement {
   const trackRef = useRef<HTMLDivElement>(null)
+  const isDraggingRef = useRef(false)
+
   const bufferedPercent = Math.min(Math.max(buffered, 0), 1) * 100 + '%'
   const progressPercent = Math.min(Math.max(progress, 0), 1) * 100 + '%'
 
-  const handleClick = (e: MouseEvent<HTMLDivElement>) => {
+  const seekFromEvent = (event: PointerEvent<HTMLDivElement>) => {
     if (!trackRef.current || !onSeek) return
+
     const rect = trackRef.current.getBoundingClientRect()
-    const position = (e.clientX - rect.left) / rect.width
+    const position = (event.clientX - rect.left) / rect.width
+
     onSeek(Math.min(Math.max(position, 0), 1))
+  }
+
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!trackRef.current) return
+
+    trackRef.current.setPointerCapture(event.pointerId)
+    isDraggingRef.current = true
+    seekFromEvent(event)
+  }
+
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return
+
+    seekFromEvent(event)
+  }
+
+  const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (!trackRef.current) return
+
+    if (trackRef.current.hasPointerCapture(event.pointerId)) {
+      trackRef.current.releasePointerCapture(event.pointerId)
+    }
+
+    isDraggingRef.current = false
   }
 
   return (
     <div
       ref={trackRef}
-      className="relative w-full h-4 cursor-pointer flex items-center"
-      onClick={handleClick}
+      className="relative w-full h-4 cursor-pointer flex items-center touch-none"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
     >
       <div className="w-full h-1 rounded-full bg-white/20 relative overflow-hidden">
         <div
