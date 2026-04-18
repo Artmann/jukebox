@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.2.0...jukebox-media-server-v0.3.0) (2026-04-18)
+
+
+### Features
+
+* scan status indicator in header + periodic background scans ([#15](https://github.com/Artmann/jukebox/issues/15)) ([7c82f4c](https://github.com/Artmann/jukebox/commit/7c82f4c3f83c5c225159d75afa95b7f75cfe8dc0))
+* Settings page with TMDB, Libraries, and Scan schedule sections ([#14](https://github.com/Artmann/jukebox/issues/14)) ([185224d](https://github.com/Artmann/jukebox/commit/185224d1996dadc8c8f61eb228132033fcf9381e))
+* subtitle sidecar detection and in-player track selector ([#17](https://github.com/Artmann/jukebox/issues/17)) ([9e7ad59](https://github.com/Artmann/jukebox/commit/9e7ad5920e16273a5fa0e5cece8e738b924f121c))
+
+
+### Bug Fixes
+
+* hide episode panel sheet overlay on desktop breakpoint ([8d0b552](https://github.com/Artmann/jukebox/commit/8d0b5521a48db5fedf2f3d4ef69ca0d0cc744c1b))
+* keep controls visible in fullscreen, add next-episode button, drag-to-seek ([8a37064](https://github.com/Artmann/jukebox/commit/8a37064fa4f4f64a4bb600d0f205b29c707df2fe))
+* next-episode goes to the linear next, restarts if already finished ([bd829a2](https://github.com/Artmann/jukebox/commit/bd829a2102466339ab3ddca40c1ec17aab17e876))
+* only mount the episode sheet on mobile ([10c69c1](https://github.com/Artmann/jukebox/commit/10c69c12b2d54e0c9bf52ba478fa7fdb66c1170e))
+
 ## [0.2.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.1.1...jukebox-media-server-v0.2.0) (2026-04-16)
 
 
