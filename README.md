@@ -35,13 +35,13 @@ npm install -g jukebox-media-server
 Or run it without installing:
 
 ```bash
-npx jukebox-media-server
+npx jukebox-media-server@latest
 ```
 
 Using [Bun](https://bun.sh/)? It works too:
 
 ```bash
-bunx jukebox-media-server
+bunx jukebox-media-server@latest
 ```
 
 ## Getting Started
