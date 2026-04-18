@@ -10,19 +10,19 @@ const maxLimit = 50
 const maxQueryLength = 256
 
 interface MovieResult {
-  backdropPath: string | null
+  backdropUrl: string | null
   id: number
   overview: string | null
-  posterPath: string | null
+  posterUrl: string | null
   title: string
   year: number | null
 }
 
 interface ShowResult {
-  backdropPath: string | null
+  backdropUrl: string | null
   id: number
   overview: string | null
-  posterPath: string | null
+  posterUrl: string | null
   title: string
   year: number | null
 }
@@ -34,7 +34,7 @@ interface EpisodeResult {
   seasonNumber: number
   showId: number
   showTitle: string
-  stillPath: string | null
+  stillUrl: string | null
   title: string
 }
 
@@ -164,10 +164,10 @@ function parseLimit(raw: string | undefined): number | null {
 
 function searchMovies(matchExpression: string, limit: number): MovieResult[] {
   const rows = db.all<{
-    backdrop_path: string | null
+    backdrop_url: string | null
     id: number
     overview: string | null
-    poster_path: string | null
+    poster_url: string | null
     title: string
     year: number | null
   }>(sql`
@@ -176,8 +176,8 @@ function searchMovies(matchExpression: string, limit: number): MovieResult[] {
       movies.title AS title,
       movies.year AS year,
       movies.overview AS overview,
-      movies.poster_path AS poster_path,
-      movies.backdrop_path AS backdrop_path
+      movies.poster_url AS poster_url,
+      movies.backdrop_url AS backdrop_url
     FROM movies_fts
     JOIN movies ON movies.rowid = movies_fts.rowid
     WHERE movies_fts MATCH ${matchExpression}
@@ -186,10 +186,10 @@ function searchMovies(matchExpression: string, limit: number): MovieResult[] {
   `)
 
   return rows.map((row) => ({
-    backdropPath: row.backdrop_path,
+    backdropUrl: row.backdrop_url,
     id: row.id,
     overview: row.overview,
-    posterPath: row.poster_path,
+    posterUrl: row.poster_url,
     title: row.title,
     year: row.year
   }))
@@ -197,10 +197,10 @@ function searchMovies(matchExpression: string, limit: number): MovieResult[] {
 
 function searchShows(matchExpression: string, limit: number): ShowResult[] {
   const rows = db.all<{
-    backdrop_path: string | null
+    backdrop_url: string | null
     id: number
     overview: string | null
-    poster_path: string | null
+    poster_url: string | null
     title: string
     year: number | null
   }>(sql`
@@ -209,8 +209,8 @@ function searchShows(matchExpression: string, limit: number): ShowResult[] {
       shows.title AS title,
       shows.year AS year,
       shows.overview AS overview,
-      shows.poster_path AS poster_path,
-      shows.backdrop_path AS backdrop_path
+      shows.poster_url AS poster_url,
+      shows.backdrop_url AS backdrop_url
     FROM shows_fts
     JOIN shows ON shows.rowid = shows_fts.rowid
     WHERE shows_fts MATCH ${matchExpression}
@@ -219,10 +219,10 @@ function searchShows(matchExpression: string, limit: number): ShowResult[] {
   `)
 
   return rows.map((row) => ({
-    backdropPath: row.backdrop_path,
+    backdropUrl: row.backdrop_url,
     id: row.id,
     overview: row.overview,
-    posterPath: row.poster_path,
+    posterUrl: row.poster_url,
     title: row.title,
     year: row.year
   }))
@@ -239,7 +239,7 @@ function searchEpisodes(
     season_number: number
     show_id: number
     show_title: string | null
-    still_path: string | null
+    still_url: string | null
     title: string
   }>(sql`
     SELECT
@@ -249,7 +249,7 @@ function searchEpisodes(
       episodes.episode_number AS episode_number,
       episodes.title AS title,
       episodes.overview AS overview,
-      episodes.still_path AS still_path,
+      episodes.still_url AS still_url,
       shows.title AS show_title
     FROM episodes_fts
     JOIN episodes ON episodes.rowid = episodes_fts.rowid
@@ -266,7 +266,7 @@ function searchEpisodes(
     seasonNumber: row.season_number,
     showId: row.show_id,
     showTitle: row.show_title ?? '',
-    stillPath: row.still_path,
+    stillUrl: row.still_url,
     title: row.title
   }))
 }

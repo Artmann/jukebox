@@ -3,33 +3,20 @@ import type { ReactElement } from 'react'
 
 import { cn } from '@/lib/utils'
 
-const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p'
-
-type PosterSize =
-  | 'w92'
-  | 'w154'
-  | 'w185'
-  | 'w342'
-  | 'w500'
-  | 'w780'
-  | 'original'
-
 interface PosterImageProps {
-  path: string | null
+  url: string | null
   alt: string
   title: string
-  size?: PosterSize
   className?: string
 }
 
 export function PosterImage({
-  path,
+  url,
   alt,
   title,
-  size = 'w500',
   className
 }: PosterImageProps): ReactElement {
-  if (!path) {
+  if (!url) {
     return (
       <div
         className={cn(
@@ -50,7 +37,7 @@ export function PosterImage({
       alt={alt}
       className={className}
       loading="lazy"
-      src={`${TMDB_IMAGE_BASE_URL}/${size}${path}`}
+      src={url}
     />
   )
 }

@@ -22,23 +22,23 @@ interface SearchResponse {
     seasonNumber: number
     showId: number
     showTitle: string
-    stillPath: string | null
+    stillUrl: string | null
     title: string
   }>
   indexEmpty: boolean
   movies: Array<{
-    backdropPath: string | null
+    backdropUrl: string | null
     id: number
     overview: string | null
-    posterPath: string | null
+    posterUrl: string | null
     title: string
     year: number | null
   }>
   shows: Array<{
-    backdropPath: string | null
+    backdropUrl: string | null
     id: number
     overview: string | null
-    posterPath: string | null
+    posterUrl: string | null
     title: string
     year: number | null
   }>
@@ -82,8 +82,8 @@ beforeEach(async () => {
       year: 2021,
       overview: 'Paul Atreides on Arrakis.',
       genres: 'Science Fiction, Adventure',
-      posterPath: '/dune.jpg',
-      backdropPath: null,
+      posterUrl: '/dune.jpg',
+      backdropUrl: null,
       createdAt: new Date(0),
       updatedAt: new Date(0)
     },
@@ -95,8 +95,8 @@ beforeEach(async () => {
       year: 2024,
       overview: 'Paul unites the Fremen.',
       genres: 'Science Fiction',
-      posterPath: '/dune2.jpg',
-      backdropPath: null,
+      posterUrl: '/dune2.jpg',
+      backdropUrl: null,
       createdAt: new Date(0),
       updatedAt: new Date(0)
     },
@@ -108,8 +108,8 @@ beforeEach(async () => {
       year: 2010,
       overview: 'A thief who steals corporate secrets through dream-sharing.',
       genres: 'Action, Science Fiction',
-      posterPath: null,
-      backdropPath: null,
+      posterUrl: null,
+      backdropUrl: null,
       createdAt: new Date(0),
       updatedAt: new Date(0)
     }
@@ -123,8 +123,8 @@ beforeEach(async () => {
       year: 2022,
       overview: 'Office workers undergo a procedure that splits their memories.',
       genres: 'Drama, Mystery',
-      posterPath: '/sev.jpg',
-      backdropPath: null,
+      posterUrl: '/sev.jpg',
+      backdropUrl: null,
       createdAt: new Date(0),
       updatedAt: new Date(0)
     },
@@ -135,8 +135,8 @@ beforeEach(async () => {
       year: 2021,
       overview: 'Hari Seldon predicts the fall of the Galactic Empire.',
       genres: 'Drama, Science Fiction',
-      posterPath: null,
-      backdropPath: null,
+      posterUrl: null,
+      backdropUrl: null,
       createdAt: new Date(0),
       updatedAt: new Date(0)
     }
@@ -149,7 +149,7 @@ beforeEach(async () => {
       seasonNumber: 1,
       name: 'Season 1',
       overview: null,
-      posterPath: null,
+      posterUrl: null,
       episodeCount: 9
     },
     {
@@ -158,7 +158,7 @@ beforeEach(async () => {
       seasonNumber: 1,
       name: 'Season 1',
       overview: null,
-      posterPath: null,
+      posterUrl: null,
       episodeCount: 10
     }
   ])
@@ -174,7 +174,7 @@ beforeEach(async () => {
       filePath: '/shows/severance/s1e1.mkv',
       fileName: 's1e1.mkv',
       overview: 'Mark adapts to a coworker leaving.',
-      stillPath: null,
+      stillUrl: null,
       createdAt: new Date(0),
       updatedAt: new Date(0)
     },
@@ -188,7 +188,7 @@ beforeEach(async () => {
       filePath: '/shows/foundation/s1e1.mkv',
       fileName: 's1e1.mkv',
       overview: 'Hari Seldon faces the Empire.',
-      stillPath: null,
+      stillUrl: null,
       createdAt: new Date(0),
       updatedAt: new Date(0)
     }
@@ -249,11 +249,11 @@ describe('search routes', () => {
 
       expect(body.movies).toEqual([
         {
-          backdropPath: null,
+          backdropUrl: null,
           id: 3,
           overview:
             'A thief who steals corporate secrets through dream-sharing.',
-          posterPath: null,
+          posterUrl: null,
           title: 'Inception',
           year: 2010
         }
@@ -277,7 +277,7 @@ describe('search routes', () => {
           seasonNumber: 1,
           showId: 11,
           showTitle: 'Foundation',
-          stillPath: null,
+          stillUrl: null,
           title: 'The Emperor\u2019s Peace'
         }
       ])

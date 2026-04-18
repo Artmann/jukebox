@@ -55,7 +55,21 @@ progressRoutes.get('/continue-watching', async (context) => {
     type: 'episode' as const
   }))
 
-  const combined = [...movies, ...episodes]
+  const episodesSorted = episodes.sort(
+    (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+  )
+
+  const seenShowIds = new Set<number>()
+  const dedupedEpisodes = episodesSorted.filter((item) => {
+    if (seenShowIds.has(item.show.id)) {
+      return false
+    }
+
+    seenShowIds.add(item.show.id)
+    return true
+  })
+
+  const combined = [...movies, ...dedupedEpisodes]
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .slice(0, 20)
 

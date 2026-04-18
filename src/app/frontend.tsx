@@ -30,7 +30,6 @@ import { SettingsAuthPage } from './pages/SettingsAuth'
 import { SettingsLibrariesPage } from './pages/SettingsLibraries'
 import { SettingsProfilesPage } from './pages/SettingsProfiles'
 import { SettingsScanSchedulePage } from './pages/SettingsScanSchedule'
-import { SettingsTmdbPage } from './pages/SettingsTmdb'
 import { SetupPage } from './pages/Setup'
 import { ShowDetailPage } from './pages/ShowDetail'
 import { ShowsPage } from './pages/Shows'
@@ -144,10 +143,6 @@ const app = (
               <Route
                 path="/settings/libraries"
                 element={<SettingsLibrariesPage />}
-              />
-              <Route
-                path="/settings/tmdb"
-                element={<SettingsTmdbPage />}
               />
               <Route
                 path="/settings/scan-schedule"

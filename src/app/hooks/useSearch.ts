@@ -1,19 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 
 export interface SearchMovie {
-  backdropPath: string | null
+  backdropUrl: string | null
   id: number
   overview: string | null
-  posterPath: string | null
+  posterUrl: string | null
   title: string
   year: number | null
 }
 
 export interface SearchShow {
-  backdropPath: string | null
+  backdropUrl: string | null
   id: number
   overview: string | null
-  posterPath: string | null
+  posterUrl: string | null
   title: string
   year: number | null
 }
@@ -25,7 +25,7 @@ export interface SearchEpisode {
   seasonNumber: number
   showId: number
   showTitle: string
-  stillPath: string | null
+  stillUrl: string | null
   title: string
 }
 

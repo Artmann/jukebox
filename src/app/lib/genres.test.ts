@@ -19,13 +19,14 @@ function makeMovie(
       extension: '.mp4',
       createdAt: '2024-01-01',
       updatedAt: '2024-01-01',
+      externalId: null,
       year: null,
       overview: null,
       runtime: null,
       genres,
       rating: null,
-      posterPath: null,
-      backdropPath: null,
+      posterUrl: null,
+      backdropUrl: null,
       trailerUrl: null
     }
   }

@@ -74,7 +74,7 @@ function DetailModal({
             />
           ) : (
             <img
-              src={buildBackdropUrl(item.backdropPath) ?? undefined}
+              src={item.backdropUrl ?? undefined}
               className="w-full h-full object-cover"
             />
           )}
@@ -128,7 +128,7 @@ function GridItem({
       >
         <div className="w-full overflow-hidden rounded-sm transition-transform duration-300 ease-out hover-hover:group-hover:scale-105">
           <PosterImage
-            path={item.posterPath}
+            url={item.posterUrl}
             alt={item.title}
             title={item.title}
             className="cursor-pointer w-full"
@@ -172,19 +172,6 @@ function GridItem({
       </div>
     </li>
   )
-}
-
-const tmdbImageBaseUrl = 'https://image.tmdb.org/t/p'
-
-type BackdropSize = 'w300' | 'w780' | 'w1280' | 'original'
-
-function buildBackdropUrl(
-  backdropPath: string | null,
-  size: BackdropSize = 'w1280'
-): string | null {
-  if (!backdropPath) return null
-
-  return `${tmdbImageBaseUrl}/${size}${backdropPath}`
 }
 
 function getYouTubeEmbedUrl(url: string | null): string | null {

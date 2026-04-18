@@ -10,23 +10,17 @@ import { scheduler } from '../../services/scheduler'
 import {
   defaultScanSchedule,
   getSetting,
-  getTmdbApiKey,
   isScanScheduleValue,
   scanScheduleSettingKey,
-  setSetting,
-  setTmdbApiKey,
-  tmdbApiKeySettingKey
+  setSetting
 } from '../../services/settings'
-
-const tmdbConfigurationUrl = 'https://api.themoviedb.org/3/configuration'
 
 // Keys that have dedicated routes with their own validation. The generic
 // /:key handlers must not read or write these or they bypass those
 // validators (e.g. writing "garbage" to scanSchedule).
-const reservedKeys = new Set<string>([tmdbApiKeySettingKey, scanScheduleSettingKey])
+const reservedKeys = new Set<string>([scanScheduleSettingKey])
 
 const reservedKeyRoute: Record<string, string> = {
-  [tmdbApiKeySettingKey]: '/api/settings/tmdb-key',
   [scanScheduleSettingKey]: '/api/settings/scan-schedule'
 }
 
@@ -34,18 +28,6 @@ interface LibraryInput {
   name: string
   path: string
   type: 'movies' | 'shows'
-}
-
-async function verifyTmdbKey(apiKey: string): Promise<boolean> {
-  try {
-    const response = await fetch(
-      `${tmdbConfigurationUrl}?api_key=${encodeURIComponent(apiKey)}`
-    )
-
-    return response.ok
-  } catch {
-    return false
-  }
 }
 
 async function pathIsReadable(path: string): Promise<boolean> {
@@ -100,57 +82,6 @@ function libraryPathPrefixPattern(libraryPath: string): string {
 }
 
 const settingsRoutes = new Hono()
-
-settingsRoutes.get('/tmdb-key', async (context) => {
-  const apiKey = await getTmdbApiKey()
-
-  return context.json({
-    configured: apiKey !== null && apiKey.length > 0,
-    apiKey: apiKey ?? ''
-  })
-})
-
-settingsRoutes.put('/tmdb-key', async (context) => {
-  let body: { apiKey?: unknown }
-
-  try {
-    body = await context.req.json<{ apiKey?: unknown }>()
-  } catch {
-    return context.json({ error: { message: 'Invalid request body.' } }, 400)
-  }
-
-  const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : ''
-
-  if (apiKey.length === 0) {
-    return context.json(
-      {
-        error: {
-          message:
-            'TMDB API key is required. Get one at themoviedb.org/settings/api.'
-        }
-      },
-      400
-    )
-  }
-
-  const valid = await verifyTmdbKey(apiKey)
-
-  if (!valid) {
-    return context.json(
-      {
-        error: {
-          message:
-            "Couldn't save TMDB key — the key wasn't accepted by TMDB. Check it at themoviedb.org/settings/api."
-        }
-      },
-      400
-    )
-  }
-
-  await setTmdbApiKey(apiKey)
-
-  return context.json({ configured: true })
-})
 
 settingsRoutes.get('/libraries', async (context) => {
   const libraries = await db.select().from(schema.libraries)

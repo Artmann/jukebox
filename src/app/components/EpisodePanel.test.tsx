@@ -15,10 +15,10 @@ const firstEpisode: Episode = {
   fileName: 's1e1.mp4',
   fileSize: null,
   extension: 'mp4',
-  tmdbId: null,
+  externalId: null,
   overview: null,
   runtime: null,
-  stillPath: null,
+  stillUrl: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z'
 }
@@ -34,10 +34,10 @@ const secondEpisode: Episode = {
   fileName: 's1e2.mp4',
   fileSize: null,
   extension: 'mp4',
-  tmdbId: null,
+  externalId: null,
   overview: null,
   runtime: null,
-  stillPath: null,
+  stillUrl: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z'
 }
@@ -48,7 +48,7 @@ const seasonOne: SeasonWithEpisodes = {
   seasonNumber: 1,
   name: 'Season 1',
   overview: null,
-  posterPath: null,
+  posterUrl: null,
   episodeCount: 2,
   episodes: [firstEpisode, secondEpisode]
 }
@@ -59,7 +59,7 @@ const seasonTwo: SeasonWithEpisodes = {
   seasonNumber: 2,
   name: 'Season 2',
   overview: null,
-  posterPath: null,
+  posterUrl: null,
   episodeCount: 0,
   episodes: []
 }

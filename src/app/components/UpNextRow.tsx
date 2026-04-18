@@ -31,8 +31,7 @@ export function UpNextRow({ items }: UpNextRowProps): ReactElement | null {
                 <PosterImage
                   alt={item.show.title}
                   className="w-full transition-transform duration-200 group-hover:scale-105"
-                  path={item.show.posterPath}
-                  size="w342"
+                  url={item.show.posterUrl}
                   title={item.show.title}
                 />
               </div>

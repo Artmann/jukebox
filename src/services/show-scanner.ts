@@ -10,7 +10,11 @@ import { subtitleExtensions, videoExtensions } from './media-extensions'
 import { normalizeShowName, parseSeasonFolder } from './show-parser'
 import { syncSubtitlesForEpisode } from './subtitle-sync'
 import { discoverSubtitlesForVideo } from './subtitles'
-import { fetchSeasonMetadata, fetchShowMetadata } from './tmdb'
+import {
+  fetchSeasonMetadata,
+  fetchShowByExternalId,
+  fetchShowMetadata
+} from './metadata'
 
 export type { NormalizedShow } from './show-parser'
 export { normalizeShowName } from './show-parser'
@@ -256,26 +260,54 @@ export async function scanShowLibrary(
       .limit(1)
 
     let showId: number
-    let tmdbId: number | null
+    let externalId: string | null
 
     if (existingShows.length > 0 && existingShows[0]) {
-      showId = existingShows[0].id
-      tmdbId = existingShows[0].tmdbId ?? null
+      const existingShow = existingShows[0]
+      showId = existingShow.id
+      externalId = existingShow.externalId ?? null
+
+      // Refresh any missing artwork/overview for shows that have an external
+      // id but are missing data (e.g. after a migration that cleared URLs).
+      if (
+        externalId !== null &&
+        (!existingShow.posterUrl ||
+          !existingShow.backdropUrl ||
+          !existingShow.overview)
+      ) {
+        console.log(`  Refreshing metadata for show: ${existingShow.title}`)
+        const refreshed = await fetchShowByExternalId(externalId)
+
+        if (refreshed) {
+          await db
+            .update(schema.shows)
+            .set({
+              year: existingShow.year ?? refreshed.year,
+              overview: existingShow.overview ?? refreshed.overview,
+              genres: existingShow.genres ?? refreshed.genres,
+              rating: existingShow.rating ?? refreshed.rating,
+              posterUrl: existingShow.posterUrl ?? refreshed.posterUrl,
+              backdropUrl: existingShow.backdropUrl ?? refreshed.backdropUrl,
+              updatedAt: new Date()
+            })
+            .where(eq(schema.shows.id, showId))
+        }
+      }
     } else {
-      console.log(`  Fetching TMDB metadata for show: ${name}`)
+      console.log(`  Fetching metadata for show: ${name}`)
       const metadata = await fetchShowMetadata(name, year ?? undefined)
 
       const now = new Date()
       const newShow: NewShow = {
         title: metadata?.title ?? name,
         folderPath,
-        tmdbId: metadata?.tmdbId ?? null,
+        externalId: metadata?.externalId ?? null,
         year: metadata?.year ?? year ?? null,
         overview: metadata?.overview ?? null,
         genres: metadata?.genres ?? null,
         rating: metadata?.rating ?? null,
-        posterPath: metadata?.posterPath ?? null,
-        backdropPath: metadata?.backdropPath ?? null,
+        posterUrl: metadata?.posterUrl ?? null,
+        backdropUrl: metadata?.backdropUrl ?? null,
         createdAt: now,
         updatedAt: now
       }
@@ -286,7 +318,7 @@ export async function scanShowLibrary(
         .returning({ id: schema.shows.id })
 
       showId = inserted[0]?.id ?? 0
-      tmdbId = metadata?.tmdbId ?? null
+      externalId = metadata?.externalId ?? null
     }
 
     // Group episodes by season number
@@ -299,13 +331,13 @@ export async function scanShowLibrary(
     }
 
     for (const [seasonNumber, seasonEpisodes] of seasonMap) {
-      // Fetch TMDB season metadata once per season
-      let tmdbEpisodes: {
+      // Fetch season metadata once per season
+      let metadataEpisodes: {
         episodeNumber: number
         title: string
         overview: string
         runtime: number | null
-        stillPath: string | null
+        stillUrl: string | null
       }[] = []
 
       // Find or create the season record
@@ -325,19 +357,22 @@ export async function scanShowLibrary(
       if (existingSeasons.length > 0 && existingSeasons[0]) {
         seasonId = existingSeasons[0].id
 
-        if (tmdbId !== null) {
-          const seasonMetadata = await fetchSeasonMetadata(tmdbId, seasonNumber)
-          tmdbEpisodes = seasonMetadata?.episodes ?? []
+        if (externalId !== null) {
+          const seasonMetadata = await fetchSeasonMetadata(
+            externalId,
+            seasonNumber
+          )
+          metadataEpisodes = seasonMetadata?.episodes ?? []
         }
       } else {
         let seasonMetadata = null
 
-        if (tmdbId !== null) {
+        if (externalId !== null) {
           console.log(
-            `  Fetching TMDB metadata for season ${seasonNumber} of: ${name}`
+            `  Fetching metadata for season ${seasonNumber} of: ${name}`
           )
-          seasonMetadata = await fetchSeasonMetadata(tmdbId, seasonNumber)
-          tmdbEpisodes = seasonMetadata?.episodes ?? []
+          seasonMetadata = await fetchSeasonMetadata(externalId, seasonNumber)
+          metadataEpisodes = seasonMetadata?.episodes ?? []
         }
 
         const newSeason: NewSeason = {
@@ -345,7 +380,7 @@ export async function scanShowLibrary(
           seasonNumber,
           name: seasonMetadata?.name ?? null,
           overview: seasonMetadata?.overview ?? null,
-          posterPath: seasonMetadata?.posterPath ?? null,
+          posterUrl: seasonMetadata?.posterUrl ?? null,
           episodeCount: seasonEpisodes.length
         }
 
@@ -360,12 +395,12 @@ export async function scanShowLibrary(
       for (const scannedEpisode of seasonEpisodes) {
         total++
 
-        const tmdbEpisode = tmdbEpisodes.find(
+        const metadataEpisode = metadataEpisodes.find(
           (e) => e.episodeNumber === scannedEpisode.episodeNumber
         )
 
         const episodeTitle =
-          tmdbEpisode?.title ??
+          metadataEpisode?.title ??
           scannedEpisode.title ??
           `Episode ${scannedEpisode.episodeNumber}`
 
@@ -407,10 +442,10 @@ export async function scanShowLibrary(
             fileName: scannedEpisode.fileName,
             fileSize: scannedEpisode.fileSize,
             extension: scannedEpisode.extension,
-            tmdbId: tmdbEpisode ? null : null,
-            overview: tmdbEpisode?.overview ?? null,
-            runtime: tmdbEpisode?.runtime ?? null,
-            stillPath: tmdbEpisode?.stillPath ?? null,
+            externalId: null,
+            overview: metadataEpisode?.overview ?? null,
+            runtime: metadataEpisode?.runtime ?? null,
+            stillUrl: metadataEpisode?.stillUrl ?? null,
             createdAt: now,
             updatedAt: now
           }

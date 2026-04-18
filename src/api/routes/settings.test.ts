@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import path, { join } from 'path'
 
 import { Hono } from 'hono'
-import { beforeEach, afterEach, beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestDatabase } from '../../database/test-database'
 
@@ -13,11 +13,6 @@ const testDb = createTestDatabase()
 vi.mock('../../database', () => ({
   db: testDb.db,
   schema: testDb.schema
-}))
-
-vi.mock('../../config', () => ({
-  getConfig: vi.fn().mockReturnValue(null),
-  saveConfig: vi.fn().mockResolvedValue(undefined)
 }))
 
 vi.mock('../../services/scheduler', () => ({
@@ -30,8 +25,9 @@ vi.mock('../../services/scheduler', () => ({
 }))
 
 const { settingsRoutes } = await import('./settings')
-const { getSetting, setSetting, tmdbApiKeySettingKey, scanScheduleSettingKey } =
-  await import('../../services/settings')
+const { getSetting, scanScheduleSettingKey } = await import(
+  '../../services/settings'
+)
 
 function buildApp(): Hono {
   const app = new Hono()
@@ -51,103 +47,8 @@ async function reset() {
   await testDb.db.delete(testDb.schema.profiles)
 }
 
-// Use the real fetch() only for tmdb verification. Stub globally with a
-// controllable vi.fn() so tests can assert on calls.
-const originalFetch = globalThis.fetch
-let fetchMock: ReturnType<typeof vi.fn>
-
-beforeAll(() => {
-  fetchMock = vi.fn()
-  globalThis.fetch = fetchMock as unknown as typeof fetch
-})
-
-afterAll(() => {
-  globalThis.fetch = originalFetch
-})
-
 beforeEach(async () => {
   await reset()
-  fetchMock.mockReset()
-})
-
-describe('GET /tmdb-key', () => {
-  it('reports not configured when no key is set', async () => {
-    const app = buildApp()
-    const response = await app.request('/tmdb-key')
-    const body = (await response.json()) as {
-      configured: boolean
-      apiKey: string
-    }
-
-    expect(response.status).toEqual(200)
-    expect(body).toEqual({ configured: false, apiKey: '' })
-  })
-
-  it('returns the stored key', async () => {
-    await setSetting(tmdbApiKeySettingKey, 'stored-key', testDb.db)
-
-    const app = buildApp()
-    const response = await app.request('/tmdb-key')
-    const body = (await response.json()) as {
-      configured: boolean
-      apiKey: string
-    }
-
-    expect(body).toEqual({ configured: true, apiKey: 'stored-key' })
-  })
-})
-
-describe('PUT /tmdb-key', () => {
-  it('rejects an empty key', async () => {
-    const app = buildApp()
-    const response = await app.request('/tmdb-key', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ apiKey: '  ' })
-    })
-    const body = (await response.json()) as { error: { message: string } }
-
-    expect(response.status).toEqual(400)
-    expect(body.error.message).toContain('required')
-  })
-
-  it('surfaces an actionable message when TMDB rejects the key', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response(null, { status: 401 }) as unknown as Response
-    )
-
-    const app = buildApp()
-    const response = await app.request('/tmdb-key', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ apiKey: 'bad-key' })
-    })
-    const body = (await response.json()) as { error: { message: string } }
-
-    expect(response.status).toEqual(400)
-    expect(body.error.message).toContain('themoviedb.org')
-    expect(await getSetting(tmdbApiKeySettingKey, testDb.db)).toEqual(null)
-  })
-
-  it('persists a valid key', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response('{}', { status: 200 }) as unknown as Response
-    )
-
-    const app = buildApp()
-    const response = await app.request('/tmdb-key', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ apiKey: 'good-key' })
-    })
-    const body = (await response.json()) as { configured: boolean }
-
-    expect(response.status).toEqual(200)
-    expect(body).toEqual({ configured: true })
-    expect(await getSetting(tmdbApiKeySettingKey, testDb.db)).toEqual(
-      'good-key'
-    )
-  })
 })
 
 describe('GET /libraries', () => {
@@ -506,14 +407,6 @@ describe('generic GET / PUT /:key', () => {
 
     expect(scheduleResponse.status).toEqual(400)
     expect(scheduleBody.error.message).toContain('/api/settings/scan-schedule')
-
-    const tmdbResponse = await app.request('/tmdbApiKey')
-    const tmdbBody = (await tmdbResponse.json()) as {
-      error: { message: string }
-    }
-
-    expect(tmdbResponse.status).toEqual(400)
-    expect(tmdbBody.error.message).toContain('/api/settings/tmdb-key')
   })
 
   it('rejects writes on reserved keys so their validators cannot be bypassed', async () => {
@@ -531,18 +424,5 @@ describe('generic GET / PUT /:key', () => {
     expect(scheduleResponse.status).toEqual(400)
     expect(scheduleBody.error.message).toContain('/api/settings/scan-schedule')
     expect(await getSetting(scanScheduleSettingKey, testDb.db)).toEqual(null)
-
-    const tmdbResponse = await app.request('/tmdbApiKey', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ value: 'unverified' })
-    })
-    const tmdbBody = (await tmdbResponse.json()) as {
-      error: { message: string }
-    }
-
-    expect(tmdbResponse.status).toEqual(400)
-    expect(tmdbBody.error.message).toContain('/api/settings/tmdb-key')
-    expect(await getSetting(tmdbApiKeySettingKey, testDb.db)).toEqual(null)
   })
 })

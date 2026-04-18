@@ -212,7 +212,7 @@ function MovieItem({
       value={`movie-${movie.id}-${movie.title}`}
     >
       <PosterThumb
-        path={movie.posterPath}
+        url={movie.posterUrl}
         title={movie.title}
       />
       <div className="min-w-0 flex-1">
@@ -248,7 +248,7 @@ function ShowItem({
       value={`show-${show.id}-${show.title}`}
     >
       <PosterThumb
-        path={show.posterPath}
+        url={show.posterUrl}
         title={show.title}
       />
       <div className="min-w-0 flex-1">
@@ -286,7 +286,7 @@ function EpisodeItem({
       value={`episode-${episode.id}-${episode.title}`}
     >
       <PosterThumb
-        path={episode.stillPath}
+        url={episode.stillUrl}
         title={episode.title}
       />
       <div className="min-w-0 flex-1">
@@ -307,10 +307,10 @@ function EpisodeItem({
 }
 
 function PosterThumb({
-  path,
+  url,
   title
 }: {
-  path: string | null
+  url: string | null
   title: string
 }): ReactElement {
   return (
@@ -318,8 +318,7 @@ function PosterThumb({
       <PosterImage
         alt=""
         className="h-12 w-9 object-cover"
-        path={path}
-        size="w92"
+        url={url}
         title={title}
       />
     </div>

@@ -97,8 +97,7 @@ export function UpNextOverlay({
         <div className="w-20 flex-shrink-0 overflow-hidden rounded">
           <PosterImage
             alt={show.title}
-            path={show.posterPath}
-            size="w185"
+            url={show.posterUrl}
             title={show.title}
           />
         </div>

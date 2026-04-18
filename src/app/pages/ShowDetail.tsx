@@ -177,7 +177,7 @@ export function ShowDetailPage(): ReactElement {
             <PosterImage
               alt={show.title}
               className="w-full rounded-lg"
-              path={show.posterPath}
+              url={show.posterUrl}
               title={show.title}
             />
           </div>

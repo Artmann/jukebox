@@ -11,7 +11,6 @@ interface SettingsLayoutProps {
 const sections = [
   { to: '/settings/profiles', label: 'Profiles' },
   { to: '/settings/libraries', label: 'Libraries' },
-  { to: '/settings/tmdb', label: 'TMDB' },
   { to: '/settings/scan-schedule', label: 'Scan schedule' },
   { to: '/settings/auth', label: 'Auth' }
 ]

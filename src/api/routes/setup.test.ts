@@ -14,22 +14,9 @@ vi.mock('../../database', () => ({
   }
 }))
 
-vi.mock('../../config', () => ({
-  getConfig: vi.fn(),
-  saveConfig: vi.fn()
-}))
-
-vi.mock('../../services/settings', () => ({
-  getTmdbApiKey: vi.fn(),
-  setTmdbApiKey: vi.fn()
-}))
-
 import { setupRoutes } from './setup'
-import { getTmdbApiKey, setTmdbApiKey } from '../../services/settings'
 
 interface SetupStatusResponse {
-  config: { tmdbApiKey: string } | null
-  hasApiKey: boolean
   libraries: Array<{ id: number; name: string; path: string; type: string }>
   libraryCount: number
   needsSetup: boolean
@@ -57,20 +44,16 @@ describe('setup routes', () => {
     vi.clearAllMocks()
     mockFrom.mockResolvedValue([])
     mockValues.mockResolvedValue(undefined)
-    vi.mocked(getTmdbApiKey).mockResolvedValue(null)
   })
 
   describe('GET /', () => {
     it('returns needsSetup true when no libraries', async () => {
-      vi.mocked(getTmdbApiKey).mockResolvedValue(null)
       mockFrom.mockResolvedValue([])
 
       const { status, body } = await request('/')
 
       expect(status).toEqual(200)
       expect(body).toEqual({
-        config: null,
-        hasApiKey: false,
         libraries: [],
         libraryCount: 0,
         needsSetup: true
@@ -78,7 +61,6 @@ describe('setup routes', () => {
     })
 
     it('returns needsSetup false when libraries exist', async () => {
-      vi.mocked(getTmdbApiKey).mockResolvedValue('key')
       mockFrom.mockResolvedValue([
         {
           id: 1,
@@ -92,44 +74,20 @@ describe('setup routes', () => {
       const { status, body } = await request('/')
 
       expect(status).toEqual(200)
-      expect(body.hasApiKey).toEqual(true)
       expect(body.libraryCount).toEqual(1)
       expect(body.needsSetup).toEqual(false)
-      expect(body.config).toEqual({ tmdbApiKey: 'key' })
       expect(body.libraries).toEqual([
         { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' }
       ])
     })
-
-    it('returns hasApiKey true when the settings source has a key', async () => {
-      vi.mocked(getTmdbApiKey).mockResolvedValue('my-key')
-      mockFrom.mockResolvedValue([])
-
-      const { body } = await request('/')
-
-      expect(body.hasApiKey).toEqual(true)
-    })
   })
 
   describe('POST /complete', () => {
-    it('returns error when tmdbApiKey is missing', async () => {
-      const { status, body } = await request('/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          libraries: [{ name: 'Movies', path: '/movies', type: 'movies' }]
-        })
-      })
-
-      expect(status).toEqual(400)
-      expect(body.error).toEqual({ message: 'TMDB API key is required' })
-    })
-
     it('returns error when libraries are empty', async () => {
       const { status, body } = await request('/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tmdbApiKey: 'key', libraries: [] })
+        body: JSON.stringify({ libraries: [] })
       })
 
       expect(status).toEqual(400)
@@ -138,19 +96,17 @@ describe('setup routes', () => {
       })
     })
 
-    it('saves config and libraries on valid input', async () => {
+    it('saves libraries on valid input', async () => {
       const { status, body } = await request('/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tmdbApiKey: 'test-key',
           libraries: [{ name: 'Movies', path: '/media/movies', type: 'movies' }]
         })
       })
 
       expect(status).toEqual(200)
       expect(body).toEqual({ success: true })
-      expect(setTmdbApiKey).toHaveBeenCalledWith('test-key')
     })
   })
 })

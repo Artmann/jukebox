@@ -24,11 +24,6 @@ export interface Library extends LibraryEntry {
   id: number
 }
 
-export interface TmdbKeyStatus {
-  apiKey: string
-  configured: boolean
-}
-
 export type ScanSchedule = 'off' | '6h' | '12h' | '24h'
 
 export interface DeleteLibraryError extends Error {
@@ -44,38 +39,6 @@ async function getJson<Result>(url: string): Promise<Result> {
   }
 
   return (await response.json()) as Result
-}
-
-export function useTmdbKey() {
-  return useQuery({
-    queryKey: ['settings', 'tmdb-key'],
-    queryFn: () => getJson<TmdbKeyStatus>('/api/settings/tmdb-key')
-  })
-}
-
-export function useSaveTmdbKey() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (apiKey: string) => {
-      const response = await fetch('/api/settings/tmdb-key', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey })
-      })
-
-      if (!response.ok) {
-        throw new Error(await readError(response))
-      }
-
-      return (await response.json()) as { configured: boolean }
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ['settings', 'tmdb-key']
-      })
-    }
-  })
 }
 
 export function useSettingsLibraries() {

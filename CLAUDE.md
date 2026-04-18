@@ -25,6 +25,7 @@
 
 ## Code Style
 
+- Always use bracers for control flows, even if they are one-liners.
 - Don't use CONSTANT_CASE. This is not JAVA.
 - Use entire words as variable names. This is not Go. For example `request`
   instead of `req`.

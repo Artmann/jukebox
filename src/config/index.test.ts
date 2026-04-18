@@ -5,8 +5,7 @@ import {
   configDirectory,
   configFilePath,
   databasePath,
-  ensureConfigDirectory,
-  getConfig
+  ensureConfigDirectory
 } from './index'
 
 vi.mock('os', async (importOriginal) => {
@@ -20,15 +19,13 @@ vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>()
   const mock = {
     ...actual,
-    existsSync: vi.fn(),
-    mkdirSync: vi.fn(),
-    readFileSync: vi.fn()
+    mkdirSync: vi.fn()
   }
 
   return { ...mock, default: mock }
 })
 
-import { existsSync, mkdirSync, readFileSync } from 'fs'
+import { mkdirSync } from 'fs'
 
 describe('config', () => {
   beforeEach(() => {
@@ -54,28 +51,6 @@ describe('config', () => {
       expect(mkdirSync).toHaveBeenCalledWith(configDirectory, {
         recursive: true
       })
-    })
-  })
-
-  describe('getConfig', () => {
-    it('returns null when config file does not exist', () => {
-      vi.mocked(existsSync).mockReturnValue(false)
-
-      expect(getConfig()).toEqual(null)
-    })
-
-    it('returns parsed config when file exists', () => {
-      vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readFileSync).mockReturnValue('{"tmdbApiKey":"test-key"}')
-
-      expect(getConfig()).toEqual({ tmdbApiKey: 'test-key' })
-    })
-
-    it('returns null when config file has invalid json', () => {
-      vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readFileSync).mockReturnValue('not json')
-
-      expect(getConfig()).toEqual(null)
     })
   })
 })

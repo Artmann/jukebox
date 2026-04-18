@@ -30,13 +30,10 @@ function renderSetup() {
   )
 }
 
-function mockSetupFetch(
-  config: { tmdbApiKey: string } | null = null,
-  libraries: unknown[] = []
-) {
+function mockSetupFetch(libraries: unknown[] = []) {
   global.fetch = vi.fn().mockResolvedValue({
     ok: true,
-    json: () => Promise.resolve({ config, libraries })
+    json: () => Promise.resolve({ libraries })
   }) as unknown as typeof fetch
 }
 
@@ -63,15 +60,6 @@ describe('SetupPage', () => {
     })
   })
 
-  it('renders the metadata section', async () => {
-    renderSetup()
-
-    await waitFor(() => {
-      expect(screen.getByText('Metadata')).toBeInTheDocument()
-      expect(screen.getByPlaceholderText('TMDB API key')).toBeInTheDocument()
-    })
-  })
-
   it('renders the complete setup button', async () => {
     renderSetup()
 
@@ -92,24 +80,6 @@ describe('SetupPage', () => {
     expect(toast.error).toHaveBeenCalledWith('Please add at least one library.')
   })
 
-  it('shows toast error when submitting without api key', async () => {
-    renderSetup()
-
-    await waitFor(() => {
-      expect(screen.getByText('Add a folder')).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByText('Add a folder'))
-
-    const input = screen.getByPlaceholderText('/mnt/media/movies')
-    fireEvent.change(input, { target: { value: '/media/movies' } })
-    fireEvent.blur(input)
-
-    fireEvent.click(screen.getByText('Complete Setup'))
-
-    expect(toast.error).toHaveBeenCalledWith('Please enter your TMDB API key.')
-  })
-
   it('adds a library row when clicking add a folder', async () => {
     renderSetup()
 
@@ -122,15 +92,14 @@ describe('SetupPage', () => {
     expect(screen.getByPlaceholderText('/mnt/media/movies')).toBeInTheDocument()
   })
 
-  it('pre-populates with existing config', async () => {
-    mockSetupFetch({ tmdbApiKey: 'existing-key' }, [
+  it('pre-populates with existing libraries', async () => {
+    mockSetupFetch([
       { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' }
     ])
 
     renderSetup()
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('existing-key')).toBeInTheDocument()
       expect(screen.getByText('/media/movies')).toBeInTheDocument()
     })
   })
@@ -140,7 +109,7 @@ describe('SetupPage', () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ config: null, libraries: [] })
+        json: () => Promise.resolve({ libraries: [] })
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -155,17 +124,11 @@ describe('SetupPage', () => {
       expect(screen.getByText('Add a folder')).toBeInTheDocument()
     })
 
-    // Add a library
     fireEvent.click(screen.getByText('Add a folder'))
 
     const pathInput = screen.getByPlaceholderText('/mnt/media/movies')
     fireEvent.change(pathInput, { target: { value: '/media/movies' } })
 
-    // Enter API key
-    const apiKeyInput = screen.getByPlaceholderText('TMDB API key')
-    fireEvent.change(apiKeyInput, { target: { value: 'test-api-key' } })
-
-    // Submit
     fireEvent.click(screen.getByText('Complete Setup'))
 
     await waitFor(() => {
@@ -187,7 +150,7 @@ describe('SetupPage', () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ config: null, libraries: [] })
+        json: () => Promise.resolve({ libraries: [] })
       })
       .mockResolvedValueOnce({
         ok: false,
@@ -206,9 +169,6 @@ describe('SetupPage', () => {
 
     const pathInput = screen.getByPlaceholderText('/mnt/media/movies')
     fireEvent.change(pathInput, { target: { value: '/media/movies' } })
-
-    const apiKeyInput = screen.getByPlaceholderText('TMDB API key')
-    fireEvent.change(apiKeyInput, { target: { value: 'test-key' } })
 
     fireEvent.click(screen.getByText('Complete Setup'))
 

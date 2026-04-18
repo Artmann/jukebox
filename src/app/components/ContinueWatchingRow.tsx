@@ -34,9 +34,9 @@ export function ContinueWatchingRow({
           const subtitle = isMovie
             ? null
             : `S${item.episode.seasonNumber} E${item.episode.episodeNumber}`
-          const posterPath = isMovie
-            ? item.movie.posterPath
-            : item.show.posterPath
+          const posterUrl = isMovie
+            ? item.movie.posterUrl
+            : item.show.posterUrl
           const progress = item.duration
             ? Math.min((item.currentTime / item.duration) * 100, 100)
             : 0
@@ -51,8 +51,7 @@ export function ContinueWatchingRow({
                 <PosterImage
                   alt={title}
                   className="w-full transition-transform duration-200 group-hover:scale-105"
-                  path={posterPath}
-                  size="w342"
+                  url={posterUrl}
                   title={title}
                 />
 

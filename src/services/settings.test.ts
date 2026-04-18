@@ -1,29 +1,15 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createTestDatabase } from '../database/test-database'
 
 const testDb = createTestDatabase()
 
-vi.mock('../database', () => ({
-  db: testDb.db,
-  schema: testDb.schema
-}))
-
-vi.mock('../config', () => ({
-  getConfig: vi.fn(),
-  saveConfig: vi.fn()
-}))
-
-const { getConfig, saveConfig } = await import('../config')
-const {
+import {
   getSetting,
-  getTmdbApiKey,
   isScanScheduleValue,
-  setSetting,
-  setTmdbApiKey,
-  tmdbApiKeySettingKey
-} = await import('./settings')
+  setSetting
+} from './settings'
 
 async function reset() {
   await testDb.db.delete(testDb.schema.settings)
@@ -31,9 +17,6 @@ async function reset() {
 
 beforeEach(async () => {
   await reset()
-  vi.mocked(getConfig).mockReset()
-  vi.mocked(saveConfig).mockReset()
-  vi.mocked(saveConfig).mockResolvedValue(undefined)
 })
 
 describe('getSetting', () => {
@@ -73,62 +56,6 @@ describe('setSetting', () => {
     const stored = await getSetting('scanSchedule', testDb.db)
 
     expect(['6h', '24h']).toContain(stored)
-  })
-})
-
-describe('getTmdbApiKey', () => {
-  it('returns null when nothing is configured', async () => {
-    vi.mocked(getConfig).mockReturnValue(null)
-
-    expect(await getTmdbApiKey(testDb.db)).toEqual(null)
-  })
-
-  it('returns the DB value when present', async () => {
-    await setSetting(tmdbApiKeySettingKey, 'from-db', testDb.db)
-    vi.mocked(getConfig).mockReturnValue({ tmdbApiKey: 'from-json' })
-
-    expect(await getTmdbApiKey(testDb.db)).toEqual('from-db')
-  })
-
-  it('migrates a JSON-only key into the DB on first call', async () => {
-    vi.mocked(getConfig).mockReturnValue({ tmdbApiKey: 'legacy-key' })
-
-    const first = await getTmdbApiKey(testDb.db)
-
-    expect(first).toEqual('legacy-key')
-    expect(await getSetting(tmdbApiKeySettingKey, testDb.db)).toEqual(
-      'legacy-key'
-    )
-  })
-
-  it('ignores the JSON config once the DB has a value', async () => {
-    vi.mocked(getConfig).mockReturnValue({ tmdbApiKey: 'legacy-key' })
-    await getTmdbApiKey(testDb.db)
-
-    vi.mocked(getConfig).mockReturnValue({ tmdbApiKey: 'stale-legacy' })
-    await setSetting(tmdbApiKeySettingKey, 'new-db-key', testDb.db)
-
-    expect(await getTmdbApiKey(testDb.db)).toEqual('new-db-key')
-  })
-})
-
-describe('setTmdbApiKey', () => {
-  it('writes to the DB and mirrors to the JSON config', async () => {
-    await setTmdbApiKey('my-key', testDb.db)
-
-    expect(await getSetting(tmdbApiKeySettingKey, testDb.db)).toEqual(
-      'my-key'
-    )
-    expect(saveConfig).toHaveBeenCalledWith({ tmdbApiKey: 'my-key' })
-  })
-
-  it('succeeds even when the JSON write fails', async () => {
-    vi.mocked(saveConfig).mockRejectedValue(new Error('read only fs'))
-
-    await expect(setTmdbApiKey('my-key', testDb.db)).resolves.toEqual(
-      undefined
-    )
-    expect(await getSetting(tmdbApiKeySettingKey, testDb.db)).toEqual('my-key')
   })
 })
 

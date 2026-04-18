@@ -32,8 +32,7 @@ export function MovieRow({
               <PosterImage
                 alt={movie.title}
                 className="w-full transition-transform duration-200 group-hover:scale-105"
-                path={movie.posterPath}
-                size="w342"
+                url={movie.posterUrl}
                 title={movie.title}
               />
             </div>

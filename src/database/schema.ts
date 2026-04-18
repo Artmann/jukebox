@@ -30,15 +30,15 @@ export const movies = sqliteTable('movies', {
   extension: text('extension'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
-  // TMDB metadata
-  tmdbId: integer('tmdb_id'),
+  // External metadata (opaque id from the metadata API)
+  externalId: text('external_id'),
   year: integer('year'),
   overview: text('overview'),
   runtime: integer('runtime'),
   genres: text('genres'),
   rating: real('rating'),
-  posterPath: text('poster_path'),
-  backdropPath: text('backdrop_path'),
+  posterUrl: text('poster_url'),
+  backdropUrl: text('backdrop_url'),
   trailerUrl: text('trailer_url')
 })
 
@@ -46,13 +46,13 @@ export const shows = sqliteTable('shows', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   title: text('title').notNull(),
   folderPath: text('folder_path').notNull().unique(),
-  tmdbId: integer('tmdb_id'),
+  externalId: text('external_id'),
   year: integer('year'),
   overview: text('overview'),
   genres: text('genres'),
   rating: real('rating'),
-  posterPath: text('poster_path'),
-  backdropPath: text('backdrop_path'),
+  posterUrl: text('poster_url'),
+  backdropUrl: text('backdrop_url'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
 })
@@ -65,7 +65,7 @@ export const seasons = sqliteTable('seasons', {
   seasonNumber: integer('season_number').notNull(),
   name: text('name'),
   overview: text('overview'),
-  posterPath: text('poster_path'),
+  posterUrl: text('poster_url'),
   episodeCount: integer('episode_count')
 })
 
@@ -84,10 +84,10 @@ export const episodes = sqliteTable('episodes', {
   fileName: text('file_name').notNull(),
   fileSize: integer('file_size'),
   extension: text('extension'),
-  tmdbId: integer('tmdb_id'),
+  externalId: text('external_id'),
   overview: text('overview'),
   runtime: integer('runtime'),
-  stillPath: text('still_path'),
+  stillUrl: text('still_url'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
 })

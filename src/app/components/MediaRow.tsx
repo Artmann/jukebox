@@ -40,8 +40,7 @@ export function MediaRow({ items, title }: MediaRowProps): ReactElement | null {
                 <PosterImage
                   alt={mediaItem.item.title}
                   className="w-full transition-transform duration-200 group-hover:scale-105"
-                  path={mediaItem.item.posterPath}
-                  size="w342"
+                  url={mediaItem.item.posterUrl}
                   title={mediaItem.item.title}
                 />
 

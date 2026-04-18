@@ -3,7 +3,7 @@ import { join, extname, basename } from 'path'
 import { db, schema } from '../database'
 import { eq } from 'drizzle-orm'
 import type { NewMovie } from '../database/schema'
-import { fetchMovieMetadata, getMovieVideos, getTrailerUrl } from './tmdb'
+import { fetchMovieByExternalId, fetchMovieMetadata } from './metadata'
 import { cleanTitle, extractYear } from './filename-parser'
 import { subtitleExtensions, videoExtensions } from './media-extensions'
 import { discoverSubtitlesForVideo } from './subtitles'
@@ -110,57 +110,63 @@ export async function scanLibrary(
     let movieId: number | null
 
     if (existing.length > 0 && existing[0]) {
-      // Update existing movie - fetch TMDB data if not already present
+      // Update existing movie - fetch metadata if not already present
       const movie = existing[0]
       movieId = movie.id
-      let tmdbData: Partial<NewMovie> = {}
+      let metadataUpdate: Partial<NewMovie> = {}
 
-      if (!movie.tmdbId) {
-        console.log(`  Fetching TMDB metadata for: ${title}`)
+      if (!movie.externalId) {
+        console.log(`  Fetching metadata for: ${title}`)
         const metadata = await fetchMovieMetadata(title, year ?? undefined)
         if (metadata) {
-          tmdbData = {
-            tmdbId: metadata.tmdbId,
+          metadataUpdate = {
+            externalId: metadata.externalId,
             year: metadata.year,
             overview: metadata.overview,
             runtime: metadata.runtime,
             genres: metadata.genres,
             rating: metadata.rating,
-            posterPath: metadata.posterPath,
-            backdropPath: metadata.backdropPath,
+            posterUrl: metadata.posterUrl,
+            backdropUrl: metadata.backdropUrl,
             trailerUrl: metadata.trailerUrl
           }
         }
-      } else if (!movie.trailerUrl && movie.tmdbId) {
-        // Fetch trailer for movies that have TMDB data but no trailer
-        console.log(`  Fetching trailer for: ${movie.title}`)
-        try {
-          const videos = await getMovieVideos(movie.tmdbId)
-          const trailerUrl = getTrailerUrl(videos)
-          if (trailerUrl) {
-            tmdbData = { trailerUrl }
+      } else if (!movie.posterUrl || !movie.backdropUrl || !movie.trailerUrl) {
+        // Refresh any missing metadata for movies that have an external id.
+        // This covers rows created before poster/backdrop URLs were stored,
+        // and rows where a past upstream hiccup dropped the trailer.
+        console.log(`  Refreshing metadata for: ${movie.title}`)
+        const refreshed = await fetchMovieByExternalId(movie.externalId)
+        if (refreshed) {
+          metadataUpdate = {
+            year: movie.year ?? refreshed.year,
+            overview: movie.overview ?? refreshed.overview,
+            runtime: movie.runtime ?? refreshed.runtime,
+            genres: movie.genres ?? refreshed.genres,
+            rating: movie.rating ?? refreshed.rating,
+            posterUrl: movie.posterUrl ?? refreshed.posterUrl,
+            backdropUrl: movie.backdropUrl ?? refreshed.backdropUrl,
+            trailerUrl: movie.trailerUrl ?? refreshed.trailerUrl
           }
-        } catch {
-          // Ignore errors fetching trailer
         }
       }
 
       await db
         .update(schema.movies)
         .set({
-          title: movie.tmdbId ? movie.title : title,
+          title: movie.externalId ? movie.title : title,
           fileName,
           fileSize,
           extension: ext,
           updatedAt: now,
-          ...tmdbData
+          ...metadataUpdate
         })
         .where(eq(schema.movies.filePath, filePath))
       updated++
       await onProgress?.({ added, total, updated })
     } else {
-      // Insert new movie - fetch TMDB metadata
-      console.log(`  Fetching TMDB metadata for: ${title}`)
+      // Insert new movie - fetch metadata
+      console.log(`  Fetching metadata for: ${title}`)
       const metadata = await fetchMovieMetadata(title, year ?? undefined)
 
       const newMovie: NewMovie = {
@@ -171,14 +177,14 @@ export async function scanLibrary(
         extension: ext,
         createdAt: now,
         updatedAt: now,
-        tmdbId: metadata?.tmdbId ?? null,
+        externalId: metadata?.externalId ?? null,
         year: metadata?.year ?? year,
         overview: metadata?.overview ?? null,
         runtime: metadata?.runtime ?? null,
         genres: metadata?.genres ?? null,
         rating: metadata?.rating ?? null,
-        posterPath: metadata?.posterPath ?? null,
-        backdropPath: metadata?.backdropPath ?? null,
+        posterUrl: metadata?.posterUrl ?? null,
+        backdropUrl: metadata?.backdropUrl ?? null,
         trailerUrl: metadata?.trailerUrl ?? null
       }
       const inserted = await db

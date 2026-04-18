@@ -14,13 +14,13 @@ export interface Show {
   id: number
   title: string
   folderPath: string
-  tmdbId: number | null
+  externalId: string | null
   year: number | null
   overview: string | null
   genres: string | null
   rating: number | null
-  posterPath: string | null
-  backdropPath: string | null
+  posterUrl: string | null
+  backdropUrl: string | null
   createdAt: string
   updatedAt: string
   seasonCount: number
@@ -40,7 +40,7 @@ export interface SeasonWithEpisodes {
   seasonNumber: number
   name: string | null
   overview: string | null
-  posterPath: string | null
+  posterUrl: string | null
   episodeCount: number | null
   episodes: Episode[]
 }
@@ -56,10 +56,10 @@ export interface Episode {
   fileName: string
   fileSize: number | null
   extension: string | null
-  tmdbId: number | null
+  externalId: string | null
   overview: string | null
   runtime: number | null
-  stillPath: string | null
+  stillUrl: string | null
   createdAt: string
   updatedAt: string
 }

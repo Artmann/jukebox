@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9e60d80a-1f2d-4c6e-9f44-d5a6f4d9a009",
-  "prevId": "5d4a3c2b-1e0f-4a8b-9c7d-6e5f4a3b2c1d",
+  "id": "c4b51f7d-2a88-4c90-95e4-0a1f60a93010",
+  "prevId": "9e60d80a-1f2d-4c6e-9f44-d5a6f4d9a009",
   "tables": {
     "auth_config": {
       "name": "auth_config",
@@ -108,9 +108,9 @@
           "notNull": false,
           "autoincrement": false
         },
-        "tmdb_id": {
-          "name": "tmdb_id",
-          "type": "integer",
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -129,8 +129,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "still_path": {
-          "name": "still_path",
+        "still_url": {
+          "name": "still_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -406,9 +406,9 @@
           "notNull": true,
           "autoincrement": false
         },
-        "tmdb_id": {
-          "name": "tmdb_id",
-          "type": "integer",
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -448,15 +448,15 @@
           "notNull": false,
           "autoincrement": false
         },
-        "poster_path": {
-          "name": "poster_path",
+        "poster_url": {
+          "name": "poster_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "backdrop_path": {
-          "name": "backdrop_path",
+        "backdrop_url": {
+          "name": "backdrop_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -637,8 +637,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "poster_path": {
-          "name": "poster_path",
+        "poster_url": {
+          "name": "poster_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -772,9 +772,9 @@
           "notNull": true,
           "autoincrement": false
         },
-        "tmdb_id": {
-          "name": "tmdb_id",
-          "type": "integer",
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -807,15 +807,15 @@
           "notNull": false,
           "autoincrement": false
         },
-        "poster_path": {
-          "name": "poster_path",
+        "poster_url": {
+          "name": "poster_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "backdrop_path": {
-          "name": "backdrop_path",
+        "backdrop_url": {
+          "name": "backdrop_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
