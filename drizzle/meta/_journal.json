@@ -50,6 +50,20 @@
       "when": 1776366140436,
       "tag": "0006_watch_progress_cascade",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1776367433841,
+      "tag": "0007_scan_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1776369000000,
+      "tag": "0008_search_fts",
+      "breakpoints": true
     }
   ]
 }

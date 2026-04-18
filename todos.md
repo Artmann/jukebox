@@ -51,12 +51,12 @@ that can be specced individually later (brainstorm → spec → plan → execute
       password, scan schedule, and profile management into one `/settings`
       route.
 
-- [ ] **Scan status visible in main UI.** Persistent scan indicator in the top
+- [x] **Scan status visible in main UI.** Persistent scan indicator in the top
       bar (spinner + "Scanning 42/310" + last-scan timestamp). Click opens scan
       detail/log. Trigger manual scan from there instead of navigating to
       `/scan`.
 
-- [ ] **Periodic background scans.** Scheduler runs `scanLibrary()` every N
+- [x] **Periodic background scans.** Scheduler runs `scanLibrary()` every N
       hours (default 6h, configurable in Settings). Skip if a scan is already
       running. Emit events the UI can subscribe to via SSE/WebSocket so the
       indicator updates live.
@@ -65,7 +65,7 @@ that can be specced individually later (brainstorm → spec → plan → execute
       library paths; debounce events and trigger a targeted rescan of the
       changed directory. Complements periodic scans rather than replacing them.
 
-- [ ] **Search.** Full-text search across movies, shows, and episodes (title,
+- [x] **Search.** Full-text search across movies, shows, and episodes (title,
       overview, cast). SQLite FTS5 virtual table populated during scan. Keyboard
       shortcut (`/`) + search bar in top nav.
 

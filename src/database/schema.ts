@@ -162,6 +162,17 @@ export const settings = sqliteTable('settings', {
   updatedAt: integer('updated_at').notNull()
 })
 
+export const scanJobs = sqliteTable('scan_jobs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  startedAt: integer('started_at', { mode: 'timestamp' }).notNull(),
+  endedAt: integer('ended_at', { mode: 'timestamp' }),
+  status: text('status').notNull(), // 'running' | 'done' | 'error'
+  added: integer('added').notNull().default(0),
+  updated: integer('updated').notNull().default(0),
+  total: integer('total').notNull().default(0),
+  errorMessage: text('error_message')
+})
+
 export type AuthConfig = typeof authConfig.$inferSelect
 export type NewAuthConfig = typeof authConfig.$inferInsert
 export type Session = typeof sessions.$inferSelect
@@ -184,3 +195,5 @@ export type Favorite = typeof favorites.$inferSelect
 export type NewFavorite = typeof favorites.$inferInsert
 export type Setting = typeof settings.$inferSelect
 export type NewSetting = typeof settings.$inferInsert
+export type ScanJob = typeof scanJobs.$inferSelect
+export type NewScanJob = typeof scanJobs.$inferInsert

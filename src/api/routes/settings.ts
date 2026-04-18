@@ -6,6 +6,7 @@ import { eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
+import { scheduler } from '../../services/scheduler'
 import {
   defaultScanSchedule,
   getSetting,
@@ -391,7 +392,12 @@ settingsRoutes.get('/scan-schedule', async (context) => {
   const value =
     stored !== null && isScanScheduleValue(stored) ? stored : defaultScanSchedule
 
-  return context.json({ schedule: value })
+  const info = scheduler.getInfo()
+
+  return context.json({
+    nextRunAt: info.nextRunAt?.toISOString() ?? null,
+    schedule: value
+  })
 })
 
 settingsRoutes.put('/scan-schedule', async (context) => {
@@ -419,8 +425,14 @@ settingsRoutes.put('/scan-schedule', async (context) => {
   }
 
   await setSetting(scanScheduleSettingKey, schedule)
+  scheduler.updateSchedule(schedule)
 
-  return context.json({ schedule })
+  const info = scheduler.getInfo()
+
+  return context.json({
+    nextRunAt: info.nextRunAt?.toISOString() ?? null,
+    schedule
+  })
 })
 
 // keep generic /:key routes last — Hono matches in declaration order

@@ -20,6 +20,15 @@ vi.mock('../../config', () => ({
   saveConfig: vi.fn().mockResolvedValue(undefined)
 }))
 
+vi.mock('../../services/scheduler', () => ({
+  scheduler: {
+    getInfo: vi.fn(() => ({ nextRunAt: null, schedule: 'off' })),
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn(),
+    updateSchedule: vi.fn()
+  }
+}))
+
 const { settingsRoutes } = await import('./settings')
 const { getSetting, setSetting, tmdbApiKeySettingKey, scanScheduleSettingKey } =
   await import('../../services/settings')
@@ -409,10 +418,13 @@ describe('GET / PUT /scan-schedule', () => {
   it('defaults to off when nothing is set', async () => {
     const app = buildApp()
     const response = await app.request('/scan-schedule')
-    const body = (await response.json()) as { schedule: string }
+    const body = (await response.json()) as {
+      nextRunAt: string | null
+      schedule: string
+    }
 
     expect(response.status).toEqual(200)
-    expect(body).toEqual({ schedule: 'off' })
+    expect(body.schedule).toEqual('off')
   })
 
   it('round-trips a valid value', async () => {
@@ -426,9 +438,12 @@ describe('GET / PUT /scan-schedule', () => {
     expect(putResponse.status).toEqual(200)
 
     const getResponse = await app.request('/scan-schedule')
-    const body = (await getResponse.json()) as { schedule: string }
+    const body = (await getResponse.json()) as {
+      nextRunAt: string | null
+      schedule: string
+    }
 
-    expect(body).toEqual({ schedule: '6h' })
+    expect(body.schedule).toEqual('6h')
     expect(await getSetting(scanScheduleSettingKey, testDb.db)).toEqual('6h')
   })
 

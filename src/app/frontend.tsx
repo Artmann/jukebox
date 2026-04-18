@@ -19,6 +19,7 @@ import { Toaster } from 'sonner'
 
 import { registerSW } from 'virtual:pwa-register'
 
+import { SearchPaletteProvider } from './components/SearchPaletteProvider'
 import { useAuthStatus } from './hooks/useAuth'
 import { useSetupStatus } from './hooks/useSetupStatus'
 import { HomePage } from './pages/Home'
@@ -61,7 +62,11 @@ function AuthGuard() {
     )
   }
 
-  return <Outlet />
+  return (
+    <SearchPaletteProvider>
+      <Outlet />
+    </SearchPaletteProvider>
+  )
 }
 
 function SetupGuard() {
