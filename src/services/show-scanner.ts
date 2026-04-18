@@ -6,24 +6,14 @@ import { and, eq } from 'drizzle-orm'
 import { db, schema } from '../database'
 import type { NewEpisode, NewSeason, NewShow } from '../database/schema'
 import { parseEpisodeFilename } from './episode-parser'
+import { subtitleExtensions, videoExtensions } from './media-extensions'
 import { normalizeShowName, parseSeasonFolder } from './show-parser'
+import { syncSubtitlesForEpisode } from './subtitle-sync'
+import { discoverSubtitlesForVideo } from './subtitles'
 import { fetchSeasonMetadata, fetchShowMetadata } from './tmdb'
 
 export type { NormalizedShow } from './show-parser'
 export { normalizeShowName } from './show-parser'
-
-const videoExtensions = new Set([
-  '.mp4',
-  '.mkv',
-  '.avi',
-  '.mov',
-  '.wmv',
-  '.m4v',
-  '.webm',
-  '.flv',
-  '.mpeg',
-  '.mpg'
-])
 
 export interface ScannedEpisode {
   filePath: string
@@ -33,6 +23,7 @@ export interface ScannedEpisode {
   seasonNumber: number
   episodeNumber: number
   title: string | null
+  subtitleSiblings: string[]
 }
 
 export interface ScannedShow {
@@ -53,15 +44,25 @@ async function scanEpisodesInDirectory(
     return []
   }
 
-  const episodes: ScannedEpisode[] = []
+  // Single pass: collect both video files we'll iterate and subtitle siblings
+  // we'll hand to the subtitle discovery helper for each episode.
+  const subtitleSiblings: string[] = []
+  const videoEntries: string[] = []
 
   for (const entry of entries) {
     const extension = extname(entry).toLowerCase()
 
-    if (!videoExtensions.has(extension)) {
-      continue
+    if (videoExtensions.has(extension)) {
+      videoEntries.push(entry)
+    } else if (subtitleExtensions.has(extension)) {
+      subtitleSiblings.push(entry)
     }
+  }
 
+  const episodes: ScannedEpisode[] = []
+
+  for (const entry of videoEntries) {
+    const extension = extname(entry).toLowerCase()
     const parsed = parseEpisodeFilename(entry)
 
     if (!parsed) {
@@ -85,7 +86,8 @@ async function scanEpisodesInDirectory(
       extension,
       seasonNumber: parsed.seasonNumber,
       episodeNumber: parsed.episodeNumber,
-      title: parsed.title
+      title: parsed.title,
+      subtitleSiblings
     })
   }
 
@@ -376,7 +378,11 @@ export async function scanShowLibrary(
 
         const now = new Date()
 
-        if (existingEpisodes.length > 0) {
+        let episodeId: number | null
+
+        if (existingEpisodes.length > 0 && existingEpisodes[0]) {
+          episodeId = existingEpisodes[0].id
+
           await db
             .update(schema.episodes)
             .set({
@@ -409,9 +415,23 @@ export async function scanShowLibrary(
             updatedAt: now
           }
 
-          await db.insert(schema.episodes).values(newEpisode)
+          const insertedEpisode = await db
+            .insert(schema.episodes)
+            .values(newEpisode)
+            .returning({ id: schema.episodes.id })
+
+          episodeId = insertedEpisode[0]?.id ?? null
           added++
           await onProgress?.({ added, total, updated })
+        }
+
+        if (episodeId !== null) {
+          const discoveredSubtitles = discoverSubtitlesForVideo(
+            scannedEpisode.filePath,
+            scannedEpisode.subtitleSiblings
+          )
+
+          await syncSubtitlesForEpisode(episodeId, discoveredSubtitles)
         }
       }
     }

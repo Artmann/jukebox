@@ -1,5 +1,15 @@
 import type { Movie } from '../hooks/useMovies'
 
+export type SubtitleFormat = 'ass' | 'srt' | 'vtt'
+
+export interface SubtitleTrack {
+  id: number
+  displayLanguage: string
+  format: SubtitleFormat
+  isSupported: boolean
+  language: string
+}
+
 export interface Show {
   id: number
   title: string

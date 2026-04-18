@@ -1,11 +1,14 @@
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
+  CheckIcon,
   List,
   Maximize,
   PauseIcon,
   PlayIcon,
   RotateCcw,
   RotateCw,
-  SkipForward
+  SkipForward,
+  Subtitles
 } from 'lucide-react'
 import {
   useEffect,
@@ -14,7 +17,12 @@ import {
   type ReactElement,
   type ReactNode
 } from 'react'
+import { toast } from 'sonner'
 import type Player from 'video.js/dist/types/player'
+
+import { cn } from '@/lib/utils'
+
+import type { SubtitleTrack } from '../lib/media'
 import { formatTime } from '../lib/format'
 import { CastButton } from './CastButton'
 import { VideoTrackBar } from './VideoTrackBar'
@@ -30,7 +38,12 @@ interface VideoControlsProps {
   onToggleEpisodes?: () => void
   showEpisodesButton?: boolean
   streamUrl?: string
+  subtitles?: SubtitleTrack[]
 }
+
+// 'off' is a reserved sentinel for the "no captions" menu item — subtitle ids
+// are positive integers from the database so there's no collision.
+const subtitleOffValue = 'off'
 
 const skipSeconds = 10
 const saveIntervalMs = 10000
@@ -44,13 +57,112 @@ export function VideoControls({
   onNextEpisode,
   onToggleEpisodes,
   showEpisodesButton,
-  streamUrl
+  streamUrl,
+  subtitles
 }: VideoControlsProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [buffered, setBuffered] = useState(0)
   const [remainingTime, setRemainingTime] = useState(0)
+  const [activeSubtitleId, setActiveSubtitleId] = useState<string>(
+    subtitleOffValue
+  )
   const lastSavedTimeRef = useRef<number>(0)
+
+  // Reset the selected subtitle when the available track list changes (e.g.
+  // navigating from one episode to another). The player tears down and
+  // recreates remote text tracks, so any prior selection is gone.
+  useEffect(() => {
+    setActiveSubtitleId(subtitleOffValue)
+  }, [subtitles])
+
+  // Surface track-load errors as a toast so the user knows to pick a
+  // different language instead of staring at empty captions.
+  useEffect(() => {
+    if (!player || player.isDisposed()) {
+      return
+    }
+
+    const remoteTrackElements = player.remoteTextTrackEls() as unknown as {
+      length: number
+      [index: number]: HTMLTrackElement
+    } | null
+
+    if (!remoteTrackElements || remoteTrackElements.length === 0) {
+      return
+    }
+
+    const handleTrackError = () => {
+      toast.error('Subtitle failed to load. Pick another track.')
+      setActiveSubtitleId(subtitleOffValue)
+    }
+
+    const elementsToCleanup: HTMLTrackElement[] = []
+
+    for (let index = 0; index < remoteTrackElements.length; index++) {
+      const element = remoteTrackElements[index]
+
+      if (!element) {
+        continue
+      }
+
+      element.addEventListener('error', handleTrackError)
+      elementsToCleanup.push(element)
+    }
+
+    return () => {
+      for (const element of elementsToCleanup) {
+        element.removeEventListener('error', handleTrackError)
+      }
+    }
+  }, [player, subtitles])
+
+  const supportedSubtitles = (subtitles ?? []).filter(
+    (subtitle) => subtitle.isSupported
+  )
+  const unsupportedSubtitles = (subtitles ?? []).filter(
+    (subtitle) => !subtitle.isSupported
+  )
+  const hasSubtitles =
+    supportedSubtitles.length > 0 || unsupportedSubtitles.length > 0
+
+  const handleSelectSubtitle = (selectedId: string) => {
+    setActiveSubtitleId(selectedId)
+
+    if (!player || player.isDisposed()) {
+      return
+    }
+
+    // video.js's TrackList type doesn't expose length/indexing, but the
+    // runtime instance is iterable via `length`/[index]. Cast through unknown
+    // to a minimal interface so we can walk it safely.
+    const textTracks = player.textTracks() as unknown as {
+      length: number
+      [index: number]: TextTrack
+    } | null
+
+    if (!textTracks) {
+      return
+    }
+
+    const selectedSubtitle = supportedSubtitles.find(
+      (subtitle) => String(subtitle.id) === selectedId
+    )
+
+    for (let index = 0; index < textTracks.length; index++) {
+      const track = textTracks[index]
+
+      if (!track || track.kind !== 'subtitles') {
+        continue
+      }
+
+      if (selectedSubtitle && track.language === selectedSubtitle.language) {
+        track.mode = 'showing'
+      } else {
+        track.mode = 'disabled'
+      }
+    }
+  }
 
   useEffect(() => {
     if (!player || player.isDisposed()) {
@@ -224,6 +336,14 @@ export function VideoControls({
               title={title}
             />
           )}
+          {hasSubtitles && (
+            <SubtitleMenu
+              activeSubtitleId={activeSubtitleId}
+              onSelect={handleSelectSubtitle}
+              supportedSubtitles={supportedSubtitles}
+              unsupportedSubtitles={unsupportedSubtitles}
+            />
+          )}
           {onNextEpisode && (
             <IconButton
               aria-label="Next episode"
@@ -254,6 +374,107 @@ export function VideoControls({
         </div>
       </div>
     </div>
+  )
+}
+
+interface SubtitleMenuProps {
+  activeSubtitleId: string
+  onSelect: (id: string) => void
+  supportedSubtitles: SubtitleTrack[]
+  unsupportedSubtitles: SubtitleTrack[]
+}
+
+function SubtitleMenu({
+  activeSubtitleId,
+  onSelect,
+  supportedSubtitles,
+  unsupportedSubtitles
+}: SubtitleMenuProps): ReactElement {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          aria-label="Subtitles"
+          className="p-2 flex justify-center items-center cursor-pointer"
+          type="button"
+        >
+          <Subtitles className="size-7 hover:scale-125 text-white" />
+        </button>
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          className="z-50 min-w-[12rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          side="top"
+          sideOffset={8}
+        >
+          <SubtitleMenuItem
+            isActive={activeSubtitleId === subtitleOffValue}
+            label="Off"
+            onSelect={() => onSelect(subtitleOffValue)}
+          />
+
+          {supportedSubtitles.map((subtitle) => {
+            const value = String(subtitle.id)
+
+            return (
+              <SubtitleMenuItem
+                isActive={activeSubtitleId === value}
+                key={subtitle.id}
+                label={subtitle.displayLanguage}
+                onSelect={() => onSelect(value)}
+              />
+            )
+          })}
+
+          {unsupportedSubtitles.map((subtitle) => (
+            <DropdownMenu.Item
+              className="flex cursor-not-allowed items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground opacity-60 outline-none data-[disabled]:pointer-events-none"
+              disabled
+              key={subtitle.id}
+            >
+              <span className="size-4" />
+              <span className="flex-1 truncate">
+                {subtitle.displayLanguage} (unsupported format)
+              </span>
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  )
+}
+
+interface SubtitleMenuItemProps {
+  isActive: boolean
+  label: string
+  onSelect: () => void
+}
+
+function SubtitleMenuItem({
+  isActive,
+  label,
+  onSelect
+}: SubtitleMenuItemProps): ReactElement {
+  return (
+    <DropdownMenu.Item
+      className={cn(
+        'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground',
+        isActive && 'font-medium'
+      )}
+      onSelect={(event) => {
+        event.preventDefault()
+        onSelect()
+      }}
+    >
+      {isActive ? (
+        <CheckIcon className="size-4 text-muted-foreground" />
+      ) : (
+        <span className="size-4" />
+      )}
+      <span className="flex-1 truncate">{label}</span>
+    </DropdownMenu.Item>
   )
 }
 

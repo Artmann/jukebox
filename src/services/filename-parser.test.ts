@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { parseFilename, cleanTitle, extractYear } from './filename-parser'
+import {
+  cleanTitle,
+  extractYear,
+  parseFilename,
+  parseSubtitleFilename
+} from './filename-parser'
 
 describe('parseFilename', () => {
   it('parses standard dot-separated filenames', () => {
@@ -134,5 +139,112 @@ describe('extractYear', () => {
 
   it('returns null when no year present', () => {
     expect(extractYear('Movie.Without.Year.mp4')).toBeNull()
+  })
+})
+
+describe('parseSubtitleFilename', () => {
+  it('parses a subtitle with no language suffix', () => {
+    expect(parseSubtitleFilename('Jurassic Park.srt')).toEqual({
+      baseName: 'Jurassic Park',
+      language: 'und',
+      format: 'srt'
+    })
+  })
+
+  it('parses a 2-letter language suffix', () => {
+    expect(parseSubtitleFilename('Jurassic Park.en.srt')).toEqual({
+      baseName: 'Jurassic Park',
+      language: 'en',
+      format: 'srt'
+    })
+  })
+
+  it('parses a 3-letter language suffix and normalizes to 2-letter code', () => {
+    expect(parseSubtitleFilename('Jurassic Park.eng.srt')).toEqual({
+      baseName: 'Jurassic Park',
+      language: 'en',
+      format: 'srt'
+    })
+  })
+
+  it('parses full English language name to a code', () => {
+    expect(parseSubtitleFilename('Jurassic Park.English.srt')).toEqual({
+      baseName: 'Jurassic Park',
+      language: 'en',
+      format: 'srt'
+    })
+  })
+
+  it('parses Spanish 3-letter code (spa) and full name', () => {
+    expect(parseSubtitleFilename('Movie.spa.srt')).toEqual({
+      baseName: 'Movie',
+      language: 'es',
+      format: 'srt'
+    })
+
+    expect(parseSubtitleFilename('Movie.Spanish.srt')).toEqual({
+      baseName: 'Movie',
+      language: 'es',
+      format: 'srt'
+    })
+  })
+
+  it('preserves unknown 2-letter codes as-is', () => {
+    expect(parseSubtitleFilename('Movie.zz.srt')).toEqual({
+      baseName: 'Movie',
+      language: 'zz',
+      format: 'srt'
+    })
+  })
+
+  it('parses .vtt files', () => {
+    expect(parseSubtitleFilename('Movie.fr.vtt')).toEqual({
+      baseName: 'Movie',
+      language: 'fr',
+      format: 'vtt'
+    })
+  })
+
+  it('parses .ass files', () => {
+    expect(parseSubtitleFilename('Movie.ja.ass')).toEqual({
+      baseName: 'Movie',
+      language: 'ja',
+      format: 'ass'
+    })
+  })
+
+  it('ignores forced/sdh modifiers and extracts the language', () => {
+    expect(parseSubtitleFilename('Movie.en.forced.srt')).toEqual({
+      baseName: 'Movie',
+      language: 'en',
+      format: 'srt'
+    })
+
+    expect(parseSubtitleFilename('Movie.en.sdh.srt')).toEqual({
+      baseName: 'Movie',
+      language: 'en',
+      format: 'srt'
+    })
+  })
+
+  it('handles TV episode style filenames', () => {
+    expect(parseSubtitleFilename('Show.S01E02.en.srt')).toEqual({
+      baseName: 'Show.S01E02',
+      language: 'en',
+      format: 'srt'
+    })
+  })
+
+  it('handles uppercase extensions and language codes', () => {
+    expect(parseSubtitleFilename('Movie.EN.SRT')).toEqual({
+      baseName: 'Movie',
+      language: 'en',
+      format: 'srt'
+    })
+  })
+
+  it('returns null for non-subtitle extensions', () => {
+    expect(parseSubtitleFilename('Movie.en.mp4')).toBeNull()
+    expect(parseSubtitleFilename('Movie.txt')).toBeNull()
   })
 })

@@ -5,37 +5,55 @@ import { eq } from 'drizzle-orm'
 import type { NewMovie } from '../database/schema'
 import { fetchMovieMetadata, getMovieVideos, getTrailerUrl } from './tmdb'
 import { cleanTitle, extractYear } from './filename-parser'
+import { subtitleExtensions, videoExtensions } from './media-extensions'
+import { discoverSubtitlesForVideo } from './subtitles'
+import { syncSubtitlesForMovie } from './subtitle-sync'
 
-const VIDEO_EXTENSIONS = new Set([
-  '.mp4',
-  '.mkv',
-  '.avi',
-  '.mov',
-  '.wmv',
-  '.m4v',
-  '.webm',
-  '.flv',
-  '.mpeg',
-  '.mpg'
-])
+interface ScannedVideo {
+  filePath: string
+  subtitleSiblings: string[]
+}
 
 /**
- * Recursively scan a directory for video files
+ * Recursively scan a directory for video files. Each yielded entry includes
+ * the subtitle siblings sitting in the same folder so subtitle discovery
+ * piggybacks on the directory read instead of re-globbing per file.
  */
-async function* scanDirectory(dir: string): AsyncGenerator<string> {
+async function* scanDirectory(dir: string): AsyncGenerator<ScannedVideo> {
   const entries = await readdir(dir, { withFileTypes: true })
 
-  for (const entry of entries) {
-    const fullPath = join(dir, entry.name)
+  const videoFiles: string[] = []
+  const subtitleSiblings: string[] = []
+  const subdirectories: string[] = []
 
+  for (const entry of entries) {
     if (entry.isDirectory()) {
-      yield* scanDirectory(fullPath)
-    } else if (entry.isFile()) {
-      const ext = extname(entry.name).toLowerCase()
-      if (VIDEO_EXTENSIONS.has(ext)) {
-        yield fullPath
-      }
+      subdirectories.push(entry.name)
+      continue
     }
+
+    if (!entry.isFile()) {
+      continue
+    }
+
+    const extension = extname(entry.name).toLowerCase()
+
+    if (videoExtensions.has(extension)) {
+      videoFiles.push(entry.name)
+    } else if (subtitleExtensions.has(extension)) {
+      subtitleSiblings.push(entry.name)
+    }
+  }
+
+  for (const videoFile of videoFiles) {
+    yield {
+      filePath: join(dir, videoFile),
+      subtitleSiblings
+    }
+  }
+
+  for (const subdirectory of subdirectories) {
+    yield* scanDirectory(join(dir, subdirectory))
   }
 }
 
@@ -58,7 +76,9 @@ export async function scanLibrary(
 
   console.log(`Scanning: ${libraryPath}`)
 
-  for await (const filePath of scanDirectory(libraryPath)) {
+  for await (const { filePath, subtitleSiblings } of scanDirectory(
+    libraryPath
+  )) {
     total++
     const fileName = basename(filePath)
     const ext = extname(fileName).toLowerCase()
@@ -75,6 +95,11 @@ export async function scanLibrary(
 
     const now = new Date()
 
+    const discoveredSubtitles = discoverSubtitlesForVideo(
+      filePath,
+      subtitleSiblings
+    )
+
     // Check if movie already exists
     const existing = await db
       .select()
@@ -82,9 +107,12 @@ export async function scanLibrary(
       .where(eq(schema.movies.filePath, filePath))
       .limit(1)
 
+    let movieId: number | null
+
     if (existing.length > 0 && existing[0]) {
       // Update existing movie - fetch TMDB data if not already present
       const movie = existing[0]
+      movieId = movie.id
       let tmdbData: Partial<NewMovie> = {}
 
       if (!movie.tmdbId) {
@@ -153,9 +181,17 @@ export async function scanLibrary(
         backdropPath: metadata?.backdropPath ?? null,
         trailerUrl: metadata?.trailerUrl ?? null
       }
-      await db.insert(schema.movies).values(newMovie)
+      const inserted = await db
+        .insert(schema.movies)
+        .values(newMovie)
+        .returning({ id: schema.movies.id })
+      movieId = inserted[0]?.id ?? null
       added++
       await onProgress?.({ added, total, updated })
+    }
+
+    if (movieId !== null) {
+      await syncSubtitlesForMovie(movieId, discoveredSubtitles)
     }
 
     console.log(`  Found: ${title}`)

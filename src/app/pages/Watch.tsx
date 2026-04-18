@@ -18,18 +18,27 @@ import { VolumeIndicator } from '../components/VolumeIndicator'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useNextEpisode } from '../hooks/useNextEpisode'
 import type { Movie } from '../hooks/useMovies'
-import type { Episode, Show, ShowWithSeasons } from '../lib/media'
+import type {
+  Episode,
+  Show,
+  ShowWithSeasons,
+  SubtitleTrack
+} from '../lib/media'
 import { watchedThreshold } from '../../lib/watched'
 import type Player from 'video.js/dist/types/player'
 
-async function fetchMovie(id: string): Promise<Movie> {
+interface MovieWithSubtitles extends Movie {
+  subtitles: SubtitleTrack[]
+}
+
+async function fetchMovie(id: string): Promise<MovieWithSubtitles> {
   const response = await fetch(`/api/library/movies/${id}`)
 
   if (!response.ok) {
     throw new Error('Failed to fetch movie')
   }
 
-  return (await response.json()) as Movie
+  return (await response.json()) as MovieWithSubtitles
 }
 
 interface WatchProgress {
@@ -46,6 +55,7 @@ async function fetchMovieProgress(movieId: number): Promise<WatchProgress> {
 interface EpisodeWithShow {
   episode: Episode
   show: Show
+  subtitles: SubtitleTrack[]
 }
 
 async function fetchEpisodeWithShow(id: string): Promise<EpisodeWithShow> {
@@ -539,6 +549,10 @@ export function WatchPage() {
       ? `${episodeShow.title} — S${episode.seasonNumber} E${episode.episodeNumber} · ${episode.title}`
       : (movie?.title ?? '')
 
+  const subtitles = isEpisode
+    ? (episodeData?.subtitles ?? [])
+    : (movie?.subtitles ?? [])
+
   return (
     <div
       ref={wrapperRef}
@@ -548,6 +562,7 @@ export function WatchPage() {
       <div className="absolute inset-0">
         <VideoPlayer
           src={streamUrl}
+          subtitles={subtitles}
           onReady={setPlayer}
         />
       </div>
@@ -656,6 +671,7 @@ export function WatchPage() {
           episodeId={isEpisode ? episode?.id : undefined}
           showEpisodesButton={isEpisode}
           streamUrl={streamUrl}
+          subtitles={subtitles}
           onFullscreen={handleFullscreen}
           onNextEpisode={
             isEpisode && nextEpisode ? goToNextEpisode : undefined

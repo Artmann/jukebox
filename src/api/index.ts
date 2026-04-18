@@ -22,6 +22,7 @@ import { profileRoutes } from './routes/profiles'
 import { favoriteRoutes } from './routes/favorites'
 import { showRoutes } from './routes/shows'
 import { streamRoutes } from './routes/stream'
+import { subtitleRoutes } from './routes/subtitles'
 import { transcodeRoutes } from './routes/transcode'
 import { upNextRoutes } from './routes/up-next'
 
@@ -55,6 +56,7 @@ app.route('/api/settings', settingsRoutes)
 app.route('/api/setup', setupRoutes)
 app.route('/api/stream/episode', episodeStreamRoutes)
 app.route('/api/stream', streamRoutes)
+app.route('/api/subtitles', subtitleRoutes)
 app.route('/api/transcode', transcodeRoutes)
 app.get('/api', (c) => c.json({ message: 'Jukebox API' }))
 
