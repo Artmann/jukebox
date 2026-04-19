@@ -11,6 +11,7 @@ import { profileMiddleware } from './middleware/profile'
 import { authRoutes } from './routes/auth'
 import { episodeProgressRoutes } from './routes/episode-progress'
 import { episodeStreamRoutes } from './routes/episode-stream'
+import { filesystemRoutes } from './routes/filesystem'
 import { helloRoutes } from './routes/hello'
 import { libraryRoutes } from './routes/library'
 import { progressRoutes } from './routes/progress'
@@ -52,6 +53,7 @@ app.route('/api/scan', scanRoutes)
 app.route('/api/search', searchRoutes)
 app.route('/api/profiles', profileRoutes)
 app.route('/api/favorites', favoriteRoutes)
+app.route('/api/filesystem', filesystemRoutes)
 app.route('/api/settings', settingsRoutes)
 app.route('/api/setup', setupRoutes)
 app.route('/api/stream/episode', episodeStreamRoutes)

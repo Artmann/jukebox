@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { FolderOpen, Plus, Trash2 } from 'lucide-react'
 import {
   useEffect,
   useRef,
@@ -15,6 +15,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+
+import { DirectoryBrowserDialog } from './DirectoryBrowserDialog'
 
 export interface LibraryEntry {
   name: string
@@ -36,6 +38,7 @@ export function LibraryPathsForm({
   value
 }: LibraryPathsFormProps): ReactElement {
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [browsingIndex, setBrowsingIndex] = useState<number | null>(null)
   const pathInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(
@@ -135,6 +138,16 @@ export function LibraryPathsForm({
             </button>
           )}
 
+          <Button
+            aria-label="Browse folders"
+            onClick={() => setBrowsingIndex(index)}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <FolderOpen className="size-4" />
+          </Button>
+
           <Select
             onValueChange={(nextType) =>
               updateLibrary(index, 'type', nextType)
@@ -172,6 +185,21 @@ export function LibraryPathsForm({
         <Plus className="size-4" />
         {addButtonLabel ?? 'Add another'}
       </Button>
+
+      {browsingIndex !== null && (
+        <DirectoryBrowserDialog
+          initialPath={value[browsingIndex]?.path}
+          onOpenChange={(open) => {
+            if (!open) {
+              setBrowsingIndex(null)
+            }
+          }}
+          onSelect={(selectedPath) => {
+            updateLibrary(browsingIndex, 'path', selectedPath)
+          }}
+          open={browsingIndex !== null}
+        />
+      )}
     </div>
   )
 }

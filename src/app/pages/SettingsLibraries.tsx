@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { FolderOpen, Plus, Trash2 } from 'lucide-react'
 import { useState, type ReactElement } from 'react'
 import { toast } from 'sonner'
 
@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+import { DirectoryBrowserDialog } from '../components/DirectoryBrowserDialog'
 import type { LibraryEntry } from '../components/LibraryPathsForm'
 import {
   useAddLibrary,
@@ -36,6 +37,7 @@ export function SettingsLibrariesPage(): ReactElement {
   const removeLibrary = useRemoveLibrary()
 
   const [draft, setDraft] = useState<NewLibraryState>(emptyLibrary)
+  const [isBrowsing, setIsBrowsing] = useState(false)
 
   async function handleAdd() {
     const trimmedPath = draft.path.trim()
@@ -165,18 +167,29 @@ export function SettingsLibrariesPage(): ReactElement {
         <div className="mt-4 grid gap-3">
           <div className="grid gap-2">
             <Label htmlFor="new-library-path">Folder path</Label>
-            <Input
-              id="new-library-path"
-              onChange={(event) =>
-                setDraft((previous) => ({
-                  ...previous,
-                  path: event.target.value
-                }))
-              }
-              placeholder="/mnt/media/movies"
-              spellCheck={false}
-              value={draft.path}
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                className="flex-1"
+                id="new-library-path"
+                onChange={(event) =>
+                  setDraft((previous) => ({
+                    ...previous,
+                    path: event.target.value
+                  }))
+                }
+                placeholder="/mnt/media/movies"
+                spellCheck={false}
+                value={draft.path}
+              />
+              <Button
+                onClick={() => setIsBrowsing(true)}
+                type="button"
+                variant="outline"
+              >
+                <FolderOpen className="size-4" />
+                Browse
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-2">
@@ -233,6 +246,17 @@ export function SettingsLibrariesPage(): ReactElement {
           </div>
         </div>
       </div>
+
+      {isBrowsing && (
+        <DirectoryBrowserDialog
+          initialPath={draft.path.trim() || undefined}
+          onOpenChange={setIsBrowsing}
+          onSelect={(selectedPath) =>
+            setDraft((previous) => ({ ...previous, path: selectedPath }))
+          }
+          open={isBrowsing}
+        />
+      )}
     </SettingsLayout>
   )
 }
