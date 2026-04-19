@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.3.0...jukebox-media-server-v0.4.0) (2026-04-19)
+
+
+### Features
+
+* server-side directory browser for library paths ([9c852ac](https://github.com/Artmann/jukebox/commit/9c852ac6616187a9f303294ed4c6ef1156ce31c1))
+
+
+### Bug Fixes
+
+* add back button to scan page ([315bab9](https://github.com/Artmann/jukebox/commit/315bab9305e0aee321d0e8ae7219e81953ab8c85)), closes [#20](https://github.com/Artmann/jukebox/issues/20)
+
+
+### Refactoring
+
+* rename tmdb service to metadata, dedupe continue-watching by show ([9c11612](https://github.com/Artmann/jukebox/commit/9c1161281898ce26a24aea17b05ceeecd280d896))
+
 ## [0.3.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.2.0...jukebox-media-server-v0.3.0) (2026-04-18)
 
 
