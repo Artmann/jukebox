@@ -1,5 +1,6 @@
-import { CheckCircle, Circle, Loader2, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Circle, Loader2, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import dayjs from 'dayjs'
@@ -224,6 +225,16 @@ export function ScanPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-16">
+      <div className="mb-6 animate-fade-up">
+        <Link
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          to="/"
+        >
+          <ArrowLeft className="size-4" />
+          Back
+        </Link>
+      </div>
+
       <div className="mb-8 animate-fade-up">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">
           {isRunning ? 'Scanning your libraries…' : 'Library scan'}
