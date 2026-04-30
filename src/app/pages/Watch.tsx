@@ -118,10 +118,34 @@ export function WatchPage() {
     volume: number
     muted: boolean
   } | null>(null)
+  const [controlsHeight, setControlsHeight] = useState(0)
   const hasRestoredProgress = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const volumeHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const controlsObserverRef = useRef<ResizeObserver | null>(null)
+
+  const controlsRef = useCallback((node: HTMLDivElement | null) => {
+    controlsObserverRef.current?.disconnect()
+
+    if (!node) {
+      controlsObserverRef.current = null
+      return
+    }
+
+    setControlsHeight(node.offsetHeight)
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+
+      if (entry) {
+        setControlsHeight(entry.contentRect.height)
+      }
+    })
+
+    observer.observe(node)
+    controlsObserverRef.current = observer
+  }, [])
 
   const handleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -605,9 +629,10 @@ export function WatchPage() {
         <>
           {/* Desktop side panel */}
           <div
-            className={`hidden sm:block absolute top-0 right-0 bottom-0 w-96 z-20 ${
+            className={`hidden sm:block absolute top-0 right-0 w-96 z-20 ${
               episodePanelOpen ? '' : 'pointer-events-none opacity-0'
             } transition-opacity duration-200`}
+            style={{ bottom: controlsHeight }}
           >
             {episodePanelOpen && (
               <EpisodePanel
@@ -630,9 +655,13 @@ export function WatchPage() {
               open={episodePanelOpen}
             >
               <SheetContent
-                className="h-[85vh] p-0 bg-black/95 border-white/10"
+                className="p-0 bg-black/95 border-white/10"
                 hideCloseButton
                 side="bottom"
+                style={{
+                  height: `calc(85vh - ${controlsHeight}px)`,
+                  bottom: controlsHeight
+                }}
               >
                 <SheetTitle className="sr-only">
                   {show.title} episodes
@@ -663,6 +692,7 @@ export function WatchPage() {
 
       <div
         className={`absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-black/80 to-transparent pt-16 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        ref={controlsRef}
       >
         <VideoControls
           title={title}
