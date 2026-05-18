@@ -37,6 +37,7 @@
   "scripts": {
     "build": "tsx scripts/build.ts",
     "build:client": "vite build",
+    "build:executable": "tsx scripts/build-executable.ts",
     "build:server": "rolldown -c rolldown.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/scripts/migrate.ts",

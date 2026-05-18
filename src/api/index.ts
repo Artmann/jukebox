@@ -1,10 +1,11 @@
 import { readFileSync } from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
 
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
+
+import { getClientAssetsDirectory } from '../runtime-paths'
 
 import { authMiddleware } from './middleware/auth'
 import { profileMiddleware } from './middleware/profile'
@@ -62,8 +63,7 @@ app.route('/api/subtitles', subtitleRoutes)
 app.route('/api/transcode', transcodeRoutes)
 app.get('/api', (c) => c.json({ message: 'Jukebox API' }))
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const clientDir = path.resolve(__dirname, '../client')
+const clientDir = getClientAssetsDirectory()
 
 export function setupStaticServing() {
   app.use(
@@ -72,8 +72,8 @@ export function setupStaticServing() {
       root: clientDir,
       rewriteRequestPath: (requestPath) => {
         return requestPath
-      },
-    }),
+      }
+    })
   )
 
   // SPA fallback — serve index.html for unmatched non-API routes
@@ -96,7 +96,7 @@ const hopByHopHeaders = new Set([
   'te',
   'trailer',
   'transfer-encoding',
-  'upgrade',
+  'upgrade'
 ])
 
 export function setupViteProxy(vitePort: number) {
@@ -122,12 +122,12 @@ export function setupViteProxy(vitePort: number) {
         body:
           c.req.method !== 'GET' && c.req.method !== 'HEAD'
             ? c.req.raw.body
-            : undefined,
+            : undefined
       })
 
       return new Response(response.body, {
         status: response.status,
-        headers: response.headers,
+        headers: response.headers
       })
     } catch {
       return next()
