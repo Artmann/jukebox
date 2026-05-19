@@ -17,6 +17,9 @@ on:
 jobs:
   build-test:
     name: build & test (${{ matrix.os }})
+    permissions:
+      contents: read
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -30,23 +33,47 @@ jobs:
           dotnet-version: 9.0.x
 
       - name: Restore
-        run: dotnet restore launcher/Launcher.sln
+        id: restore
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet restore launcher/Launcher.sln 2>&1 | tee restore.log
 
       - name: Build
         id: build
+        if: success()
         shell: bash
         run: |
           set -o pipefail
           dotnet build launcher/Launcher.sln -c Release --no-restore -clp:NoSummary 2>&1 | tee build.log
 
-      - name: Surface build errors on failure
-        if: failure() && steps.build.conclusion == 'failure'
+      - name: Test
+        id: test
+        if: success()
         shell: bash
         run: |
-          echo "## Build errors (${{ matrix.os }})" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          grep -E '(error|Error)\s' build.log | head -100 >> "$GITHUB_STEP_SUMMARY" || true
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          set -o pipefail
+          dotnet test launcher/Launcher.sln -c Release --no-build --no-restore 2>&1 | tee test.log
 
-      - name: Test
-        run: dotnet test launcher/Launcher.sln -c Release --no-build --no-restore
+      - name: Post failure log to PR
+        if: failure() && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### launcher-ci failure on \`${{ matrix.os }}\`"
+            echo
+            for step_log in restore.log build.log test.log; do
+              if [ -f "$step_log" ]; then
+                echo "<details><summary>$step_log (last 80 lines)</summary>"
+                echo
+                echo '```'
+                tail -n 80 "$step_log"
+                echo '```'
+                echo "</details>"
+                echo
+              fi
+            done
+          } > comment.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md --repo ${{ github.repository }}
