@@ -1,31 +1,32 @@
 using System;
 using System.IO;
+using System.Text;
 
 namespace Jukebox.Launcher.Autostart;
 
 public sealed class LinuxAutostartService : IAutostartService
 {
-    private readonly string applicationName;
+    private readonly string desktopFileSlug;
     private readonly string autostartDirectory;
     private readonly string executablePath;
 
-    public LinuxAutostartService(string applicationName, string executablePath)
-        : this(applicationName, executablePath, DefaultAutostartDirectory())
+    public LinuxAutostartService(string desktopFileSlug, string executablePath)
+        : this(desktopFileSlug, executablePath, DefaultAutostartDirectory())
     {
     }
 
     public LinuxAutostartService(
-        string applicationName,
+        string desktopFileSlug,
         string executablePath,
         string autostartDirectory)
     {
-        this.applicationName = applicationName;
+        this.desktopFileSlug = desktopFileSlug;
         this.executablePath = executablePath;
         this.autostartDirectory = autostartDirectory;
     }
 
     public string DesktopFilePath
-        => Path.Combine(autostartDirectory, $"{applicationName.ToLowerInvariant()}.desktop");
+        => Path.Combine(autostartDirectory, $"{desktopFileSlug}.desktop");
 
     public bool IsEnabled()
     {
@@ -64,11 +65,36 @@ public sealed class LinuxAutostartService : IAutostartService
             [Desktop Entry]
             Type=Application
             Name=Jukebox
-            Exec={executablePath}
+            Exec={QuoteForExec(executablePath)}
             X-GNOME-Autostart-enabled=true
             Terminal=false
 
             """;
+
+    // Per the Desktop Entry Specification, the Exec key uses a shell-like
+    // quoting model. Reserved characters (space, tab, newline, " ' \ > < ~
+    // | & ; $ * ? # ( ) `) must be quoted; inside double quotes, the
+    // characters " ` $ and \ must additionally be escaped with a backslash.
+    private static string QuoteForExec(string value)
+    {
+        var builder = new StringBuilder(value.Length + 2);
+
+        builder.Append('"');
+
+        foreach (var character in value)
+        {
+            if (character is '"' or '\\' or '$' or '`')
+            {
+                builder.Append('\\');
+            }
+
+            builder.Append(character);
+        }
+
+        builder.Append('"');
+
+        return builder.ToString();
+    }
 
     private static string DefaultAutostartDirectory()
     {

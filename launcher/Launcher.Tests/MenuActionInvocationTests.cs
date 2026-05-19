@@ -1,8 +1,8 @@
 using System.Linq;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless.XUnit;
+using Jukebox.Launcher;
 using Jukebox.Launcher.Views;
 using Xunit;
 
@@ -14,7 +14,7 @@ public class MenuActionInvocationTests
     public void ShowAboutOpensAnAboutWindow()
     {
         var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
-        var actions = new LauncherActions(lifetime, "7.7.7");
+        var actions = new LauncherActions(lifetime, new StubVersionProvider("7.7.7"));
 
         var openBefore = lifetime.Windows.OfType<AboutWindow>().Count();
 

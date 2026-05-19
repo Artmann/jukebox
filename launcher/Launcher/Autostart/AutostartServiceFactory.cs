@@ -6,6 +6,7 @@ public static class AutostartServiceFactory
 {
     public const string AppName = "JukeboxLauncher";
     public const string BundleId = "com.jukebox.launcher";
+    public const string DesktopFileSlug = "jukebox-launcher";
 
     public static IAutostartService Create()
     {
@@ -25,7 +26,7 @@ public static class AutostartServiceFactory
 
         if (OperatingSystem.IsLinux())
         {
-            return new LinuxAutostartService(AppName, executablePath);
+            return new LinuxAutostartService(DesktopFileSlug, executablePath);
         }
 
         return new NoopAutostartService();

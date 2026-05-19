@@ -7,19 +7,21 @@ namespace Jukebox.Launcher;
 public sealed class LauncherActions
 {
     private readonly IClassicDesktopStyleApplicationLifetime lifetime;
-    private readonly string version;
+    private readonly IVersionProvider versionProvider;
 
-    public LauncherActions(IClassicDesktopStyleApplicationLifetime lifetime, string version)
+    public LauncherActions(
+        IClassicDesktopStyleApplicationLifetime lifetime,
+        IVersionProvider versionProvider)
     {
         this.lifetime = lifetime;
-        this.version = version;
+        this.versionProvider = versionProvider;
     }
 
     public AboutWindow ShowAbout()
     {
         var window = new AboutWindow
         {
-            DataContext = new AboutViewModel(version),
+            DataContext = new AboutViewModel(versionProvider.Current),
         };
 
         window.Show();

@@ -2,13 +2,13 @@ using System.Reflection;
 
 namespace Jukebox.Launcher;
 
-public static class VersionProvider
+public sealed class AssemblyVersionProvider : IVersionProvider
 {
-    public static string Current { get; } = ResolveVersion();
+    public string Current { get; } = ResolveVersion();
 
     private static string ResolveVersion()
     {
-        var assembly = typeof(VersionProvider).Assembly;
+        var assembly = typeof(AssemblyVersionProvider).Assembly;
         var informationalVersion = assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion;

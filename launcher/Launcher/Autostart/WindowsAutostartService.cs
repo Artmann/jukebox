@@ -42,7 +42,7 @@ public sealed class WindowsAutostartService : IAutostartService
     {
         using var key = rootKey.CreateSubKey(runKeyPath, writable: true)
             ?? throw new InvalidOperationException(
-                $@"Could not open HKCU\{runKeyPath} for writing. Autostart not configured.");
+                $@"Could not open {rootKey.Name}\{runKeyPath} for writing. Autostart not configured.");
 
         if (key.GetValue(name) as string != command)
         {

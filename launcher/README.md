@@ -50,6 +50,10 @@ The launcher registers itself to start on login the first time it runs (idempote
 - **macOS** — `~/Library/LaunchAgents/com.jukebox.launcher.plist`
 - **Linux** — `~/.config/autostart/jukebox-launcher.desktop`
 
+## Dependency injection
+
+Services are registered in `Program.ConfigureServices` and resolved through `App.Services` (a `Microsoft.Extensions.DependencyInjection` container). Add new services there; in tests, swap implementations by overriding `TestAppBuilder.BuildAvaloniaApp`.
+
 ## Auto-update
 
 Not implemented yet. The project is structured so [Velopack](https://github.com/velopack/velopack) (the maintained cross-platform successor to Squirrel) can be added later by hooking `VelopackApp.Build().Run()` at the top of `Program.Main` and packaging release artifacts with `vpk`.
