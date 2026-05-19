@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless.XUnit;
 using Jukebox.Launcher;
 using Jukebox.Launcher.Views;
+using Moq;
 using Xunit;
 
 namespace Jukebox.Launcher.Tests;
@@ -14,7 +15,11 @@ public class MenuActionInvocationTests
     public void ShowAboutOpensAnAboutWindow()
     {
         var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
-        var actions = new LauncherActions(lifetime, new StubVersionProvider("7.7.7"));
+
+        var versionProvider = new Mock<IVersionProvider>();
+        versionProvider.SetupGet(provider => provider.Current).Returns("7.7.7");
+
+        var actions = new LauncherActions(lifetime, versionProvider.Object);
 
         var openBefore = lifetime.Windows.OfType<AboutWindow>().Count();
 
@@ -24,6 +29,23 @@ public class MenuActionInvocationTests
 
         Assert.Equal(openBefore + 1, openAfter);
         Assert.Equal("About Jukebox", window.Title);
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ShowAboutBindsVersionFromProvider()
+    {
+        var lifetime = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
+
+        var versionProvider = new Mock<IVersionProvider>();
+        versionProvider.SetupGet(provider => provider.Current).Returns("4.2.0");
+
+        var actions = new LauncherActions(lifetime, versionProvider.Object);
+
+        var window = actions.ShowAbout();
+
+        versionProvider.VerifyGet(provider => provider.Current, Times.AtLeastOnce);
 
         window.Close();
     }

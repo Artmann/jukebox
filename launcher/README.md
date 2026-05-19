@@ -23,7 +23,7 @@ No main window appears — look for the tray / menu-bar icon. Right-click it for
 dotnet test launcher/Launcher.sln
 ```
 
-UI tests use `Avalonia.Headless.XUnit` so they run without a display on all three OSes in CI.
+UI tests use `Avalonia.Headless.XUnit` so they run without a display on all three OSes in CI. Service collaborators are mocked with `Moq` and wired through `App.ConfigureServices` from `TestAppBuilder`.
 
 Tests live in the sibling `Launcher.Tests/` project. This is the standard .NET convention; at project granularity it satisfies the repo's "tests next to implementation" guideline.
 
