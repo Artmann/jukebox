@@ -27,6 +27,17 @@ UI tests use `Avalonia.Headless.XUnit` so they run without a display on all thre
 
 Tests live in the sibling `Launcher.Tests/` project. This is the standard .NET convention; at project granularity it satisfies the repo's "tests next to implementation" guideline.
 
+### Finding elements in UI tests
+
+Elements that tests need to interact with are tagged in AXAML with `AutomationProperties.AutomationId="..."` — the cross-platform UI Automation equivalent of `data-testid`. The `UiQueries` helper in the test project exposes `window.GetByTestId<TextBlock>("about-version")` and `QueryByTestId<T>` (nullable) so tests read like Testing Library:
+
+```csharp
+Assert.Equal("Version 1.2.3", window.GetByTestId<TextBlock>("about-version").Text);
+window.GetByTestId<Button>("about-close").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+```
+
+When adding test-targeted elements, set an `AutomationId` rather than `x:Name`. Automation IDs must be unique within a window — `GetByTestId` throws an actionable error if zero or multiple matches are found.
+
 ## Versioning
 
 The version is injected at build time from the repo root `package.json`. There is no separate version file to update for the launcher.

@@ -10,17 +10,19 @@
         WindowStartupLocation="CenterScreen">
 
     <StackPanel Margin="24" Spacing="12">
-        <TextBlock Text="Jukebox"
+        <TextBlock AutomationProperties.AutomationId="about-title"
+                   Text="Jukebox"
                    FontSize="20"
                    FontWeight="Bold" />
 
-        <TextBlock x:Name="VersionText"
+        <TextBlock AutomationProperties.AutomationId="about-version"
                    Text="{Binding VersionDisplay}" />
 
-        <TextBlock Text="Self-hosted media server"
+        <TextBlock AutomationProperties.AutomationId="about-tagline"
+                   Text="Self-hosted media server"
                    Opacity="0.7" />
 
-        <Button x:Name="CloseButton"
+        <Button AutomationProperties.AutomationId="about-close"
                 Content="Close"
                 HorizontalAlignment="Right"
                 Click="OnCloseClicked" />
