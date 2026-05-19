@@ -1,0 +1,25 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Jukebox.Launcher.App"
+             RequestedThemeVariant="Default">
+
+    <Application.Styles>
+        <FluentTheme />
+    </Application.Styles>
+
+    <TrayIcon.Icons>
+        <TrayIcons>
+            <TrayIcon Icon="/Assets/tray-icon.ico"
+                      ToolTipText="Jukebox">
+                <TrayIcon.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="About Jukebox" Click="OnAboutClicked" />
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Quit" Click="OnQuitClicked" />
+                    </NativeMenu>
+                </TrayIcon.Menu>
+            </TrayIcon>
+        </TrayIcons>
+    </TrayIcon.Icons>
+
+</Application>

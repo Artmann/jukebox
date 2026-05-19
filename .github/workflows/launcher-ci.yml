@@ -1,0 +1,39 @@
+name: Launcher CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'launcher/**'
+      - '.github/workflows/launcher-ci.yml'
+      - 'package.json'
+  push:
+    branches: [main]
+    paths:
+      - 'launcher/**'
+      - '.github/workflows/launcher-ci.yml'
+      - 'package.json'
+
+jobs:
+  build-test:
+    name: build & test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore launcher/Launcher.sln
+
+      - name: Build
+        run: dotnet build launcher/Launcher.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test launcher/Launcher.sln -c Release --no-build --no-restore

@@ -39,3 +39,8 @@ jukebox.db
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# .NET / Launcher
+launcher/**/bin/
+launcher/**/obj/
+launcher/**/*.user

@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Jukebox.Launcher.ViewModels"
+        x:DataType="vm:AboutViewModel"
+        x:Class="Jukebox.Launcher.Views.AboutWindow"
+        Title="About Jukebox"
+        Width="320"
+        Height="200"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen">
+
+    <StackPanel Margin="24" Spacing="12">
+        <TextBlock Text="Jukebox"
+                   FontSize="20"
+                   FontWeight="Bold" />
+
+        <TextBlock x:Name="VersionText"
+                   Text="{Binding VersionDisplay}" />
+
+        <TextBlock Text="Self-hosted media server"
+                   Opacity="0.7" />
+
+        <Button x:Name="CloseButton"
+                Content="Close"
+                HorizontalAlignment="Right"
+                Click="OnCloseClicked" />
+    </StackPanel>
+
+</Window>
