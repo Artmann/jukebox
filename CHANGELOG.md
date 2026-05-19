@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.4.0...jukebox-media-server-v0.5.0) (2026-05-19)
+
+
+### Features
+
+* build standalone executables on release via bun compile ([#25](https://github.com/Artmann/jukebox/issues/25)) ([16e2492](https://github.com/Artmann/jukebox/commit/16e2492c2fea8104b8f249f0d44e19c5f220e1a2))
+
+
+### Bug Fixes
+
+* episode drawer fits above toolbar with auto-scroll and clearer progress ([0b57f33](https://github.com/Artmann/jukebox/commit/0b57f335328668b58a3494851aa2d6941ee83481))
+
 ## [0.4.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.3.0...jukebox-media-server-v0.4.0) (2026-04-19)
 
 
