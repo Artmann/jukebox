@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.5.0...jukebox-media-server-v0.5.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* trigger executable build from release-please workflow ([#26](https://github.com/Artmann/jukebox/issues/26)) ([16f83ac](https://github.com/Artmann/jukebox/commit/16f83ac63f52ecc1c7e973100cc5dd5570a7e339))
+
 ## [0.5.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.4.0...jukebox-media-server-v0.5.0) (2026-05-19)
 
 
