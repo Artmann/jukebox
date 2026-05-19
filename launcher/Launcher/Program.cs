@@ -11,17 +11,14 @@ internal static class Program
     [STAThread]
     public static void Main(string[] arguments)
     {
-        var services = BuildServiceProvider();
+        App.ConfigureServices(BuildServiceProvider());
 
-        BuildAvaloniaApp(services)
+        BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(arguments, ShutdownMode.OnExplicitShutdown);
     }
 
     public static AppBuilder BuildAvaloniaApp()
-        => BuildAvaloniaApp(BuildServiceProvider());
-
-    public static AppBuilder BuildAvaloniaApp(IServiceProvider services)
-        => AppBuilder.Configure(() => new App(services))
+        => AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace();

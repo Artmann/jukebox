@@ -33,7 +33,20 @@ jobs:
         run: dotnet restore launcher/Launcher.sln
 
       - name: Build
-        run: dotnet build launcher/Launcher.sln -c Release --no-restore
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet build launcher/Launcher.sln -c Release --no-restore -clp:NoSummary 2>&1 | tee build.log
+
+      - name: Surface build errors on failure
+        if: failure() && steps.build.conclusion == 'failure'
+        shell: bash
+        run: |
+          echo "## Build errors (${{ matrix.os }})" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E '(error|Error)\s' build.log | head -100 >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Test
         run: dotnet test launcher/Launcher.sln -c Release --no-build --no-restore

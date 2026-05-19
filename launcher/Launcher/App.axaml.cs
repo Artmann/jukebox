@@ -10,18 +10,21 @@ namespace Jukebox.Launcher;
 
 public partial class App : Application
 {
+    private static IServiceProvider? configuredServices;
+
     private LauncherActions? actions;
 
-    public App() : this(BuildFallbackServices())
+    public App()
     {
-    }
-
-    public App(IServiceProvider services)
-    {
-        Services = services;
+        Services = configuredServices ?? Program.BuildServiceProvider();
     }
 
     public IServiceProvider Services { get; }
+
+    public static void ConfigureServices(IServiceProvider services)
+    {
+        configuredServices = services;
+    }
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -55,6 +58,4 @@ public partial class App : Application
     private void OnAboutClicked(object? sender, EventArgs eventArguments) => actions?.ShowAbout();
 
     private void OnQuitClicked(object? sender, EventArgs eventArguments) => actions?.Quit();
-
-    private static IServiceProvider BuildFallbackServices() => Program.BuildServiceProvider();
 }

@@ -18,9 +18,9 @@ public static class TestAppBuilder
         services.AddSingleton<IVersionProvider>(new StubVersionProvider("0.0.0-test"));
         services.AddSingleton<IAutostartService>(new NoopAutostartService());
 
-        var provider = services.BuildServiceProvider();
+        App.ConfigureServices(services.BuildServiceProvider());
 
-        return AppBuilder.Configure(() => new App(provider))
+        return AppBuilder.Configure<App>()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions());
     }
 }
