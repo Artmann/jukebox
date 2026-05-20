@@ -1,0 +1,113 @@
+name: Release Launcher
+
+on:
+  release:
+    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to attach launcher executables to (e.g. v0.4.0)
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach launcher executables to (e.g. v0.4.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Launcher (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            rid: linux-x64
+            runner: ubuntu-latest
+            archive_format: tar.gz
+            binary_name: JukeboxLauncher
+          - target: darwin-arm64
+            rid: osx-arm64
+            runner: macos-latest
+            archive_format: tar.gz
+            binary_name: JukeboxLauncher
+          - target: windows-x64
+            rid: win-x64
+            runner: windows-latest
+            archive_format: zip
+            binary_name: JukeboxLauncher.exe
+
+    steps:
+      - name: Resolve release tag
+        id: resolve_tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.resolve_tag.outputs.tag }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore launcher/Launcher/Launcher.csproj -r ${{ matrix.rid }}
+
+      - name: Publish self-contained single-file
+        shell: bash
+        run: |
+          dotnet publish launcher/Launcher/Launcher.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            --self-contained true \
+            --no-restore \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:DebugType=embedded \
+            -p:DebugSymbols=true \
+            -o publish/jukebox-launcher-${{ matrix.target }}
+
+      - name: Stage archive payload
+        shell: bash
+        run: |
+          STAGE="release-staging/jukebox-launcher-${{ matrix.target }}"
+          mkdir -p "$STAGE"
+          cp "publish/jukebox-launcher-${{ matrix.target }}/${{ matrix.binary_name }}" "$STAGE/"
+          [ -f README.md ] && cp README.md "$STAGE/"
+          [ -f LICENSE ] && cp LICENSE "$STAGE/"
+
+      - name: Package archive (Unix)
+        if: matrix.archive_format == 'tar.gz'
+        shell: bash
+        run: |
+          cd release-staging
+          chmod +x "jukebox-launcher-${{ matrix.target }}/${{ matrix.binary_name }}"
+          tar czf "../jukebox-launcher-${{ matrix.target }}.tar.gz" "jukebox-launcher-${{ matrix.target }}"
+
+      - name: Package archive (Windows)
+        if: matrix.archive_format == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "release-staging/jukebox-launcher-${{ matrix.target }}" -DestinationPath "jukebox-launcher-${{ matrix.target }}.zip"
+
+      - name: Upload archive to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.resolve_tag.outputs.tag }}
+          files:
+            'jukebox-launcher-${{ matrix.target }}.${{ matrix.archive_format
+            }}'
+          fail_on_unmatched_files: true
