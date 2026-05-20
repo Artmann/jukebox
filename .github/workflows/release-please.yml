@@ -58,3 +58,13 @@ jobs:
       contents: write
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
+
+  release-launcher:
+    name: Release Launcher
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/release-launcher.yml
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}

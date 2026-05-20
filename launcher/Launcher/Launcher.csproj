@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <RootNamespace>Jukebox.Launcher</RootNamespace>
+    <AssemblyName>JukeboxLauncher</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.2.*" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.*" />
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <RepoRootPackageJson>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', '..', '..', 'package.json'))))</RepoRootPackageJson>
+  </PropertyGroup>
+
+  <Target Name="ReadVersionFromPackageJson" BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo;CoreCompile">
+    <Error Condition="!Exists('$(RepoRootPackageJson)')"
+           Text="package.json not found at $(RepoRootPackageJson). The launcher must be built from inside the jukebox repo so the version can be sourced from the root package.json." />
+
+    <ReadLinesFromFile File="$(RepoRootPackageJson)">
+      <Output TaskParameter="Lines" ItemName="PackageJsonLines" />
+    </ReadLinesFromFile>
+
+    <PropertyGroup>
+      <PackageJsonText>@(PackageJsonLines, '%0A')</PackageJsonText>
+      <PackageJsonVersion>$([System.Text.RegularExpressions.Regex]::Match($(PackageJsonText), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</PackageJsonVersion>
+    </PropertyGroup>
+
+    <Error Condition="'$(PackageJsonVersion)' == ''"
+           Text='Could not parse a &quot;version&quot; field from $(RepoRootPackageJson). Expected something like: &quot;version&quot;: &quot;0.5.1&quot;.' />
+
+    <PropertyGroup>
+      <PackageJsonVersionCore>$([System.Text.RegularExpressions.Regex]::Match($(PackageJsonVersion), '^\d+\.\d+\.\d+').Value)</PackageJsonVersionCore>
+      <Version>$(PackageJsonVersion)</Version>
+      <InformationalVersion>$(PackageJsonVersion)</InformationalVersion>
+      <AssemblyVersion>$(PackageJsonVersionCore).0</AssemblyVersion>
+      <FileVersion>$(PackageJsonVersionCore).0</FileVersion>
+    </PropertyGroup>
+
+    <Message Importance="high" Text="Launcher version: $(Version) (assembly $(AssemblyVersion))" />
+  </Target>
+
+</Project>
