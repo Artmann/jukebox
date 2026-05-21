@@ -11,7 +11,7 @@ streaming your personal movie and TV show collection.
   rich metadata
 - **Movies and TV shows** — automatic detection of episodes, seasons, and series
 - **Automatic metadata** — fetches titles, posters, backdrops, ratings, and
-  trailers from TMDB
+  trailers automatically. No API key required.
 - **Video streaming with seeking** — stream any common video format with full
   range-request support
 - **Watch progress** — automatically saves and resumes playback position
@@ -21,8 +21,9 @@ streaming your personal movie and TV show collection.
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) 18 or later
-- A free [TMDB API key](https://www.themoviedb.org/settings/api)
+- [Node.js](https://nodejs.org/) 18 or later (or [Bun](https://bun.sh/))
+- [ffmpeg](https://ffmpeg.org/) on your `PATH` (used for media probing and
+  on-the-fly transcoding)
 
 ## Installation
 
@@ -54,34 +55,30 @@ bunx jukebox-media-server@latest
 
    Then open `http://localhost:1990` in your browser.
 
-2. **Add your TMDB API key**
+2. **Add your library**
 
-   On first launch, the setup screen will ask for your TMDB API key. You can
-   create one for free at
-   [themoviedb.org](https://www.themoviedb.org/settings/api).
+   On first launch, the setup screen asks you to point Jukebox at the folders
+   containing your movies and TV shows. It will recursively scan for video
+   files, parse titles and years from filenames, and fetch metadata
+   automatically — no API key needed.
 
-3. **Scan your library**
-
-   Point Jukebox at the folder containing your movies and TV shows. It will
-   recursively scan for video files, parse titles and years from filenames, and
-   fetch metadata from TMDB.
-
-4. **Watch**
+3. **Watch**
 
    That's it — your library is ready.
 
 ## Configuration
 
-Jukebox stores its configuration and database in `~/.jukebox/`:
+Jukebox stores its data in `~/.jukebox/`:
 
-- `~/.jukebox/config.json` — your TMDB API key and library paths
-- `~/.jukebox/jukebox.db` — SQLite database with metadata and watch progress
+- `~/.jukebox/jukebox.db` — SQLite database with library paths, metadata, and
+  watch progress
 
 Environment variables:
 
-| Variable | Description | Default |
-| -------- | ----------- | ------- |
-| `PORT`   | Server port | `1990`  |
+| Variable                   | Description                            | Default                                          |
+| -------------------------- | -------------------------------------- | ------------------------------------------------ |
+| `PORT`                     | Server port                            | `1990`                                           |
+| `JUKEBOX_METADATA_API_URL` | Override the metadata service endpoint | `https://movie-data-api.artgaard.workers.dev` |
 
 ## Casting
 
