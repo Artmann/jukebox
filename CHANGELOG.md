@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.5.1...jukebox-media-server-v0.5.2) (2026-05-21)
+
+
+### Documentation
+
+* update README to remove TMDB API key requirement ([#29](https://github.com/Artmann/jukebox/issues/29)) ([bf0f088](https://github.com/Artmann/jukebox/commit/bf0f08810c0078f217691489e84e656e3d5c3d64))
+
 ## [0.5.1](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.5.0...jukebox-media-server-v0.5.1) (2026-05-19)
 
 
