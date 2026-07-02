@@ -164,6 +164,25 @@ public class AboutViewModelTests
         Assert.Equal("Server running", viewModel.ServerStateDisplay);
     }
 
+    [Theory]
+    [InlineData(ServerProcessState.NotInstalled, "detail is ignored", "")]
+    [InlineData(ServerProcessState.Starting, "detail is ignored", "Server starting…")]
+    [InlineData(ServerProcessState.Running, "detail is ignored", "Server running")]
+    [InlineData(ServerProcessState.Restarting, "detail is ignored", "Server restarting…")]
+    [InlineData(ServerProcessState.Stopped, "detail is ignored", "Server stopped")]
+    [InlineData(ServerProcessState.Failed, "Couldn't start the server: nope.", "Couldn't start the server: nope.")]
+    public void MapsEveryServerStateToItsDisplayText(
+        ServerProcessState state,
+        string detail,
+        string expected)
+    {
+        var manager = new FakeServerProcessManager(state, detail);
+
+        using var viewModel = new AboutViewModel("1.0.0", null, null, null, null, manager);
+
+        Assert.Equal(expected, viewModel.ServerStateDisplay);
+    }
+
     internal sealed class FakeServerProcessManager : IServerProcessManager
     {
         public FakeServerProcessManager(ServerProcessState state, string stateDetail)
