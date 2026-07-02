@@ -9,10 +9,12 @@ namespace Jukebox.Launcher.ViewModels;
 
 public sealed class AboutViewModel : INotifyPropertyChanged, IDisposable
 {
+    private readonly IServerProcessManager? processManager;
     private readonly IUpdateStatusBus? statusBus;
 
     private string serverInstalled;
     private string serverLatest;
+    private string serverState;
     private string status;
     private string launcherLatest;
 
@@ -26,7 +28,8 @@ public sealed class AboutViewModel : INotifyPropertyChanged, IDisposable
         string? launcherLatest,
         InstalledServer? installedServer,
         LatestRelease? latestServer,
-        IUpdateStatusBus? statusBus)
+        IUpdateStatusBus? statusBus,
+        IServerProcessManager? processManager = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(launcherInstalled);
 
@@ -34,14 +37,23 @@ public sealed class AboutViewModel : INotifyPropertyChanged, IDisposable
         this.launcherLatest = FormatLauncherLatest(launcherLatest);
         serverInstalled = FormatServerInstalled(installedServer);
         serverLatest = FormatServerLatest(latestServer);
+        serverState = processManager is null
+            ? string.Empty
+            : FormatServerState(processManager.State, processManager.StateDetail);
         status = statusBus?.Status ?? string.Empty;
 
+        this.processManager = processManager;
         this.statusBus = statusBus;
 
         if (statusBus is not null)
         {
             statusBus.StatusChanged += OnStatusChanged;
             statusBus.LatestServerChanged += OnLatestServerChanged;
+        }
+
+        if (processManager is not null)
+        {
+            processManager.StateChanged += OnServerStateChanged;
         }
     }
 
@@ -57,6 +69,8 @@ public sealed class AboutViewModel : INotifyPropertyChanged, IDisposable
 
     public string ServerLatestDisplay => serverLatest;
 
+    public string ServerStateDisplay => serverState;
+
     public string StatusDisplay => status;
 
     public string Version => LauncherInstalled;
@@ -69,6 +83,11 @@ public sealed class AboutViewModel : INotifyPropertyChanged, IDisposable
         {
             statusBus.StatusChanged -= OnStatusChanged;
             statusBus.LatestServerChanged -= OnLatestServerChanged;
+        }
+
+        if (processManager is not null)
+        {
+            processManager.StateChanged -= OnServerStateChanged;
         }
     }
 
@@ -87,6 +106,20 @@ public sealed class AboutViewModel : INotifyPropertyChanged, IDisposable
         return latest is null ? string.Empty : $"latest {latest.Version}";
     }
 
+    private static string FormatServerState(ServerProcessState state, string detail)
+    {
+        return state switch
+        {
+            ServerProcessState.Failed => detail,
+            ServerProcessState.NotInstalled => string.Empty,
+            ServerProcessState.Restarting => "Server restarting…",
+            ServerProcessState.Running => "Server running",
+            ServerProcessState.Starting => "Server starting…",
+            ServerProcessState.Stopped => "Server stopped",
+            _ => string.Empty,
+        };
+    }
+
     private void OnLatestServerChanged(object? sender, LatestServerChangedEventArgs eventArguments)
     {
         var formattedServer = FormatServerLatest(eventArguments.Latest);
@@ -95,6 +128,17 @@ public sealed class AboutViewModel : INotifyPropertyChanged, IDisposable
         {
             serverLatest = formattedServer;
             RaisePropertyChanged(nameof(ServerLatestDisplay));
+        });
+    }
+
+    private void OnServerStateChanged(object? sender, ServerProcessStateChangedEventArgs eventArguments)
+    {
+        var formattedState = FormatServerState(eventArguments.State, eventArguments.Detail);
+
+        RunOnUiThread(() =>
+        {
+            serverState = formattedState;
+            RaisePropertyChanged(nameof(ServerStateDisplay));
         });
     }
 

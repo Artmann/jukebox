@@ -5,7 +5,7 @@
         x:Class="Jukebox.Launcher.Views.AboutWindow"
         Title="About Jukebox"
         Width="360"
-        Height="280"
+        Height="300"
         CanResize="False"
         WindowStartupLocation="CenterScreen">
 
@@ -40,6 +40,11 @@
 
         <TextBlock AutomationProperties.AutomationId="about-status"
                    Text="{Binding StatusDisplay}"
+                   TextWrapping="Wrap"
+                   Opacity="0.7" />
+
+        <TextBlock AutomationProperties.AutomationId="about-server-state"
+                   Text="{Binding ServerStateDisplay}"
                    TextWrapping="Wrap"
                    Opacity="0.7" />
 

@@ -96,4 +96,26 @@ public class AboutWindowRenderingTests
 
         Assert.True(closed);
     }
+
+    [AvaloniaFact]
+    public void ServerStateLineUpdatesWhenManagerRaisesEvent()
+    {
+        var manager = new AboutViewModelTests.FakeServerProcessManager(
+            ServerProcessState.Starting,
+            "Server starting…");
+        var viewModel = new AboutViewModel("1.0.0", null, null, null, null, manager);
+
+        var window = new AboutWindow { DataContext = viewModel };
+
+        window.Show();
+
+        Assert.Equal("Server starting…", window.GetByTestId<TextBlock>("about-server-state").Text);
+
+        manager.Raise(ServerProcessState.Running, "Server running");
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Server running", window.GetByTestId<TextBlock>("about-server-state").Text);
+
+        window.Close();
+    }
 }
