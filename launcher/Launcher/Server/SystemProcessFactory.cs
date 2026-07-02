@@ -57,12 +57,23 @@ public sealed class SystemProcessFactory : IProcessFactory
             },
         };
 
-        var logStream = new FileStream(
-            startInfo.LogFilePath,
-            FileMode.Append,
-            FileAccess.Write,
-            FileShare.Read);
-        var logWriter = new StreamWriter(logStream) { AutoFlush = true };
+        StreamWriter logWriter;
+
+        try
+        {
+            var logStream = new FileStream(
+                startInfo.LogFilePath,
+                FileMode.Append,
+                FileAccess.Write,
+                FileShare.Read);
+            logWriter = new StreamWriter(logStream) { AutoFlush = true };
+        }
+        catch
+        {
+            process.Dispose();
+            throw;
+        }
+
         var logLock = new object();
 
         process.OutputDataReceived += (_, eventArguments) =>
@@ -88,7 +99,7 @@ public sealed class SystemProcessFactory : IProcessFactory
         process.BeginErrorReadLine();
         process.BeginOutputReadLine();
 
-        return new SystemManagedProcess(process, logWriter);
+        return new SystemManagedProcess(process, logWriter, logLock);
     }
 
     private static void AppendLine(StreamWriter logWriter, object logLock, string? line)
@@ -104,7 +115,7 @@ public sealed class SystemProcessFactory : IProcessFactory
             {
                 logWriter.WriteLine(line);
             }
-            catch (ObjectDisposedException)
+            catch (Exception error) when (error is IOException or ObjectDisposedException)
             {
             }
         }
@@ -112,13 +123,15 @@ public sealed class SystemProcessFactory : IProcessFactory
 
     private sealed class SystemManagedProcess : IManagedProcess
     {
+        private readonly object logLock;
         private readonly StreamWriter logWriter;
         private readonly Process process;
 
-        public SystemManagedProcess(Process process, StreamWriter logWriter)
+        public SystemManagedProcess(Process process, StreamWriter logWriter, object logLock)
         {
             this.process = process;
             this.logWriter = logWriter;
+            this.logLock = logLock;
         }
 
         public int Id => process.Id;
@@ -126,7 +139,11 @@ public sealed class SystemProcessFactory : IProcessFactory
         public void Dispose()
         {
             process.Dispose();
-            logWriter.Dispose();
+
+            lock (logLock)
+            {
+                logWriter.Dispose();
+            }
         }
 
         public void Kill()
@@ -178,6 +195,14 @@ public sealed class SystemProcessFactory : IProcessFactory
         public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
         {
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+            // Process.WaitForExitAsync does not guarantee that redirected output has
+            // finished being processed, unlike the parameterless synchronous
+            // WaitForExit() overload. The process has already exited at this point, so
+            // this call returns immediately, but it guarantees the OutputDataReceived
+            // and ErrorDataReceived handlers have drained before we return, making it
+            // safe to dispose the log writer afterward.
+            process.WaitForExit();
 
             return process.ExitCode;
         }
