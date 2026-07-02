@@ -246,12 +246,18 @@ public sealed class ServerProcessManager : IServerProcessManager, IServerProcess
         {
             var executablePath = processFactory.GetExecutablePath(processId);
 
-            if (executablePath is not null
-                && executablePath.StartsWith(
-                    installation.InstallDirectory,
-                    StringComparison.OrdinalIgnoreCase))
+            if (executablePath is not null)
             {
-                processFactory.KillById(processId);
+                var installRoot = Path.TrimEndingDirectorySeparator(
+                    Path.GetFullPath(installation.InstallDirectory));
+                var fullExecutablePath = Path.GetFullPath(executablePath);
+
+                if (fullExecutablePath.StartsWith(
+                        installRoot + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    processFactory.KillById(processId);
+                }
             }
         }
 
@@ -289,6 +295,8 @@ public sealed class ServerProcessManager : IServerProcessManager, IServerProcess
         {
             return;
         }
+
+        process.Dispose();
 
         lock (stateLock)
         {
