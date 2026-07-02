@@ -44,6 +44,17 @@ internal static class Program
             new GitHubReleaseClient(serviceProvider.GetRequiredService<HttpClient>()));
         services.AddSingleton<IPlatformAssetSelector>(_ => new PlatformAssetSelector());
         services.AddSingleton<IServerInstallation>(_ => ServerInstallationFactory.Create());
+        services.AddSingleton<IServerExecutableLocator>(serviceProvider =>
+            new ServerExecutableLocator(serviceProvider.GetRequiredService<IServerInstallation>()));
+        services.AddSingleton<IProcessFactory, SystemProcessFactory>();
+        services.AddSingleton<ServerProcessManager>(serviceProvider => new ServerProcessManager(
+            serviceProvider.GetRequiredService<IServerInstallation>(),
+            serviceProvider.GetRequiredService<IServerExecutableLocator>(),
+            serviceProvider.GetRequiredService<IProcessFactory>()));
+        services.AddSingleton<IServerProcessManager>(serviceProvider =>
+            serviceProvider.GetRequiredService<ServerProcessManager>());
+        services.AddSingleton<IServerProcessGate>(serviceProvider =>
+            serviceProvider.GetRequiredService<ServerProcessManager>());
         services.AddSingleton<IUpdateStatusBus, UpdateStatusBus>();
         services.AddSingleton<IArchiveDownloader>(serviceProvider =>
             new HttpArchiveDownloader(serviceProvider.GetRequiredService<HttpClient>()));
@@ -52,7 +63,8 @@ internal static class Program
             serviceProvider.GetRequiredService<IPlatformAssetSelector>(),
             serviceProvider.GetRequiredService<IServerInstallation>(),
             serviceProvider.GetRequiredService<IArchiveDownloader>(),
-            serviceProvider.GetRequiredService<IUpdateStatusBus>()));
+            serviceProvider.GetRequiredService<IUpdateStatusBus>(),
+            serviceProvider.GetRequiredService<IServerProcessGate>()));
     }
 
     private static HttpClient CreateHttpClient(IServiceProvider serviceProvider)

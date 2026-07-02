@@ -9,6 +9,7 @@ namespace Jukebox.Launcher;
 public sealed class LauncherActions
 {
     private readonly IClassicDesktopStyleApplicationLifetime lifetime;
+    private readonly IServerProcessManager? processManager;
     private readonly IServerInstallation? serverInstallation;
     private readonly IUpdateStatusBus? statusBus;
     private readonly IVersionProvider versionProvider;
@@ -24,12 +25,14 @@ public sealed class LauncherActions
         IClassicDesktopStyleApplicationLifetime lifetime,
         IVersionProvider versionProvider,
         IServerInstallation? serverInstallation,
-        IUpdateStatusBus? statusBus)
+        IUpdateStatusBus? statusBus,
+        IServerProcessManager? processManager = null)
     {
         this.lifetime = lifetime;
         this.versionProvider = versionProvider;
         this.serverInstallation = serverInstallation;
         this.statusBus = statusBus;
+        this.processManager = processManager;
     }
 
     public AboutWindow ShowAbout()
@@ -44,7 +47,8 @@ public sealed class LauncherActions
                 latestServer?.Version,
                 installedServer,
                 latestServer,
-                statusBus),
+                statusBus,
+                processManager),
         };
 
         window.Show();
