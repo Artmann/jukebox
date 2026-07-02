@@ -16,12 +16,15 @@ public class SystemProcessFactoryTests
         var logPath = Path.Combine(workspace.Path, "server.log");
         var factory = new SystemProcessFactory();
 
-        using var process = factory.Start(BuildEchoStartInfo(workspace.Path, logPath, "hello-from-server"));
+        var process = factory.Start(BuildEchoStartInfo(workspace.Path, logPath, "hello-from-server"));
 
         var exitCode = await process.WaitForExitAsync(
             new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
 
         Assert.Equal(0, exitCode);
+
+        // Release the log writer so the file can be opened for reading below.
+        process.Dispose();
 
         // Output pumping is asynchronous; give it a moment to flush.
         await WaitForAsync(() => File.Exists(logPath)
