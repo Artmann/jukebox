@@ -44,7 +44,7 @@ public sealed class LauncherActions
         {
             DataContext = new AboutViewModel(
                 versionProvider.Current,
-                latestServer?.Version,
+                null,
                 installedServer,
                 latestServer,
                 statusBus,
