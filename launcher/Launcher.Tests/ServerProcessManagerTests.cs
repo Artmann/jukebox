@@ -222,6 +222,151 @@ public class ServerProcessManagerTests
             states);
     }
 
+    [Fact]
+    public async Task RestartsAfterUnexpectedExit()
+    {
+        using var workspace = new Workspace();
+        var manager = workspace.BuildManager();
+
+        await manager.StartAsync(CancellationToken.None);
+
+        workspace.Factory.Started[0].Exit(1);
+
+        await WaitForAsync(() => workspace.Factory.Started.Count == 2);
+        await WaitForAsync(() => manager.State == ServerProcessState.Running);
+
+        Assert.Equal(
+            workspace.Factory.Started[1].Id.ToString(),
+            File.ReadAllText(workspace.PidFilePath).Trim());
+        Assert.Equal(new[] { TimeSpan.FromSeconds(1) }, workspace.RecordedDelays);
+    }
+
+    [Fact]
+    public async Task KeepsBackoffLowWhenCrashesAreSpreadOut()
+    {
+        using var workspace = new Workspace();
+
+        // Advance the clock 3 minutes per crash so the give-up window never fills.
+        var now = new DateTimeOffset(2026, 7, 2, 12, 0, 0, TimeSpan.Zero);
+        workspace.NowProvider = () => now;
+
+        var manager = workspace.BuildManager();
+
+        await manager.StartAsync(CancellationToken.None);
+
+        for (var crash = 0; crash < 6; crash++)
+        {
+            var processCountBefore = workspace.Factory.Started.Count;
+
+            now = now.AddMinutes(3);
+            workspace.Factory.Started[^1].Exit(1);
+
+            await WaitForAsync(() => workspace.Factory.Started.Count == processCountBefore + 1);
+        }
+
+        Assert.Equal(
+            new[]
+            {
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(1),
+            },
+            workspace.RecordedDelays);
+    }
+
+    [Fact]
+    public async Task GivesUpAfterFiveCrashesInWindow()
+    {
+        using var workspace = new Workspace();
+        var manager = workspace.BuildManager();
+
+        await manager.StartAsync(CancellationToken.None);
+
+        // The fixed clock keeps every crash inside the 2-minute window.
+        for (var crash = 0; crash < 4; crash++)
+        {
+            var processCountBefore = workspace.Factory.Started.Count;
+
+            workspace.Factory.Started[^1].Exit(1);
+
+            await WaitForAsync(() => workspace.Factory.Started.Count == processCountBefore + 1);
+        }
+
+        workspace.Factory.Started[^1].Exit(1);
+
+        await WaitForAsync(() => manager.State == ServerProcessState.Failed);
+
+        Assert.Equal(5, workspace.Factory.Started.Count);
+        Assert.Equal(
+            "The server keeps crashing and has been stopped. "
+            + $"Check the log at {workspace.LogFilePath}, "
+            + "then restart the launcher to try again.",
+            manager.StateDetail);
+        Assert.Equal(
+            new[]
+            {
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(2),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(15),
+            },
+            workspace.RecordedDelays);
+        Assert.False(File.Exists(workspace.PidFilePath));
+    }
+
+    [Fact]
+    public async Task DeliberateStopSuppressesRestart()
+    {
+        using var workspace = new Workspace();
+        var manager = workspace.BuildManager();
+
+        await manager.StartAsync(CancellationToken.None);
+        await manager.StopAsync(CancellationToken.None);
+
+        await Task.Delay(100);
+
+        Assert.Single(workspace.Factory.Started);
+        Assert.Equal(ServerProcessState.Stopped, manager.State);
+    }
+
+    [Fact]
+    public async Task FailsWhenRestartSpawnThrows()
+    {
+        using var workspace = new Workspace();
+        var manager = workspace.BuildManager();
+
+        await manager.StartAsync(CancellationToken.None);
+
+        workspace.Factory.StartError = new InvalidOperationException("file locked");
+        workspace.Factory.Started[0].Exit(1);
+
+        await WaitForAsync(() => manager.State == ServerProcessState.Failed);
+
+        Assert.Equal(
+            $"Couldn't start the server: file locked. Check the log at {workspace.LogFilePath}.",
+            manager.StateDetail);
+    }
+
+    [Fact]
+    public async Task GateStopAndStartRoundTrip()
+    {
+        using var workspace = new Workspace();
+        var manager = workspace.BuildManager();
+
+        await manager.StartAsync(CancellationToken.None);
+        await ((IServerProcessGate)manager).StopForUpdateAsync(CancellationToken.None);
+
+        Assert.Equal(ServerProcessState.Stopped, manager.State);
+
+        await ((IServerProcessGate)manager).StartAfterUpdateAsync(CancellationToken.None);
+
+        Assert.Equal(ServerProcessState.Running, manager.State);
+        Assert.Equal(2, workspace.Factory.Started.Count);
+    }
+
     private static async Task WaitForAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
