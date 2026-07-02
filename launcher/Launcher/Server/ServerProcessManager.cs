@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Threading;
@@ -8,6 +9,18 @@ namespace Jukebox.Launcher.Server;
 
 public sealed class ServerProcessManager : IServerProcessManager, IServerProcessGate
 {
+    private static readonly TimeSpan CrashWindow = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan[] RestartDelays =
+    {
+        TimeSpan.FromSeconds(1),
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(15),
+        TimeSpan.FromSeconds(30),
+    };
+
+    private const int MaxCrashesInWindow = 5;
+
     private readonly Func<TimeSpan, CancellationToken, Task> delay;
     private readonly IServerExecutableLocator executableLocator;
     private readonly IServerInstallation installation;
@@ -280,33 +293,94 @@ public sealed class ServerProcessManager : IServerProcessManager, IServerProcess
         string executablePath,
         CancellationToken cancellationToken)
     {
-        int exitCode;
+        var crashTimes = new List<DateTimeOffset>();
+        var current = process;
 
-        try
+        while (true)
         {
-            exitCode = await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
+            int exitCode;
 
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return;
+            try
+            {
+                exitCode = await current.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            current.Dispose();
+
+            lock (stateLock)
+            {
+                currentProcess = null;
+            }
+
+            var now = nowProvider();
+
+            crashTimes.Add(now);
+            crashTimes.RemoveAll(crashTime => now - crashTime > CrashWindow);
+
+            if (crashTimes.Count >= MaxCrashesInWindow)
+            {
+                DeletePidFile();
+                SetState(
+                    ServerProcessState.Failed,
+                    "The server keeps crashing and has been stopped. "
+                    + $"Check the log at {LogFilePath}, "
+                    + "then restart the launcher to try again.");
+
+                return;
+            }
+
+            var delayIndex = Math.Min(crashTimes.Count - 1, RestartDelays.Length - 1);
+
+            SetState(
+                ServerProcessState.Restarting,
+                $"Server exited unexpectedly (code {exitCode}). Restarting…");
+
+            try
+            {
+                await delay(RestartDelays[delayIndex], cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            try
+            {
+                current = processFactory.Start(BuildStartInfo(executablePath));
+            }
+            catch (Exception error)
+            {
+                DeletePidFile();
+                SetState(
+                    ServerProcessState.Failed,
+                    $"Couldn't start the server: {error.Message}. "
+                    + $"Check the log at {LogFilePath}.");
+
+                return;
+            }
+
+            lock (stateLock)
+            {
+                currentProcess = current;
+            }
+
+            WritePidFile(current.Id);
+            SetState(ServerProcessState.Running, "Server running");
         }
-
-        process.Dispose();
-
-        lock (stateLock)
-        {
-            currentProcess = null;
-        }
-
-        DeletePidFile();
-        SetState(
-            ServerProcessState.Stopped,
-            $"Server exited unexpectedly (code {exitCode}).");
     }
 
     private async Task TerminateAsync(IManagedProcess process)
