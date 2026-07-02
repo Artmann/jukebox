@@ -14,6 +14,7 @@ public sealed class ServerUpdater : IServerUpdater
     private readonly IArchiveDownloader downloader;
     private readonly IServerInstallation installation;
     private readonly IPlatformAssetSelector platformSelector;
+    private readonly IServerProcessGate? processGate;
     private readonly IGitHubReleaseClient releaseClient;
     private readonly IUpdateStatusBus statusBus;
     private readonly Func<DateTimeOffset> nowProvider;
@@ -23,8 +24,16 @@ public sealed class ServerUpdater : IServerUpdater
         IPlatformAssetSelector platformSelector,
         IServerInstallation installation,
         IArchiveDownloader downloader,
-        IUpdateStatusBus statusBus)
-        : this(releaseClient, platformSelector, installation, downloader, statusBus, () => DateTimeOffset.UtcNow)
+        IUpdateStatusBus statusBus,
+        IServerProcessGate? processGate = null)
+        : this(
+            releaseClient,
+            platformSelector,
+            installation,
+            downloader,
+            statusBus,
+            () => DateTimeOffset.UtcNow,
+            processGate)
     {
     }
 
@@ -34,7 +43,8 @@ public sealed class ServerUpdater : IServerUpdater
         IServerInstallation installation,
         IArchiveDownloader downloader,
         IUpdateStatusBus statusBus,
-        Func<DateTimeOffset> nowProvider)
+        Func<DateTimeOffset> nowProvider,
+        IServerProcessGate? processGate = null)
     {
         ArgumentNullException.ThrowIfNull(releaseClient);
         ArgumentNullException.ThrowIfNull(platformSelector);
@@ -49,6 +59,7 @@ public sealed class ServerUpdater : IServerUpdater
         this.downloader = downloader;
         this.statusBus = statusBus;
         this.nowProvider = nowProvider;
+        this.processGate = processGate;
     }
 
     public async Task<ServerUpdateResult> UpdateIfNewerAsync(CancellationToken cancellationToken)
@@ -166,30 +177,48 @@ public sealed class ServerUpdater : IServerUpdater
         Directory.CreateDirectory(newDirectory);
         ExtractArchive(archivePath, newDirectory);
 
-        if (Directory.Exists(installDirectory))
+        var gate = processGate;
+
+        if (gate is not null)
         {
-            Directory.Move(installDirectory, oldDirectory);
+            statusBus.Publish($"Restarting server for update to {latest.Version}…");
+            await gate.StopForUpdateAsync(cancellationToken).ConfigureAwait(false);
         }
 
         try
         {
-            Directory.Move(newDirectory, installDirectory);
-        }
-        catch
-        {
-            if (Directory.Exists(oldDirectory))
+            if (Directory.Exists(installDirectory))
             {
-                TryRestore(oldDirectory, installDirectory);
+                Directory.Move(installDirectory, oldDirectory);
             }
 
-            throw;
+            try
+            {
+                Directory.Move(newDirectory, installDirectory);
+            }
+            catch
+            {
+                if (Directory.Exists(oldDirectory))
+                {
+                    TryRestore(oldDirectory, installDirectory);
+                }
+
+                throw;
+            }
+
+            installation.WriteInstalled(
+                new InstalledServer(latest.Version, latest.Tag, nowProvider()));
+
+            CleanDirectory(oldDirectory);
+            CleanDirectory(downloadDirectory);
         }
-
-        installation.WriteInstalled(
-            new InstalledServer(latest.Version, latest.Tag, nowProvider()));
-
-        CleanDirectory(oldDirectory);
-        CleanDirectory(downloadDirectory);
+        finally
+        {
+            if (gate is not null)
+            {
+                await gate.StartAfterUpdateAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+        }
     }
 
     private static void ExtractArchive(string archivePath, string destinationDirectory)
