@@ -42,14 +42,57 @@ public partial class App : Application
             var versionProvider = Services.GetRequiredService<IVersionProvider>();
             var serverInstallation = Services.GetService<IServerInstallation>();
             var statusBus = Services.GetService<IUpdateStatusBus>();
+            var processManager = Services.GetService<IServerProcessManager>();
 
-            actions = new LauncherActions(desktop, versionProvider, serverInstallation, statusBus);
+            actions = new LauncherActions(
+                desktop,
+                versionProvider,
+                serverInstallation,
+                statusBus,
+                processManager);
 
             TryEnableAutostart();
+            StartServer(desktop, processManager);
             StartBackgroundUpdateCheck(desktop);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static void StartServer(
+        IClassicDesktopStyleApplicationLifetime desktop,
+        IServerProcessManager? processManager)
+    {
+        if (processManager is null)
+        {
+            return;
+        }
+
+        desktop.ShutdownRequested += (_, _) =>
+        {
+            try
+            {
+                processManager
+                    .StopAsync(CancellationToken.None)
+                    .Wait(TimeSpan.FromSeconds(5));
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine($"Could not stop the server cleanly: {error.Message}");
+            }
+        };
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await processManager.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine($"Could not start the server: {error.Message}");
+            }
+        });
     }
 
     private void StartBackgroundUpdateCheck(IClassicDesktopStyleApplicationLifetime desktop)
