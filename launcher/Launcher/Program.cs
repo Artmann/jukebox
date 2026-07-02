@@ -57,7 +57,7 @@ internal static class Program
             serviceProvider.GetRequiredService<ServerProcessManager>());
         services.AddSingleton<IUpdateStatusBus, UpdateStatusBus>();
         services.AddSingleton<IArchiveDownloader>(serviceProvider =>
-            new HttpArchiveDownloader(serviceProvider.GetRequiredService<HttpClient>()));
+            new HttpArchiveDownloader(CreateDownloadHttpClient(serviceProvider)));
         services.AddSingleton<IServerUpdater>(serviceProvider => new ServerUpdater(
             serviceProvider.GetRequiredService<IGitHubReleaseClient>(),
             serviceProvider.GetRequiredService<IPlatformAssetSelector>(),
@@ -73,6 +73,20 @@ internal static class Program
         var client = new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(30),
+        };
+
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"JukeboxLauncher/{version}");
+        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+
+        return client;
+    }
+
+    private static HttpClient CreateDownloadHttpClient(IServiceProvider serviceProvider)
+    {
+        var version = serviceProvider.GetRequiredService<IVersionProvider>().Current;
+        var client = new HttpClient
+        {
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
         };
 
         client.DefaultRequestHeaders.UserAgent.ParseAdd($"JukeboxLauncher/{version}");
