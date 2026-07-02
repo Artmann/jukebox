@@ -163,6 +163,35 @@ public class ServerProcessManagerTests
     }
 
     [Fact]
+    public async Task LeavesProcessInSiblingDirectoryWithSharedPrefixAlone()
+    {
+        using var workspace = new Workspace();
+
+        File.WriteAllText(workspace.PidFilePath, "4242");
+        workspace.Factory.ExecutablePaths[4242] =
+            workspace.InstallDirectory + "-evil" + Path.DirectorySeparatorChar + "jukebox-media-server";
+
+        var manager = workspace.BuildManager();
+
+        await manager.StartAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(4242, workspace.Factory.Killed);
+    }
+
+    [Fact]
+    public async Task UnexpectedExitDisposesTheProcess()
+    {
+        using var workspace = new Workspace();
+        var manager = workspace.BuildManager();
+
+        await manager.StartAsync(CancellationToken.None);
+
+        workspace.Factory.Started[0].Exit(1);
+
+        await WaitForAsync(() => workspace.Factory.Started[0].Disposed);
+    }
+
+    [Fact]
     public async Task IgnoresMalformedPidFile()
     {
         using var workspace = new Workspace();
@@ -191,6 +220,21 @@ public class ServerProcessManagerTests
         Assert.Equal(
             new[] { ServerProcessState.Starting, ServerProcessState.Running },
             states);
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException("Condition was not met within 5 seconds.");
+            }
+
+            await Task.Delay(10);
+        }
     }
 
     internal sealed class Workspace : IDisposable
@@ -301,12 +345,15 @@ public class ServerProcessManagerTests
 
         public int Id { get; }
 
+        public bool Disposed { get; private set; }
+
         public bool KillCalled { get; private set; }
 
         public bool TerminateSignalled { get; private set; }
 
         public void Dispose()
         {
+            Disposed = true;
         }
 
         public void Exit(int code) => exit.TrySetResult(code);
