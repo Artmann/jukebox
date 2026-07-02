@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Jukebox.Launcher.Server;
 using Jukebox.Launcher.Updates;
 using Jukebox.Launcher.ViewModels;
@@ -108,5 +110,83 @@ public class AboutViewModelTests
         bus.Publish("After dispose");
 
         Assert.Equal(string.Empty, viewModel.StatusDisplay);
+    }
+
+    [Fact]
+    public void ShowsServerStateFromManager()
+    {
+        var manager = new FakeServerProcessManager(
+            ServerProcessState.Running,
+            "Server running");
+
+        using var viewModel = new AboutViewModel("1.0.0", null, null, null, null, manager);
+
+        Assert.Equal("Server running", viewModel.ServerStateDisplay);
+    }
+
+    [Fact]
+    public void ShowsEmptyServerStateWithoutManager()
+    {
+        using var viewModel = new AboutViewModel("1.0.0", null, null, null, null);
+
+        Assert.Equal(string.Empty, viewModel.ServerStateDisplay);
+    }
+
+    [Fact]
+    public void UpdatesServerStateWhenManagerRaisesEvent()
+    {
+        var manager = new FakeServerProcessManager(
+            ServerProcessState.Starting,
+            "Server starting…");
+
+        using var viewModel = new AboutViewModel("1.0.0", null, null, null, null, manager);
+
+        manager.Raise(ServerProcessState.Failed, "Couldn't start the server: nope. Check the log at /tmp/server.log.");
+
+        Assert.Equal(
+            "Couldn't start the server: nope. Check the log at /tmp/server.log.",
+            viewModel.ServerStateDisplay);
+    }
+
+    [Fact]
+    public void DisposeUnsubscribesFromManager()
+    {
+        var manager = new FakeServerProcessManager(
+            ServerProcessState.Running,
+            "Server running");
+
+        var viewModel = new AboutViewModel("1.0.0", null, null, null, null, manager);
+
+        viewModel.Dispose();
+
+        manager.Raise(ServerProcessState.Stopped, "Server stopped");
+
+        Assert.Equal("Server running", viewModel.ServerStateDisplay);
+    }
+
+    internal sealed class FakeServerProcessManager : IServerProcessManager
+    {
+        public FakeServerProcessManager(ServerProcessState state, string stateDetail)
+        {
+            State = state;
+            StateDetail = stateDetail;
+        }
+
+        public event EventHandler<ServerProcessStateChangedEventArgs>? StateChanged;
+
+        public ServerProcessState State { get; private set; }
+
+        public string StateDetail { get; private set; }
+
+        public void Raise(ServerProcessState state, string detail)
+        {
+            State = state;
+            StateDetail = detail;
+            StateChanged?.Invoke(this, new ServerProcessStateChangedEventArgs(state, detail));
+        }
+
+        public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }
