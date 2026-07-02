@@ -244,6 +244,145 @@ public class ServerUpdaterTests
         Assert.True(File.Exists(Path.Combine(installDirectory, "fake-server")));
     }
 
+    [Fact]
+    public async Task StopsServerBeforeSwapAndStartsAfter()
+    {
+        using var workspace = new TempDirectory();
+        var installDirectory = Path.Combine(workspace.Path, "install");
+
+        Directory.CreateDirectory(installDirectory);
+        File.WriteAllText(Path.Combine(installDirectory, "old-file.txt"), "old");
+
+        var installation = new ServerInstallation(installDirectory);
+        installation.WriteInstalled(new InstalledServer(
+            "0.5.0",
+            "jukebox-media-server-v0.5.0",
+            DateTimeOffset.UtcNow));
+
+        var fixtureArchive = BuildZipFixture(workspace.Path, "gated", "0.5.1");
+        var gate = new RecordingProcessGate(
+            stopProbePath: Path.Combine(installDirectory, "old-file.txt"),
+            startProbePath: Path.Combine(installDirectory, "fake-server.exe"));
+
+        var updater = BuildUpdater(
+            installDirectory,
+            OSPlatform.Windows,
+            Architecture.X64,
+            BuildRelease("0.5.1", "jukebox-media-server-windows-x64.zip"),
+            fixtureArchive,
+            out _,
+            installation: installation,
+            processGate: gate);
+
+        var result = await updater.UpdateIfNewerAsync(CancellationToken.None);
+
+        Assert.Equal(ServerUpdateOutcome.Updated, result.Outcome);
+        Assert.Equal(1, gate.StopCallCount);
+        Assert.Equal(1, gate.StartCallCount);
+        Assert.True(gate.StopProbeExisted);
+        Assert.True(gate.StartProbeExisted);
+    }
+
+    [Fact]
+    public async Task StartsServerAfterFirstInstall()
+    {
+        using var workspace = new TempDirectory();
+        var installDirectory = Path.Combine(workspace.Path, "install");
+        var fixtureArchive = BuildZipFixture(workspace.Path, "first", "0.5.1");
+        var gate = new RecordingProcessGate(
+            stopProbePath: Path.Combine(installDirectory, "fake-server.exe"),
+            startProbePath: Path.Combine(installDirectory, "fake-server.exe"));
+
+        var updater = BuildUpdater(
+            installDirectory,
+            OSPlatform.Windows,
+            Architecture.X64,
+            BuildRelease("0.5.1", "jukebox-media-server-windows-x64.zip"),
+            fixtureArchive,
+            out _,
+            processGate: gate);
+
+        var result = await updater.UpdateIfNewerAsync(CancellationToken.None);
+
+        Assert.Equal(ServerUpdateOutcome.Updated, result.Outcome);
+        Assert.Equal(1, gate.StartCallCount);
+        Assert.True(gate.StartProbeExisted);
+    }
+
+    [Fact]
+    public async Task LeavesServerAloneWhenExtractionFails()
+    {
+        using var workspace = new TempDirectory();
+        var installDirectory = Path.Combine(workspace.Path, "install");
+
+        Directory.CreateDirectory(installDirectory);
+
+        var installation = new ServerInstallation(installDirectory);
+        installation.WriteInstalled(new InstalledServer(
+            "0.5.0",
+            "jukebox-media-server-v0.5.0",
+            DateTimeOffset.UtcNow));
+
+        var corruptArchive = Path.Combine(workspace.Path, "broken.zip");
+        File.WriteAllText(corruptArchive, "this is not a zip");
+
+        var gate = new RecordingProcessGate(
+            stopProbePath: corruptArchive,
+            startProbePath: corruptArchive);
+
+        var updater = BuildUpdater(
+            installDirectory,
+            OSPlatform.Windows,
+            Architecture.X64,
+            BuildRelease("0.5.1", "jukebox-media-server-windows-x64.zip"),
+            corruptArchive,
+            out _,
+            installation: installation,
+            processGate: gate);
+
+        var result = await updater.UpdateIfNewerAsync(CancellationToken.None);
+
+        Assert.Equal(ServerUpdateOutcome.Failed, result.Outcome);
+        Assert.Equal(0, gate.StopCallCount);
+        Assert.Equal(0, gate.StartCallCount);
+    }
+
+    private sealed class RecordingProcessGate : IServerProcessGate
+    {
+        private readonly string startProbePath;
+        private readonly string stopProbePath;
+
+        public RecordingProcessGate(string stopProbePath, string startProbePath)
+        {
+            this.stopProbePath = stopProbePath;
+            this.startProbePath = startProbePath;
+        }
+
+        public int StartCallCount { get; private set; }
+
+        public bool StartProbeExisted { get; private set; }
+
+        public int StopCallCount { get; private set; }
+
+        public bool StopProbeExisted { get; private set; }
+
+        public Task StartAfterUpdateAsync(CancellationToken cancellationToken)
+        {
+            StartCallCount++;
+            StartProbeExisted = File.Exists(startProbePath);
+
+            return Task.CompletedTask;
+        }
+
+        public Task StopForUpdateAsync(CancellationToken cancellationToken)
+        {
+            StopCallCount++;
+            StopProbeExisted = File.Exists(stopProbePath);
+
+            return Task.CompletedTask;
+        }
+    }
+
     private static LatestRelease BuildRelease(string version, string assetName)
     {
         return new LatestRelease(
@@ -296,7 +435,8 @@ public class ServerUpdaterTests
         LatestRelease release,
         string fixtureArchivePath,
         out UpdateStatusBus statusBus,
-        IServerInstallation? installation = null)
+        IServerInstallation? installation = null,
+        IServerProcessGate? processGate = null)
     {
         var releaseClient = new Mock<IGitHubReleaseClient>();
         releaseClient
@@ -325,6 +465,7 @@ public class ServerUpdaterTests
             installation,
             downloader.Object,
             statusBus,
-            () => new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
+            () => new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero),
+            processGate);
     }
 }
