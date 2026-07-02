@@ -195,18 +195,38 @@ public sealed class ServerProcessManager : IServerProcessManager, IServerProcess
                 supervisionTask = Task.CompletedTask;
             }
 
-            if (process is null)
+            if (process is null && cancellation is null)
             {
                 return;
             }
 
             cancellation?.Cancel();
 
-            await TerminateAsync(process).ConfigureAwait(false);
+            if (process is not null)
+            {
+                await TerminateAsync(process).ConfigureAwait(false);
+            }
+
             await AwaitCompletionIgnoringCancellation(supervision).ConfigureAwait(false);
 
+            // The loop can spawn a replacement between its last cancellation
+            // check and Cancel() above — terminate that straggler too.
+            IManagedProcess? straggler;
+
+            lock (stateLock)
+            {
+                straggler = currentProcess;
+                currentProcess = null;
+            }
+
+            if (straggler is not null)
+            {
+                await TerminateAsync(straggler).ConfigureAwait(false);
+                straggler.Dispose();
+            }
+
             cancellation?.Dispose();
-            process.Dispose();
+            process?.Dispose();
             DeletePidFile();
             SetState(ServerProcessState.Stopped, "Server stopped");
         }
