@@ -4,8 +4,8 @@
         x:DataType="vm:AboutViewModel"
         x:Class="Jukebox.Launcher.Views.AboutWindow"
         Title="About Jukebox"
-        Width="320"
-        Height="200"
+        Width="360"
+        Height="280"
         CanResize="False"
         WindowStartupLocation="CenterScreen">
 
@@ -15,8 +15,33 @@
                    FontSize="20"
                    FontWeight="Bold" />
 
-        <TextBlock AutomationProperties.AutomationId="about-version"
-                   Text="{Binding VersionDisplay}" />
+        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0"
+                       AutomationProperties.AutomationId="about-launcher-installed"
+                       Text="{Binding LauncherInstalledDisplay}" />
+
+            <TextBlock Grid.Row="0" Grid.Column="1"
+                       Margin="12,0,0,0"
+                       AutomationProperties.AutomationId="about-launcher-latest"
+                       Text="{Binding LauncherLatestDisplay}"
+                       Opacity="0.6" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0"
+                       Margin="0,4,0,0"
+                       AutomationProperties.AutomationId="about-server-installed"
+                       Text="{Binding ServerInstalledDisplay}" />
+
+            <TextBlock Grid.Row="1" Grid.Column="1"
+                       Margin="12,4,0,0"
+                       AutomationProperties.AutomationId="about-server-latest"
+                       Text="{Binding ServerLatestDisplay}"
+                       Opacity="0.6" />
+        </Grid>
+
+        <TextBlock AutomationProperties.AutomationId="about-status"
+                   Text="{Binding StatusDisplay}"
+                   TextWrapping="Wrap"
+                   Opacity="0.7" />
 
         <TextBlock AutomationProperties.AutomationId="about-tagline"
                    Text="Self-hosted media server"
