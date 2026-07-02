@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls.ApplicationLifetimes;
 using Jukebox.Launcher.Server;
 using Jukebox.Launcher.Updates;
@@ -50,6 +51,8 @@ public sealed class LauncherActions
                 statusBus,
                 processManager),
         };
+
+        window.Closed += (_, _) => (window.DataContext as IDisposable)?.Dispose();
 
         window.Show();
 
