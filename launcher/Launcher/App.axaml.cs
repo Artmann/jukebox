@@ -51,6 +51,8 @@ public partial class App : Application
                 statusBus,
                 processManager);
 
+            updateCheckCancellation = new CancellationTokenSource();
+
             TryEnableAutostart();
             StartServer(desktop, processManager);
             StartBackgroundUpdateCheck(desktop);
@@ -59,7 +61,7 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static void StartServer(
+    private void StartServer(
         IClassicDesktopStyleApplicationLifetime desktop,
         IServerProcessManager? processManager)
     {
@@ -70,6 +72,8 @@ public partial class App : Application
 
         desktop.ShutdownRequested += (_, _) =>
         {
+            updateCheckCancellation?.Cancel();
+
             try
             {
                 processManager
@@ -104,10 +108,9 @@ public partial class App : Application
             return;
         }
 
-        updateCheckCancellation = new CancellationTokenSource();
-        desktop.ShutdownRequested += (_, _) => updateCheckCancellation?.Cancel();
-
-        var token = updateCheckCancellation.Token;
+        var token = updateCheckCancellation is null
+            ? CancellationToken.None
+            : updateCheckCancellation.Token;
 
         _ = Task.Run(
             async () =>

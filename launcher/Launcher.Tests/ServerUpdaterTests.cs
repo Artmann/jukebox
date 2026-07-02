@@ -380,6 +380,56 @@ public class ServerUpdaterTests
         Assert.Equal(1, gate.StartCallCount);
     }
 
+    [Fact]
+    public async Task SkipsRestartWhenUpdateIsCancelledDuringStop()
+    {
+        using var workspace = new TempDirectory();
+        var installDirectory = Path.Combine(workspace.Path, "install");
+        var fixtureArchive = BuildZipFixture(workspace.Path, "cancelled", "0.5.1");
+
+        using var cancellation = new CancellationTokenSource();
+        var gate = new CancellingStopGate(cancellation);
+
+        var updater = BuildUpdater(
+            installDirectory,
+            OSPlatform.Windows,
+            Architecture.X64,
+            BuildRelease("0.5.1", "jukebox-media-server-windows-x64.zip"),
+            fixtureArchive,
+            out _,
+            processGate: gate);
+
+        await updater.UpdateIfNewerAsync(cancellation.Token);
+
+        Assert.Equal(0, gate.StartCallCount);
+    }
+
+    private sealed class CancellingStopGate : IServerProcessGate
+    {
+        private readonly CancellationTokenSource cancellation;
+
+        public CancellingStopGate(CancellationTokenSource cancellation)
+        {
+            this.cancellation = cancellation;
+        }
+
+        public int StartCallCount { get; private set; }
+
+        public Task StartAfterUpdateAsync(CancellationToken cancellationToken)
+        {
+            StartCallCount++;
+
+            return Task.CompletedTask;
+        }
+
+        public Task StopForUpdateAsync(CancellationToken cancellationToken)
+        {
+            cancellation.Cancel();
+
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class ThrowingStopGate : IServerProcessGate
     {
         public int StartCallCount { get; private set; }

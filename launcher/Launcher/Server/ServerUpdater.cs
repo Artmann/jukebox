@@ -216,7 +216,7 @@ public sealed class ServerUpdater : IServerUpdater
         }
         finally
         {
-            if (gate is not null && gateEngaged)
+            if (gate is not null && gateEngaged && !cancellationToken.IsCancellationRequested)
             {
                 try
                 {
