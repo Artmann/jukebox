@@ -333,6 +333,32 @@ public class ServerProcessManagerTests
     }
 
     [Fact]
+    public async Task StopDuringRestartBackoffSuppressesRestart()
+    {
+        using var workspace = new Workspace();
+        var delayStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseDelay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        workspace.DelayOverride = async (_, token) =>
+        {
+            delayStarted.TrySetResult();
+            await releaseDelay.Task.WaitAsync(token);
+        };
+
+        var manager = workspace.BuildManager();
+
+        await manager.StartAsync(CancellationToken.None);
+
+        workspace.Factory.Started[0].Exit(1);
+        await delayStarted.Task;
+
+        await manager.StopAsync(CancellationToken.None);
+
+        Assert.Equal(ServerProcessState.Stopped, manager.State);
+        Assert.Single(workspace.Factory.Started);
+    }
+
+    [Fact]
     public async Task FailsWhenRestartSpawnThrows()
     {
         using var workspace = new Workspace();
@@ -407,6 +433,8 @@ public class ServerProcessManagerTests
 
         public string BinaryPath { get; }
 
+        public Func<TimeSpan, CancellationToken, Task>? DelayOverride { get; set; }
+
         public FakeProcessFactory Factory { get; } = new();
 
         public string InstallDirectory { get; }
@@ -429,10 +457,13 @@ public class ServerProcessManagerTests
                 installation,
                 new ServerExecutableLocator(installation, "jukebox-media-server"),
                 Factory,
-                (delayDuration, _) =>
+                (delayDuration, token) =>
                 {
                     RecordedDelays.Add(delayDuration);
-                    return Task.CompletedTask;
+
+                    return DelayOverride is null
+                        ? Task.CompletedTask
+                        : DelayOverride(delayDuration, token);
                 },
                 () => NowProvider(),
                 stopGracePeriod: TimeSpan.FromMilliseconds(200));
