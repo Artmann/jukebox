@@ -200,35 +200,40 @@ public sealed class ServerProcessManager : IServerProcessManager, IServerProcess
                 return;
             }
 
-            cancellation?.Cancel();
-
-            if (process is not null)
+            try
             {
-                await TerminateAsync(process).ConfigureAwait(false);
+                cancellation?.Cancel();
+
+                if (process is not null)
+                {
+                    await TerminateAsync(process).ConfigureAwait(false);
+                }
+
+                await AwaitCompletionIgnoringCancellation(supervision).ConfigureAwait(false);
+
+                // The loop can spawn a replacement between its last cancellation
+                // check and Cancel() above — terminate that straggler too.
+                IManagedProcess? straggler;
+
+                lock (stateLock)
+                {
+                    straggler = currentProcess;
+                    currentProcess = null;
+                }
+
+                if (straggler is not null)
+                {
+                    await TerminateAsync(straggler).ConfigureAwait(false);
+                    straggler.Dispose();
+                }
             }
-
-            await AwaitCompletionIgnoringCancellation(supervision).ConfigureAwait(false);
-
-            // The loop can spawn a replacement between its last cancellation
-            // check and Cancel() above — terminate that straggler too.
-            IManagedProcess? straggler;
-
-            lock (stateLock)
+            finally
             {
-                straggler = currentProcess;
-                currentProcess = null;
+                cancellation?.Dispose();
+                process?.Dispose();
+                DeletePidFile();
+                SetState(ServerProcessState.Stopped, "Server stopped");
             }
-
-            if (straggler is not null)
-            {
-                await TerminateAsync(straggler).ConfigureAwait(false);
-                straggler.Dispose();
-            }
-
-            cancellation?.Dispose();
-            process?.Dispose();
-            DeletePidFile();
-            SetState(ServerProcessState.Stopped, "Server stopped");
         }
         finally
         {
@@ -414,7 +419,8 @@ public sealed class ServerProcessManager : IServerProcessManager, IServerProcess
                 await process.WaitForExitAsync(graceCancellation.Token).ConfigureAwait(false);
                 return;
             }
-            catch (OperationCanceledException)
+            catch (Exception error) when (
+                error is OperationCanceledException or ObjectDisposedException or InvalidOperationException)
             {
             }
         }
@@ -427,7 +433,8 @@ public sealed class ServerProcessManager : IServerProcessManager, IServerProcess
         {
             await process.WaitForExitAsync(killCancellation.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (Exception error) when (
+            error is OperationCanceledException or ObjectDisposedException or InvalidOperationException)
         {
         }
     }
