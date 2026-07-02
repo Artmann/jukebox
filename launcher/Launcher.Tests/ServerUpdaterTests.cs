@@ -347,6 +347,54 @@ public class ServerUpdaterTests
         Assert.Equal(0, gate.StartCallCount);
     }
 
+    [Fact]
+    public async Task RestartsServerEvenWhenStopThrows()
+    {
+        using var workspace = new TempDirectory();
+        var installDirectory = Path.Combine(workspace.Path, "install");
+
+        Directory.CreateDirectory(installDirectory);
+
+        var installation = new ServerInstallation(installDirectory);
+        installation.WriteInstalled(new InstalledServer(
+            "0.5.0",
+            "jukebox-media-server-v0.5.0",
+            DateTimeOffset.UtcNow));
+
+        var fixtureArchive = BuildZipFixture(workspace.Path, "stop-throws", "0.5.1");
+        var gate = new ThrowingStopGate();
+
+        var updater = BuildUpdater(
+            installDirectory,
+            OSPlatform.Windows,
+            Architecture.X64,
+            BuildRelease("0.5.1", "jukebox-media-server-windows-x64.zip"),
+            fixtureArchive,
+            out _,
+            installation: installation,
+            processGate: gate);
+
+        var result = await updater.UpdateIfNewerAsync(CancellationToken.None);
+
+        Assert.Equal(ServerUpdateOutcome.Failed, result.Outcome);
+        Assert.Equal(1, gate.StartCallCount);
+    }
+
+    private sealed class ThrowingStopGate : IServerProcessGate
+    {
+        public int StartCallCount { get; private set; }
+
+        public Task StartAfterUpdateAsync(CancellationToken cancellationToken)
+        {
+            StartCallCount++;
+
+            return Task.CompletedTask;
+        }
+
+        public Task StopForUpdateAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("stop failed");
+    }
+
     private sealed class RecordingProcessGate : IServerProcessGate
     {
         private readonly string startProbePath;

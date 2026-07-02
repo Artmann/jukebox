@@ -178,15 +178,17 @@ public sealed class ServerUpdater : IServerUpdater
         ExtractArchive(archivePath, newDirectory);
 
         var gate = processGate;
-
-        if (gate is not null)
-        {
-            statusBus.Publish($"Restarting server for update to {latest.Version}…");
-            await gate.StopForUpdateAsync(cancellationToken).ConfigureAwait(false);
-        }
+        var gateEngaged = false;
 
         try
         {
+            if (gate is not null)
+            {
+                statusBus.Publish($"Restarting server for update to {latest.Version}…");
+                gateEngaged = true;
+                await gate.StopForUpdateAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             if (Directory.Exists(installDirectory))
             {
                 Directory.Move(installDirectory, oldDirectory);
@@ -214,9 +216,18 @@ public sealed class ServerUpdater : IServerUpdater
         }
         finally
         {
-            if (gate is not null)
+            if (gate is not null && gateEngaged)
             {
-                await gate.StartAfterUpdateAsync(CancellationToken.None).ConfigureAwait(false);
+                try
+                {
+                    await gate.StartAfterUpdateAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception error)
+                {
+                    statusBus.Publish(
+                        $"Server restart after update failed: {error.Message}. "
+                        + "Restart the launcher to start the server.");
+                }
             }
         }
     }
