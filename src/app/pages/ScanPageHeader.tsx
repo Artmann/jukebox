@@ -60,15 +60,6 @@ export function ScanActions({
     <div className="mt-12 flex items-center gap-3 animate-fade-up animate-delay-2">
       <Button
         disabled={isRunning || isPending}
-        onClick={onContinue}
-        size="lg"
-        type="button"
-      >
-        Continue
-      </Button>
-
-      <Button
-        disabled={isRunning || isPending}
         onClick={onStart}
         size="lg"
         type="button"
@@ -79,6 +70,15 @@ export function ScanActions({
           : isPending
             ? 'Starting…'
             : 'Start manual scan'}
+      </Button>
+
+      <Button
+        disabled={isRunning || isPending}
+        onClick={onContinue}
+        size="lg"
+        type="button"
+      >
+        Continue
       </Button>
     </div>
   )
