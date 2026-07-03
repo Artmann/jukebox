@@ -142,11 +142,7 @@ export function CastButton({
   const { mutate: saveProgress } = useSaveProgress()
 
   const getCastingListeners = () => {
-    if (castingListenersRef.current === null) {
-      castingListenersRef.current = new Set()
-    }
-
-    return castingListenersRef.current
+    return (castingListenersRef.current ??= new Set())
   }
 
   const subscribeToCasting = useCallback((onStoreChange: () => void) => {

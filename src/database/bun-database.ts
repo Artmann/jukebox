@@ -6,11 +6,23 @@ import * as schema from './schema'
 type Schema = typeof schema
 type Database = BaseSQLiteDatabase<'sync', unknown, Schema>
 
+interface BunSqliteConnection {
+  exec: (sql: string) => void
+}
+
+type BunSqliteConstructor = new (path: string) => BunSqliteConnection
+
+interface BunSqliteModule {
+  Database: BunSqliteConstructor
+}
+
 export async function createBunDatabase(
   migrationsFolder: string
 ): Promise<Database> {
-  // @ts-expect-error Bun built-in — only resolves when running under Bun.
-  const { Database: BunDatabase } = await import('bun:sqlite')
+  const { Database: BunDatabase } = (await import(
+    // @ts-expect-error Bun built-in — only resolves when running under Bun.
+    'bun:sqlite'
+  )) as BunSqliteModule
   const { drizzle } = (await import('drizzle-orm/bun-sqlite')) as unknown as {
     drizzle: (sqlite: unknown, options: { schema: Schema }) => Database
   }
