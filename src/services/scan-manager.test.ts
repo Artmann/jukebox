@@ -10,7 +10,9 @@ vi.mock('../database', () => ({
   schema: testDb.schema
 }))
 
-const { createScanManager } = await import('./scan-manager')
+const { createScanManager, parseLibraryResults } = await import(
+  './scan-manager'
+)
 
 interface FakeLibrary {
   id: number
@@ -193,6 +195,51 @@ describe('scanManager.start', () => {
       'library-complete',
       'job-completed'
     ])
+  })
+})
+
+describe('per-library results persistence', () => {
+  it('stores a result entry per library, including errors', async () => {
+    insertLibrary({ id: 1, name: 'Movies', path: '/movies', type: 'movies' })
+    insertLibrary({ id: 2, name: 'Shows', path: '/shows', type: 'shows' })
+
+    const manager = createScanManager({
+      scanLibrary: () => Promise.resolve({ added: 2, total: 3, updated: 1 }),
+      scanShowLibrary: () => Promise.reject(new Error('folder gone'))
+    })
+
+    await manager.start()
+
+    const jobs = await testDb.db.select().from(testDb.schema.scanJobs)
+
+    expect(parseLibraryResults(jobs[0]?.libraryResults ?? null)).toEqual([
+      {
+        added: 2,
+        error: null,
+        libraryId: 1,
+        name: 'Movies',
+        status: 'complete',
+        total: 3,
+        updated: 1
+      },
+      {
+        added: 0,
+        error: 'folder gone',
+        libraryId: 2,
+        name: 'Shows',
+        status: 'error',
+        total: 0,
+        updated: 0
+      }
+    ])
+  })
+})
+
+describe('parseLibraryResults', () => {
+  it('returns an empty array for null, invalid JSON, and non-arrays', () => {
+    expect(parseLibraryResults(null)).toEqual([])
+    expect(parseLibraryResults('not json')).toEqual([])
+    expect(parseLibraryResults('{"an":"object"}')).toEqual([])
   })
 })
 

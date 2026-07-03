@@ -1,11 +1,14 @@
-import { access } from 'fs/promises'
-import { constants } from 'fs'
 import path from 'path'
 
 import { eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import { db, schema } from '../../database'
+import {
+  defaultLibraryName,
+  pathIsReadable,
+  validateLibraryInput
+} from '../../services/library-validation'
 import { scheduler } from '../../services/scheduler'
 import {
   defaultScanSchedule,
@@ -22,43 +25,6 @@ const reservedKeys = new Set<string>([scanScheduleSettingKey])
 
 const reservedKeyRoute: Record<string, string> = {
   [scanScheduleSettingKey]: '/api/settings/scan-schedule'
-}
-
-interface LibraryInput {
-  name: string
-  path: string
-  type: 'movies' | 'shows'
-}
-
-async function pathIsReadable(path: string): Promise<boolean> {
-  try {
-    await access(path, constants.R_OK)
-
-    return true
-  } catch {
-    return false
-  }
-}
-
-function validateLibraryInput(input: unknown): LibraryInput | string {
-  if (typeof input !== 'object' || input === null) {
-    return 'Library entry must be an object.'
-  }
-
-  const record = input as Record<string, unknown>
-  const name = typeof record.name === 'string' ? record.name.trim() : ''
-  const libraryPath = typeof record.path === 'string' ? record.path.trim() : ''
-  const type = record.type
-
-  if (libraryPath.length === 0) {
-    return 'Library path is required.'
-  }
-
-  if (type !== 'movies' && type !== 'shows') {
-    return 'Library type must be "movies" or "shows".'
-  }
-
-  return { name, path: libraryPath, type }
 }
 
 /**
@@ -144,7 +110,7 @@ settingsRoutes.post('/libraries', async (context) => {
   const resolvedName =
     parsed.name.length > 0
       ? parsed.name
-      : (parsed.path.split(/[\\/]/).filter(Boolean).pop() ?? parsed.type)
+      : defaultLibraryName(parsed.path, parsed.type)
 
   const [created] = await db
     .insert(schema.libraries)

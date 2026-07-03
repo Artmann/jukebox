@@ -6,6 +6,7 @@ import { and, eq } from 'drizzle-orm'
 import { db, schema } from '../database'
 import type { NewEpisode, NewSeason, NewShow } from '../database/schema'
 import { parseEpisodeFilename } from './episode-parser'
+import { readLibraryRoot } from './library-validation'
 import { subtitleExtensions, videoExtensions } from './media-extensions'
 import { normalizeShowName, parseSeasonFolder } from './show-parser'
 import { syncSubtitlesForEpisode } from './subtitle-sync'
@@ -159,13 +160,10 @@ async function scanShowFolder(folderPath: string): Promise<ScannedEpisode[]> {
 async function discoverShows(
   libraryPath: string
 ): Promise<ScannedShow[]> {
-  let entries: string[]
-
-  try {
-    entries = await readdir(libraryPath)
-  } catch {
-    return []
-  }
+  // An unreadable library root is a configuration error the user must fix,
+  // so it throws instead of silently scanning nothing. Nested folders below
+  // keep their tolerant behavior — one bad subfolder shouldn't kill the scan.
+  const entries = await readLibraryRoot(libraryPath)
 
   const directoryFlags = await Promise.all(
     entries.map(async (entry) => {

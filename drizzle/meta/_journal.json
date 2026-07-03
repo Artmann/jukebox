@@ -78,6 +78,13 @@
       "when": 1776380000000,
       "tag": "0010_metadata_rename",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1783082032035,
+      "tag": "0011_loose_eternity",
+      "breakpoints": true
     }
   ]
 }

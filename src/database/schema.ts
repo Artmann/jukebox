@@ -170,7 +170,11 @@ export const scanJobs = sqliteTable('scan_jobs', {
   added: integer('added').notNull().default(0),
   updated: integer('updated').notNull().default(0),
   total: integer('total').notNull().default(0),
-  errorMessage: text('error_message')
+  errorMessage: text('error_message'),
+  // JSON array of per-library results ({ added, error, libraryId, name,
+  // status, total, updated }) so the scan page can show each library's
+  // outcome after the scan finished or the page reloaded.
+  libraryResults: text('library_results')
 })
 
 export const subtitles = sqliteTable('subtitles', {

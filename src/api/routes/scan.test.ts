@@ -11,8 +11,12 @@ vi.mock('../../database', () => ({
   }
 }))
 
-vi.mock('../../services/scan-manager', () => {
+vi.mock('../../services/scan-manager', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../services/scan-manager')>()
+
   return {
+    parseLibraryResults: actual.parseLibraryResults,
     scanManager: {
       getStatus: vi.fn(),
       isRunning: vi.fn(),
@@ -107,6 +111,7 @@ describe('scan routes', () => {
           endedAt: new Date('2025-01-01T12:05:00Z'),
           errorMessage: null,
           id: 7,
+          libraryResults: null,
           startedAt: new Date('2025-01-01T12:00:00Z'),
           status: 'done',
           total: 10,
@@ -127,11 +132,90 @@ describe('scan routes', () => {
         endedAt: '2025-01-01T12:05:00.000Z',
         errorMessage: null,
         id: 7,
+        libraries: [],
         startedAt: '2025-01-01T12:00:00.000Z',
         status: 'done',
         total: 10,
         updated: 1
       })
+    })
+
+    it('parses per-library results from the job row', async () => {
+      const libraryResult = {
+        added: 2,
+        error: null,
+        libraryId: 1,
+        name: 'Movies',
+        status: 'complete',
+        total: 3,
+        updated: 1
+      }
+
+      mockGetStatus.mockResolvedValue({
+        currentJob: null,
+        isRunning: false,
+        lastJob: {
+          added: 2,
+          endedAt: new Date('2025-01-01T12:05:00Z'),
+          errorMessage: null,
+          id: 8,
+          libraryResults: JSON.stringify([libraryResult]),
+          startedAt: new Date('2025-01-01T12:00:00Z'),
+          status: 'done',
+          total: 3,
+          updated: 1
+        }
+      })
+
+      const response = await scanRoutes.request('/status')
+      const body = (await response.json()) as {
+        lastJob: { libraries: unknown[] }
+      }
+
+      expect(response.status).toEqual(200)
+      expect(body.lastJob.libraries).toEqual([libraryResult])
+    })
+  })
+
+  describe('GET /stream', () => {
+    it('forwards job-started as a scan-started SSE event', async () => {
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const mockOn = vi.mocked(scanManager.on)
+
+      const response = await scanRoutes.request('/stream')
+      const reader = response.body?.getReader()
+
+      expect(reader).toBeDefined()
+
+      if (!reader) {
+        return
+      }
+
+      const decoder = new TextDecoder()
+
+      // First chunk is the 'ready' heartbeat — by then all listeners are
+      // registered on the scan manager.
+      const first = await reader.read()
+
+      expect(decoder.decode(first.value)).toContain('event: ready')
+
+      const jobStartedCall = mockOn.mock.calls.find(
+        ([event]) => event === 'job-started'
+      )
+
+      expect(jobStartedCall).toBeDefined()
+
+      const listener = jobStartedCall?.[1]
+      listener?.({ jobId: 42, startedAt: new Date('2025-01-01T12:00:00Z') })
+
+      const second = await reader.read()
+      const payload = decoder.decode(second.value)
+
+      expect(payload).toContain('event: scan-started')
+      expect(payload).toContain('"jobId":42')
+      expect(payload).toContain('"startedAt":"2025-01-01T12:00:00.000Z"')
+
+      await reader.cancel()
     })
   })
 

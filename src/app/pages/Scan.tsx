@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { useScanEventStream } from '../hooks/useScanEventStream'
-import {
-  useScanStatus,
-  useStartScan
-} from '../hooks/useScanStatus'
+import { useScanStatus, useStartScan } from '../hooks/useScanStatus'
 import { ScanLibraryList } from './ScanLibraryList'
 import { ScanPageHeader, ScanStartButton } from './ScanPageHeader'
 import {
   makeInitialLibraryProgress,
+  mergeLibrariesWithJob,
   summarizeTotals,
   type LibraryInfo,
   type LibraryProgress
@@ -28,6 +26,7 @@ async function fetchLibraries(): Promise<LibraryInfo[]> {
 
 export function ScanPage() {
   const location = useLocation()
+  const navigate = useNavigate()
   const { data: status } = useScanStatus()
   const startScanMutation = useStartScan()
 
@@ -35,6 +34,9 @@ export function ScanPage() {
   const [liveActive, setLiveActive] = useState(false)
   const loadedRef = useRef(false)
   const autoStartedRef = useRef(false)
+  // Once live SSE events arrive they are the freshest source of truth, so
+  // reconciliation from the (possibly stale) status query must stop.
+  const liveSeenRef = useRef(false)
 
   const totals = useMemo(() => {
     if (!libraries) {
@@ -59,13 +61,36 @@ export function ScanPage() {
     void loadLibraries()
   }, [loadLibraries])
 
-  useScanEventStream(setLibraries, setLiveActive)
+  const markLiveSeen = useCallback(() => {
+    liveSeenRef.current = true
+  }, [])
+
+  useScanEventStream(setLibraries, setLiveActive, markLiveSeen)
+
+  // Reconcile library rows with the persisted per-library results of the
+  // current or last job, so a page opened after a finished scan shows real
+  // outcomes instead of "Waiting". Live SSE events take over once they arrive.
+  // Depends on both fetches — whichever of status/libraries resolves last
+  // triggers the merge.
+  const librariesLoaded = libraries !== null
+
+  useEffect(() => {
+    if (liveSeenRef.current || !status || !librariesLoaded) {
+      return
+    }
+
+    const job = status.currentJob ?? status.lastJob
+
+    setLibraries((previous) =>
+      previous === null ? previous : mergeLibrariesWithJob(previous, job)
+    )
+  }, [librariesLoaded, status])
 
   // If a scan is already running when this page opens (or SSE events were
   // missed), reflect that in the UI instead of leaving every library on
   // "Waiting".
   useEffect(() => {
-    if (!status?.isRunning) {
+    if (!status?.isRunning || liveSeenRef.current) {
       return
     }
 
@@ -86,27 +111,15 @@ export function ScanPage() {
     })
   }, [status?.isRunning])
 
+  const startScan = startScanMutation.mutateAsync
+
   const handleStartScan = useCallback(async () => {
     try {
-      const response = await startScanMutation.mutateAsync()
+      const response = await startScan()
 
       if (response.status === 'already-running') {
         toast.info('A scan is already running.')
-        setLiveActive(true)
-
-        return
       }
-
-      setLiveActive(true)
-      setLibraries(
-        (previous) =>
-          previous?.map((library) => ({
-            ...library,
-            progress: { added: 0, total: 0, updated: 0 },
-            status: 'scanning' as const,
-            error: undefined
-          })) ?? null
-      )
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
@@ -115,26 +128,24 @@ export function ScanPage() {
 
       toast.error(message)
     }
-  }, [startScanMutation])
+  }, [startScan])
 
-  // After first-time setup, start the initial scan automatically.
+  // Kick off a scan automatically when arriving from setup ("Save and scan").
+  // The router state is cleared right away so a refresh doesn't re-trigger.
   useEffect(() => {
-    const autoStart = (location.state as { autoStart?: boolean } | null)
-      ?.autoStart
+    const state = location.state as { autoStart?: boolean } | null
 
-    if (
-      !autoStart ||
-      autoStartedRef.current ||
-      libraries === null ||
-      libraries.length === 0 ||
-      status?.isRunning
-    ) {
+    if (!state?.autoStart || autoStartedRef.current || !status) {
       return
     }
 
     autoStartedRef.current = true
-    void handleStartScan()
-  }, [handleStartScan, libraries, location.state, status?.isRunning])
+    void navigate(location.pathname, { replace: true, state: null })
+
+    if (!status.isRunning) {
+      void handleStartScan()
+    }
+  }, [handleStartScan, location, navigate, status])
 
   const isRunning = liveActive || (status?.isRunning ?? false)
 
@@ -147,7 +158,10 @@ export function ScanPage() {
       />
 
       <div className="animate-fade-up animate-delay-1">
-        <ScanLibraryList libraries={libraries} />
+        <ScanLibraryList
+          isRunning={isRunning}
+          libraries={libraries}
+        />
       </div>
 
       <ScanStartButton

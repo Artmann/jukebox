@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 
 import { db, schema } from '../../database'
-import { scanManager } from '../../services/scan-manager'
+import { parseLibraryResults, scanManager } from '../../services/scan-manager'
 import type {
   FileScannedEvent,
   LibraryCompleteEvent,
@@ -10,6 +10,21 @@ import type {
   LibraryStartEvent,
   ScanCompleteEvent
 } from '../../services/scan-manager'
+import type { ScanJob } from '../../database/schema'
+
+function serializeJob(job: ScanJob) {
+  return {
+    added: job.added,
+    endedAt: job.endedAt?.toISOString() ?? null,
+    errorMessage: job.errorMessage,
+    id: job.id,
+    libraries: parseLibraryResults(job.libraryResults),
+    startedAt: job.startedAt.toISOString(),
+    status: job.status,
+    total: job.total,
+    updated: job.updated
+  }
+}
 
 const scanRoutes = new Hono()
 
@@ -30,31 +45,9 @@ scanRoutes.get('/status', async (context) => {
   const status = await scanManager.getStatus()
 
   return context.json({
-    currentJob: status.currentJob
-      ? {
-          added: status.currentJob.added,
-          endedAt: status.currentJob.endedAt?.toISOString() ?? null,
-          errorMessage: status.currentJob.errorMessage,
-          id: status.currentJob.id,
-          startedAt: status.currentJob.startedAt.toISOString(),
-          status: status.currentJob.status,
-          total: status.currentJob.total,
-          updated: status.currentJob.updated
-        }
-      : null,
+    currentJob: status.currentJob ? serializeJob(status.currentJob) : null,
     isRunning: status.isRunning,
-    lastJob: status.lastJob
-      ? {
-          added: status.lastJob.added,
-          endedAt: status.lastJob.endedAt?.toISOString() ?? null,
-          errorMessage: status.lastJob.errorMessage,
-          id: status.lastJob.id,
-          startedAt: status.lastJob.startedAt.toISOString(),
-          status: status.lastJob.status,
-          total: status.lastJob.total,
-          updated: status.lastJob.updated
-        }
-      : null
+    lastJob: status.lastJob ? serializeJob(status.lastJob) : null
   })
 })
 
@@ -91,6 +84,16 @@ scanRoutes.post('/start', async (context) => {
 
 scanRoutes.get('/stream', (context) => {
   return streamSSE(context, async (stream) => {
+    const onJobStarted = (event: { jobId: number; startedAt: Date }) => {
+      void stream.writeSSE({
+        event: 'scan-started',
+        data: JSON.stringify({
+          jobId: event.jobId,
+          startedAt: event.startedAt.toISOString()
+        })
+      })
+    }
+
     const onLibraryStart = (event: LibraryStartEvent) => {
       void stream.writeSSE({
         event: 'library-start',
@@ -132,6 +135,7 @@ scanRoutes.get('/stream', (context) => {
       })
     }
 
+    scanManager.on('job-started', onJobStarted as (...args: unknown[]) => void)
     scanManager.on('library-start', onLibraryStart as (...args: unknown[]) => void)
     scanManager.on('file-scanned', onFileScanned as (...args: unknown[]) => void)
     scanManager.on(
@@ -157,6 +161,10 @@ scanRoutes.get('/stream', (context) => {
     // Keep the stream open until the client disconnects. Periodically write
     // a ping so proxies don't time out the connection.
     stream.onAbort(() => {
+      scanManager.off(
+        'job-started',
+        onJobStarted as (...args: unknown[]) => void
+      )
       scanManager.off(
         'library-start',
         onLibraryStart as (...args: unknown[]) => void

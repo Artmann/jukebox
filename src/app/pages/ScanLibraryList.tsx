@@ -4,7 +4,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 import type { LibraryProgress } from './scan-types'
 
-function LibraryProgressRow({ library }: { library: LibraryProgress }) {
+function LibraryProgressRow({
+  isRunning,
+  library
+}: {
+  isRunning: boolean
+  library: LibraryProgress
+}) {
   return (
     <div className="flex items-center gap-3">
       {library.status === 'pending' && (
@@ -20,11 +26,16 @@ function LibraryProgressRow({ library }: { library: LibraryProgress }) {
         <XCircle className="size-4 shrink-0 text-destructive" />
       )}
 
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <p className="text-sm text-foreground">{library.name}</p>
+        <p className="truncate text-xs text-muted-foreground/50">
+          {library.path}
+        </p>
 
         {library.status === 'pending' && (
-          <p className="text-xs text-muted-foreground/50">Waiting</p>
+          <p className="text-xs text-muted-foreground/50">
+            {isRunning ? 'Waiting' : 'Not scanned yet'}
+          </p>
         )}
 
         {(library.status === 'scanning' || library.status === 'complete') && (
@@ -71,8 +82,10 @@ function LibraryProgressSkeleton() {
 }
 
 export function ScanLibraryList({
+  isRunning,
   libraries
 }: {
+  isRunning: boolean
   libraries: LibraryProgress[] | null
 }) {
   if (libraries === null) {
@@ -91,6 +104,7 @@ export function ScanLibraryList({
     <div className="space-y-4">
       {libraries.map((library) => (
         <LibraryProgressRow
+          isRunning={isRunning}
           key={library.id}
           library={library}
         />

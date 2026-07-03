@@ -1,11 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
+export interface LibraryScanResult {
+  added: number
+  error: string | null
+  libraryId: number
+  name: string
+  status: 'complete' | 'error'
+  total: number
+  updated: number
+}
+
 export interface ScanJobSummary {
   added: number
   endedAt: string | null
   errorMessage: string | null
   id: number
+  libraries: LibraryScanResult[]
   startedAt: string
   status: 'running' | 'done' | 'error'
   total: number
@@ -40,7 +51,7 @@ async function getJson<Result>(url: string): Promise<Result> {
   return (await response.json()) as Result
 }
 
-const scanStatusQueryKey = ['scan', 'status'] as const
+export const scanStatusQueryKey = ['scan', 'status'] as const
 
 export function useScanStatus() {
   return useQuery({
