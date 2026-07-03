@@ -481,5 +481,9 @@ export async function scanShowLibrary(
     console.log(`  Found show: ${name} (${episodes.length} episodes)`)
   }
 
+  console.log(
+    `Finished scanning ${libraryPath}: ${total} episode file(s) found.`
+  )
+
   return { added, updated, total }
 }

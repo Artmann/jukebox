@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { useScanEventStream } from '../hooks/useScanEventStream'
 import { useScanStatus, useStartScan } from '../hooks/useScanStatus'
 import { ScanLibraryList } from './ScanLibraryList'
-import { ScanPageHeader, ScanStartButton } from './ScanPageHeader'
+import { ScanActions, ScanPageHeader } from './ScanPageHeader'
 import {
   makeInitialLibraryProgress,
   mergeLibrariesWithJob,
@@ -164,9 +164,10 @@ export function ScanPage() {
         />
       </div>
 
-      <ScanStartButton
+      <ScanActions
         isPending={startScanMutation.isPending}
         isRunning={isRunning}
+        onContinue={() => void navigate('/')}
         onStart={() => void handleStartScan()}
       />
     </div>
