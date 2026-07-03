@@ -44,3 +44,4 @@ jukebox.db
 launcher/**/bin/
 launcher/**/obj/
 launcher/**/*.user
+release-staging/

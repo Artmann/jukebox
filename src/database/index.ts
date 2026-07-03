@@ -21,20 +21,24 @@ async function createDatabase(): Promise<Database> {
   const migrationsFolder = getMigrationsDirectory()
 
   if (typeof Bun !== 'undefined') {
-    // The module specifiers are obscured behind a variable so vite's static
-    // resolver (used by vitest in Node) doesn't try to resolve `bun:sqlite`
-    // — which only exists inside the Bun runtime — at module-graph build time.
+    // Only the `bun:sqlite` specifier is obscured behind a variable, so
+    // vite's static resolver (used by vitest in Node) doesn't try to resolve
+    // the `bun:` protocol — which only exists inside the Bun runtime — at
+    // module-graph build time. It's a Bun builtin, so the runtime resolves it
+    // even from a fully dynamic import. The drizzle driver modules MUST stay
+    // literal: `bun build --compile` only bundles imports it can see
+    // statically, and the shipped release archive has no node_modules to
+    // fall back on (hiding these behind variables shipped broken
+    // executables — see issue #32).
     const bunSqliteModule = 'bun:sqlite'
-    const bunSqliteDrizzleModule = 'drizzle-orm/bun-sqlite'
-    const bunSqliteMigratorModule = 'drizzle-orm/bun-sqlite/migrator'
 
     const { Database: BunDatabase } = (await import(bunSqliteModule)) as {
       Database: new (path: string) => { exec: (sql: string) => void }
     }
-    const { drizzle } = (await import(bunSqliteDrizzleModule)) as {
+    const { drizzle } = (await import('drizzle-orm/bun-sqlite')) as {
       drizzle: (sqlite: unknown, options: { schema: Schema }) => Database
     }
-    const { migrate } = (await import(bunSqliteMigratorModule)) as {
+    const { migrate } = (await import('drizzle-orm/bun-sqlite/migrator')) as {
       migrate: (db: Database, config: { migrationsFolder: string }) => void
     }
 
