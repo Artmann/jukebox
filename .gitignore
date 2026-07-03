@@ -40,6 +40,9 @@ jukebox.db
 # Claude Code worktrees
 .claude/worktrees/
 
+# React Doctor scan output
+react-doctor-report*.json
+
 # .NET / Launcher
 launcher/**/bin/
 launcher/**/obj/
