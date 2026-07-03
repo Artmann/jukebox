@@ -2,20 +2,24 @@ import { existsSync, readFileSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-const virtualFileSystemPrefix = '/$bunfs/'
+// Bun's compiled executables have used several virtual filesystem markers
+// over time: `/$bunfs/` on older versions, and a `B:/~BUN/` drive on modern
+// Windows builds — where the tilde arrives percent-encoded (`%7EBUN`) via
+// `import.meta.url`. Match all of them, case-insensitively.
+const virtualFileSystemMarkers = ['/$bunfs/', '/~bun/', '/%7ebun/']
 
-export function isCompiledExecutable(): boolean {
-  const currentModuleUrl = import.meta.url
-
-  if (currentModuleUrl.includes(virtualFileSystemPrefix)) {
+export function isCompiledExecutable(
+  moduleUrl: string = import.meta.url
+): boolean {
+  if (moduleUrl.startsWith('compiled://')) {
     return true
   }
 
-  if (currentModuleUrl.startsWith('compiled://')) {
-    return true
-  }
+  const normalizedUrl = moduleUrl.toLowerCase()
 
-  return false
+  return virtualFileSystemMarkers.some((marker) =>
+    normalizedUrl.includes(marker)
+  )
 }
 
 function resolveBinaryDirectory(): string {
