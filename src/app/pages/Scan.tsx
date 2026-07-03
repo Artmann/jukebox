@@ -3,7 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { useScanEventStream } from '../hooks/useScanEventStream'
-import { useScanStatus, useStartScan } from '../hooks/useScanStatus'
+import {
+  useScanStatus,
+  useStartScan,
+  type ScanStatus
+} from '../hooks/useScanStatus'
 import { ScanLibraryList } from './ScanLibraryList'
 import { ScanActions, ScanPageHeader } from './ScanPageHeader'
 import {
@@ -24,6 +28,14 @@ async function fetchLibraries(): Promise<LibraryInfo[]> {
   return (await response.json()) as LibraryInfo[]
 }
 
+function jobFromStatus(status: ScanStatus | undefined) {
+  if (!status) {
+    return null
+  }
+
+  return status.currentJob ?? status.lastJob
+}
+
 export function ScanPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -32,19 +44,21 @@ export function ScanPage() {
 
   const [libraries, setLibraries] = useState<LibraryProgress[] | null>(null)
   const [liveActive, setLiveActive] = useState(false)
+  // Once live SSE events arrive they are the freshest source of truth, so
+  // the merged view derived from the (possibly stale) status query steps
+  // aside in favor of the event-driven rows.
+  const [liveSeen, setLiveSeen] = useState(false)
+  const liveSeenRef = useRef(false)
   const loadedRef = useRef(false)
   const autoStartedRef = useRef(false)
-  // Once live SSE events arrive they are the freshest source of truth, so
-  // reconciliation from the (possibly stale) status query must stop.
-  const liveSeenRef = useRef(false)
 
-  const totals = useMemo(() => {
-    if (!libraries) {
-      return { added: 0, found: 0, updated: 0 }
-    }
+  // Keeps the freshest status reachable from the stable markLiveSeen
+  // callback without re-subscribing the event stream on every fetch.
+  const statusRef = useRef<ScanStatus | undefined>(undefined)
 
-    return summarizeTotals(libraries)
-  }, [libraries])
+  useEffect(() => {
+    statusRef.current = status
+  })
 
   const loadLibraries = useCallback(async () => {
     const fetched = await fetchLibraries()
@@ -62,54 +76,61 @@ export function ScanPage() {
   }, [loadLibraries])
 
   const markLiveSeen = useCallback(() => {
-    liveSeenRef.current = true
-  }, [])
-
-  useScanEventStream(setLibraries, setLiveActive, markLiveSeen)
-
-  // Reconcile library rows with the persisted per-library results of the
-  // current or last job, so a page opened after a finished scan shows real
-  // outcomes instead of "Waiting". Live SSE events take over once they arrive.
-  // Depends on both fetches — whichever of status/libraries resolves last
-  // triggers the merge.
-  const librariesLoaded = libraries !== null
-
-  useEffect(() => {
-    if (liveSeenRef.current || !status || !librariesLoaded) {
+    if (liveSeenRef.current) {
       return
     }
 
-    const job = status.currentJob ?? status.lastJob
+    liveSeenRef.current = true
+
+    // Fold the completed-so-far results into the rows before live deltas
+    // apply on top, so libraries that finished before this page attached
+    // keep their outcome instead of resetting to "Waiting".
+    const job = jobFromStatus(statusRef.current)
 
     setLibraries((previous) =>
       previous === null ? previous : mergeLibrariesWithJob(previous, job)
     )
-  }, [librariesLoaded, status])
+    setLiveSeen(true)
+  }, [])
 
-  // If a scan is already running when this page opens (or SSE events were
-  // missed), reflect that in the UI instead of leaving every library on
-  // "Waiting".
-  useEffect(() => {
-    if (!status?.isRunning || liveSeenRef.current) {
-      return
+  useScanEventStream(setLibraries, setLiveActive, markLiveSeen)
+
+  const isRunning = liveActive || (status?.isRunning ?? false)
+
+  // Until live SSE events arrive, derive the rows from the persisted
+  // per-library results of the current or last job, so a page opened after
+  // (or during) a scan shows real outcomes instead of "Waiting".
+  const displayedLibraries = useMemo(() => {
+    if (libraries === null) {
+      return null
     }
 
-    setLiveActive(true)
-    setLibraries((previous) => {
-      if (
-        previous === null ||
-        !previous.some((library) => library.status === 'pending')
-      ) {
-        return previous
-      }
+    if (liveSeen) {
+      return libraries
+    }
 
-      return previous.map((library) =>
-        library.status === 'pending'
-          ? { ...library, status: 'scanning' as const }
-          : library
-      )
-    })
-  }, [status?.isRunning])
+    const merged = mergeLibrariesWithJob(libraries, jobFromStatus(status))
+
+    if (!status?.isRunning) {
+      return merged
+    }
+
+    // A scan is running but its events were missed (page opened mid-scan) —
+    // show the not-yet-finished libraries as scanning rather than idle.
+    return merged.map((library) =>
+      library.status === 'pending'
+        ? { ...library, status: 'scanning' as const }
+        : library
+    )
+  }, [libraries, liveSeen, status])
+
+  const totals = useMemo(() => {
+    if (!displayedLibraries) {
+      return { added: 0, found: 0, updated: 0 }
+    }
+
+    return summarizeTotals(displayedLibraries)
+  }, [displayedLibraries])
 
   const startScan = startScanMutation.mutateAsync
 
@@ -147,8 +168,6 @@ export function ScanPage() {
     }
   }, [handleStartScan, location, navigate, status])
 
-  const isRunning = liveActive || (status?.isRunning ?? false)
-
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-16">
       <ScanPageHeader
@@ -160,7 +179,7 @@ export function ScanPage() {
       <div className="animate-fade-up animate-delay-1">
         <ScanLibraryList
           isRunning={isRunning}
-          libraries={libraries}
+          libraries={displayedLibraries}
         />
       </div>
 

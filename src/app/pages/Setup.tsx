@@ -107,15 +107,13 @@ export function SetupPage() {
         `/api/filesystem/browse?path=${encodeURIComponent(library.path.trim())}`
       )
 
-      if (!isCurrent()) {
-        return
-      }
-
       if (response.ok) {
-        setValidation((previous) => ({
-          ...previous,
-          [library.id]: { status: 'valid' }
-        }))
+        if (isCurrent()) {
+          setValidation((previous) => ({
+            ...previous,
+            [library.id]: { status: 'valid' }
+          }))
+        }
 
         return
       }
