@@ -1,12 +1,14 @@
 import { readFileSync } from 'fs'
 
-import { serve } from '@hono/node-server'
-import type { ViteDevServer } from 'vite'
+import { HttpRouter, HttpServer, HttpServerResponse } from '@effect/platform'
+import { Effect, Layer } from 'effect'
 
-import { app, setupStaticServing, setupViteProxy } from './api'
+import { HttpServerLive } from './http/server'
 import { getPackageJsonPath, isCompiledExecutable } from './runtime-paths'
-import { scanManager } from './services/scan-manager'
-import { scheduler } from './services/scheduler'
+
+// Declared like `src/database/index.ts` so the Node build (vitest, tsc) never
+// depends on Bun's ambient global types.
+declare const Bun: unknown
 
 // A compiled `bun build --compile` executable has no notion of a dev mode —
 // vite and its plugins are not bundled — so default NODE_ENV to production
@@ -16,7 +18,7 @@ if (isCompiledExecutable()) {
   process.env.NODE_ENV = process.env.NODE_ENV ?? 'production'
 }
 
-const isDevelopment = process.env.NODE_ENV !== 'production'
+const port = process.env.PORT ? Number(process.env.PORT) : 1990
 
 // Dev defaults to 1991 so `bun dev` doesn't collide with an installed server:
 // the JukeboxLauncher runs the compiled executable on 1990, and the compiled
@@ -60,36 +62,6 @@ function readPackageVersion(): string {
 
 const version = readPackageVersion()
 
-let viteServer: ViteDevServer | null = null
-
-if (isDevelopment) {
-  const { createServer } = await import('vite')
-
-  viteServer = await createServer({
-    configFile: './vite.config.ts',
-    server: {
-      port: vitePort,
-      strictPort: true
-    }
-  })
-
-  await viteServer.listen()
-
-  setupViteProxy(vitePort)
-} else {
-  setupStaticServing()
-}
-
-// The scan manager recovers any scan_jobs rows left in `running` state from a
-// previous crash by marking them as `error`. The scheduler then reads the
-// persisted schedule and arms the first tick.
-await scanManager.recoverInterruptedJobs()
-await scheduler.start()
-
-const server = serve({ fetch: app.fetch, port }, (info) => {
-  printWelcome(info.port)
-})
-
 function printWelcome(boundPort: number) {
   const url = `http://localhost:${boundPort}`
   const bold = '\x1b[1m'
@@ -109,22 +81,34 @@ function printWelcome(boundPort: number) {
   console.log(lines.join('\n'))
 }
 
-function shutdown(signal: string) {
-  console.log(`\nReceived ${signal}, shutting down...`)
+// Minimal router skeleton. Later phases replace this with the full HttpApi
+// rebuilt from the old Hono routes.
+const router = HttpRouter.empty.pipe(
+  HttpRouter.get('/api', HttpServerResponse.json({ message: 'Jukebox API' }))
+)
 
-  // Force exit after 2 seconds if graceful shutdown hangs
-  setTimeout(() => process.exit(1), 2000).unref()
+// Print the welcome banner only after the HTTP server layer is running, so the
+// advertised URL is actually accepting connections.
+const welcomeLayer = Layer.effectDiscard(
+  Effect.flatMap(HttpServer.HttpServer, () =>
+    Effect.sync(() => printWelcome(port))
+  )
+)
 
-  scheduler.stop()
+const mainLayer = Layer.mergeAll(HttpServer.serve()(router), welcomeLayer).pipe(
+  Layer.provide(HttpServerLive)
+)
 
-  server.close(() => {
-    if (viteServer) {
-      void viteServer.close().finally(() => process.exit(0))
-    } else {
-      process.exit(0)
-    }
-  })
+// `runMain` installs SIGINT/SIGTERM handling and interrupts the layer's
+// finalizers on shutdown, so no manual `process.on` handlers are needed. The
+// runtime is picked with the same literal-import pattern as the platform layer
+// so `bun build --compile` can discover both modules.
+if (typeof Bun !== 'undefined') {
+  const { BunRuntime } = await import('@effect/platform-bun')
+
+  BunRuntime.runMain(Layer.launch(mainLayer))
+} else {
+  const { NodeRuntime } = await import('@effect/platform-node')
+
+  NodeRuntime.runMain(Layer.launch(mainLayer))
 }
-
-process.on('SIGINT', () => shutdown('SIGINT'))
-process.on('SIGTERM', () => shutdown('SIGTERM'))
