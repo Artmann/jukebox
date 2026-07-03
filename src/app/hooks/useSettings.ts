@@ -4,7 +4,7 @@ import {
   useQueryClient
 } from '@tanstack/react-query'
 
-import type { LibraryEntry } from '../components/LibraryPathsForm'
+import type { LibraryEntry } from '../components/library-draft'
 
 interface ApiError {
   error?: { message?: string; referenceCount?: number }

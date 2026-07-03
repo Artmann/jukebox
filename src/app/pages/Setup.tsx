@@ -4,12 +4,12 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { LibraryPathsForm } from '../components/LibraryPathsForm'
 import {
-  LibraryPathsForm,
   makeLibraryDraft,
   type LibraryDraft,
   type LibraryRowValidation
-} from '../components/LibraryPathsForm'
+} from '../components/library-draft'
 import { setupStatusQueryKey } from '../hooks/useSetupStatus'
 
 interface SetupData {

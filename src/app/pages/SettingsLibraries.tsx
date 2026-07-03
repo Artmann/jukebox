@@ -13,7 +13,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { DirectoryBrowserDialog } from '../components/DirectoryBrowserDialog'
-import type { LibraryEntry } from '../components/LibraryPathsForm'
+import type { LibraryEntry } from '../components/library-draft'
 import {
   useAddLibrary,
   useRemoveLibrary,

@@ -3,12 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { LibraryPathsForm } from './LibraryPathsForm'
 import {
-  LibraryPathsForm,
   makeLibraryDraft,
   type LibraryDraft,
   type LibraryRowValidation
-} from './LibraryPathsForm'
+} from './library-draft'
 
 interface HarnessProps {
   initial: LibraryDraft[]
