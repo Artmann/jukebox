@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using Jukebox.Launcher.Server;
 using Jukebox.Launcher.Updates;
 using Jukebox.Launcher.ViewModels;
@@ -59,7 +61,7 @@ public class AboutViewModelTests
         Assert.Equal("latest 0.5.1", viewModel.LauncherLatestDisplay);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void UpdatesStatusWhenBusPublishes()
     {
         var bus = new UpdateStatusBus();
@@ -76,12 +78,13 @@ public class AboutViewModelTests
         };
 
         bus.Publish("Checking for updates…");
+        Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(new[] { "Checking for updates…" }, changes);
         Assert.Equal("Checking for updates…", viewModel.StatusDisplay);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void UpdatesServerLatestWhenBusSetsRelease()
     {
         var bus = new UpdateStatusBus();
@@ -94,6 +97,7 @@ public class AboutViewModelTests
             new List<ReleaseAsset>());
 
         bus.SetLatestServer(release);
+        Dispatcher.UIThread.RunJobs();
 
         Assert.Equal("latest 2.0.0", viewModel.ServerLatestDisplay);
         Assert.Equal(string.Empty, viewModel.LauncherLatestDisplay);
@@ -132,7 +136,7 @@ public class AboutViewModelTests
         Assert.Equal(string.Empty, viewModel.ServerStateDisplay);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void UpdatesServerStateWhenManagerRaisesEvent()
     {
         var manager = new FakeServerProcessManager(
@@ -142,6 +146,7 @@ public class AboutViewModelTests
         using var viewModel = new AboutViewModel("1.0.0", null, null, null, null, manager);
 
         manager.Raise(ServerProcessState.Failed, "Couldn't start the server: nope. Check the log at /tmp/server.log.");
+        Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(
             "Couldn't start the server: nope. Check the log at /tmp/server.log.",
