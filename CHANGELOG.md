@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.6.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.5.2...jukebox-media-server-v0.6.0) (2026-07-03)
+
+
+### Features
+
+* add server auto-update pipeline to launcher ([246ee8f](https://github.com/Artmann/jukebox/commit/246ee8f1e5adc350f5176027a597a2308adc3304))
+* **launcher:** add process abstraction over System.Diagnostics.Process ([5071f8c](https://github.com/Artmann/jukebox/commit/5071f8cb51fbc5f2dacc998609414648cf5b5e2d))
+* **launcher:** add server log file rotation ([9a33ae8](https://github.com/Artmann/jukebox/commit/9a33ae813acac134769595cac226e97d33facdb7))
+* **launcher:** add server process manager with start/stop and orphan handling ([7a33042](https://github.com/Artmann/jukebox/commit/7a33042046626a50abf994096c8ea1b42ee78f5b))
+* **launcher:** locate installed server executable ([628fe69](https://github.com/Artmann/jukebox/commit/628fe6914d8575629ba9b6451c5919f2dfec601b))
+* **launcher:** restart crashed server with backoff and give-up threshold ([58f92d0](https://github.com/Artmann/jukebox/commit/58f92d01a22749b8024cfa5a848a82dbd26698b1))
+* **launcher:** show live server state in the About window ([b3376df](https://github.com/Artmann/jukebox/commit/b3376dfcaad1d0c20dbac56236122883829bda99))
+* **launcher:** start installed server on launch and stop on quit ([8a915f9](https://github.com/Artmann/jukebox/commit/8a915f953f51fa104806ccf8e8fba3d41e3713f3))
+* **launcher:** stop and restart server around update installs ([3dbe97e](https://github.com/Artmann/jukebox/commit/3dbe97e80555893476a7cd55b7cab4cba613741a))
+
+
+### Bug Fixes
+
+* bundle bun-sqlite drizzle driver into compiled executable ([255d1cc](https://github.com/Artmann/jukebox/commit/255d1cc214a824746e55659e45148b4855bdaff3))
+* detect modern bunfs virtual paths in compiled executables ([c3e2bd9](https://github.com/Artmann/jukebox/commit/c3e2bd921c35ac26ad8aead54f322ba1a8a5cb83)), closes [#32](https://github.com/Artmann/jukebox/issues/32)
+* **launcher:** always restart server after update once stop is attempted ([b6dca1d](https://github.com/Artmann/jukebox/commit/b6dca1d2b80a40e722a7a267778f2664855b9fca))
+* **launcher:** dispose About view model when the window closes ([c40f061](https://github.com/Artmann/jukebox/commit/c40f06118821230b2f56485c23d7d4adaba2a3dd))
+* **launcher:** dispose crashed server process and harden orphan path check ([2061808](https://github.com/Artmann/jukebox/commit/2061808648953e46262558d478566f7b1b03e9aa))
+* **launcher:** do not restart server when update is cancelled by quit ([027f217](https://github.com/Artmann/jukebox/commit/027f21774b841294b64ded57b5d8938d420a3c93))
+* **launcher:** guarantee Stopped state even if termination throws ([8048a41](https://github.com/Artmann/jukebox/commit/8048a41b9d3cf6f002d32186cd36b9ffb03b8ea2))
+* **launcher:** release log writer before reading in process factory test ([1750468](https://github.com/Artmann/jukebox/commit/175046892250623693a6b6692d83ee0cb229f2a0))
+* **launcher:** run view model event tests on the headless UI thread ([897d2cb](https://github.com/Artmann/jukebox/commit/897d2cb4b4f52f3045186581f16785bd9c5c8e7b))
+* **launcher:** stop during restart backoff no longer resurrects the server ([93d2d76](https://github.com/Artmann/jukebox/commit/93d2d7645fdccc9ce4002c865a098eb7c6e63e47))
+* **launcher:** stop showing server version as launcher latest in About ([dc9e4a5](https://github.com/Artmann/jukebox/commit/dc9e4a555d65b9d33c0cfa756cff5718713934c6))
+* **launcher:** synchronize log writer disposal and drain process output ([2240f05](https://github.com/Artmann/jukebox/commit/2240f054be9f31a9bcbc700f47cacd555cbbedb8))
+* **launcher:** use untimed HttpClient for archive downloads ([67fe16d](https://github.com/Artmann/jukebox/commit/67fe16d5a5634db29aaef099fcf4628fefde945d))
+* route drizzle import casts through unknown for typecheck ([fdc1aa0](https://github.com/Artmann/jukebox/commit/fdc1aa0fb84bd67f4a57c5d421bdfda8a188cc46))
+
+
+### Documentation
+
+* add server process management design spec ([b6a27d4](https://github.com/Artmann/jukebox/commit/b6a27d4dc1f4d4861ccffc47e2397f4059adaff1))
+* add server process management implementation plan ([a5a62de](https://github.com/Artmann/jukebox/commit/a5a62de34b67b0fb307b9fc08567cf12c874f7ce))
+
 ## [0.5.2](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.5.1...jukebox-media-server-v0.5.2) (2026-05-21)
 
 
