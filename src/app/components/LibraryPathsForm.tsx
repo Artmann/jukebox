@@ -12,21 +12,12 @@ import {
 } from '@/components/ui/select'
 
 import { DirectoryBrowserDialog } from './DirectoryBrowserDialog'
-
-export interface LibraryEntry {
-  name: string
-  path: string
-  type: 'movies' | 'shows'
-}
-
-export interface LibraryDraft extends LibraryEntry {
-  id: string
-}
-
-export type LibraryRowValidation =
-  | { status: 'checking' }
-  | { message: string; status: 'invalid' }
-  | { status: 'valid' }
+import {
+  makeLibraryDraft,
+  type LibraryDraft,
+  type LibraryEntry,
+  type LibraryRowValidation
+} from './library-draft'
 
 interface LibraryPathsFormProps {
   addButtonLabel?: string
@@ -40,12 +31,6 @@ interface LibraryPathsFormProps {
   onPathCommitted?: (library: LibraryDraft) => void
   validation?: Record<string, LibraryRowValidation>
   value: LibraryDraft[]
-}
-
-export function makeLibraryDraft(
-  entry: LibraryEntry = { name: '', path: '', type: 'movies' }
-): LibraryDraft {
-  return { ...entry, id: crypto.randomUUID() }
 }
 
 export function LibraryPathsForm({

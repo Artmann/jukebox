@@ -57,12 +57,10 @@ setupRoutes.post('/complete', async (context) => {
     )
   }
 
-  const fieldErrors: FieldError[] = []
-  const validated: LibraryInput[] = []
   const seenPaths = new Set<string>()
 
-  for (let index = 0; index < entries.length; index++) {
-    const parsed = validateLibraryInput(entries[index])
+  const parsedEntries = entries.map((entry, index) => {
+    const parsed = validateLibraryInput(entry)
 
     if (typeof parsed === 'string') {
       const message =
@@ -70,38 +68,58 @@ setupRoutes.post('/complete', async (context) => {
           ? 'Enter a folder path or remove this row.'
           : parsed
 
-      fieldErrors.push({ index, message })
-      continue
+      return { index, message, parsed: null }
     }
 
     const pathKey = comparablePath(parsed.path)
 
     if (seenPaths.has(pathKey)) {
-      fieldErrors.push({
+      return {
         index,
-        message: `You've added ${parsed.path} more than once. Remove the duplicate row.`
-      })
-      continue
+        message: `You've added ${parsed.path} more than once. Remove the duplicate row.`,
+        parsed: null
+      }
     }
 
     seenPaths.add(pathKey)
 
-    const readable = await pathIsReadable(parsed.path)
+    return { index, message: null, parsed }
+  })
 
-    if (!readable) {
+  // The readability checks hit the filesystem, so run them for all rows at
+  // once instead of one folder at a time.
+  const readableFlags = await Promise.all(
+    parsedEntries.map((entry) =>
+      entry.parsed ? pathIsReadable(entry.parsed.path) : Promise.resolve(false)
+    )
+  )
+
+  const fieldErrors: FieldError[] = []
+  const validated: LibraryInput[] = []
+
+  for (const entry of parsedEntries) {
+    if (entry.message !== null || entry.parsed === null) {
       fieldErrors.push({
-        index,
-        message: `Library path doesn't exist or isn't readable: ${parsed.path}. Check the path and Jukebox's file permissions.`
+        index: entry.index,
+        message: entry.message ?? 'Enter a folder path or remove this row.'
+      })
+      continue
+    }
+
+    if (!readableFlags[entry.index]) {
+      fieldErrors.push({
+        index: entry.index,
+        message: `Library path doesn't exist or isn't readable: ${entry.parsed.path}. Check the path and Jukebox's file permissions.`
       })
       continue
     }
 
     validated.push({
-      ...parsed,
+      ...entry.parsed,
       name:
-        parsed.name.length > 0
-          ? parsed.name
-          : defaultLibraryName(parsed.path, parsed.type)
+        entry.parsed.name.length > 0
+          ? entry.parsed.name
+          : defaultLibraryName(entry.parsed.path, entry.parsed.type)
     })
   }
 

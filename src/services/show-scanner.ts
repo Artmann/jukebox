@@ -157,7 +157,7 @@ async function scanShowFolder(folderPath: string): Promise<ScannedEpisode[]> {
   return episodes
 }
 
-async function discoverShows(
+export async function discoverShows(
   libraryPath: string
 ): Promise<ScannedShow[]> {
   // An unreadable library root is a configuration error the user must fix,
