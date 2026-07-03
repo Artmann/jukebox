@@ -141,7 +141,9 @@ describe('SetupPage', () => {
     })
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/scan')
+      expect(mockNavigate).toHaveBeenCalledWith('/scan', {
+        state: { autoStart: true }
+      })
     })
   })
 

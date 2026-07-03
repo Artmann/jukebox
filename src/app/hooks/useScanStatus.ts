@@ -45,7 +45,9 @@ const scanStatusQueryKey = ['scan', 'status'] as const
 export function useScanStatus() {
   return useQuery({
     queryKey: scanStatusQueryKey,
-    queryFn: () => getJson<ScanStatus>('/api/scan/status')
+    queryFn: () => getJson<ScanStatus>('/api/scan/status'),
+    refetchInterval: (query) =>
+      query.state.data?.isRunning ? 2_000 : false
   })
 }
 

@@ -156,21 +156,7 @@ scanRoutes.get('/stream', (context) => {
 
     // Keep the stream open until the client disconnects. Periodically write
     // a ping so proxies don't time out the connection.
-    const keepAliveMs = 15_000
-    let keepAliveTimer: ReturnType<typeof setInterval> | undefined
-
-    const stopKeepAlive = () => {
-      if (keepAliveTimer !== undefined) {
-        clearInterval(keepAliveTimer)
-        keepAliveTimer = undefined
-      }
-    }
-
-    let releaseStream: (() => void) | undefined
-
     stream.onAbort(() => {
-      stopKeepAlive()
-      releaseStream?.()
       scanManager.off(
         'library-start',
         onLibraryStart as (...args: unknown[]) => void
@@ -193,19 +179,25 @@ scanRoutes.get('/stream', (context) => {
       )
     })
 
-    await new Promise<void>((resolve) => {
-      releaseStream = resolve
+    const keepAliveMs = 15_000
 
-      keepAliveTimer = setInterval(() => {
+    try {
+      while (!stream.aborted && !stream.closed) {
         if (stream.aborted || stream.closed) {
-          stopKeepAlive()
-          resolve()
-          return
+          break
         }
 
-        void stream.writeSSE({ event: 'ping', data: '{}' })
-      }, keepAliveMs)
-    })
+        await stream.sleep(keepAliveMs)
+
+        if (stream.aborted || stream.closed) {
+          break
+        }
+
+        await stream.writeSSE({ event: 'ping', data: '{}' })
+      }
+    } catch {
+      // Stream closed by client — cleanup runs via onAbort.
+    }
   })
 })
 
