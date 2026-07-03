@@ -21,48 +21,17 @@ async function createDatabase(): Promise<Database> {
   const migrationsFolder = getMigrationsDirectory()
 
   if (typeof Bun !== 'undefined') {
-    // Only the `bun:sqlite` specifier is obscured behind a variable, so
-    // vite's static resolver (used by vitest in Node) doesn't try to resolve
-    // the `bun:` protocol — which only exists inside the Bun runtime — at
-    // module-graph build time. It's a Bun builtin, so the runtime resolves it
-    // even from a fully dynamic import. The drizzle driver modules MUST stay
-    // literal: `bun build --compile` only bundles imports it can see
-    // statically, and the shipped release archive has no node_modules to
-    // fall back on (hiding these behind variables shipped broken
-    // executables — see issue #32).
-    const bunSqliteModule = 'bun:sqlite'
-
-    const { Database: BunDatabase } = (await import(bunSqliteModule)) as {
-      Database: new (path: string) => { exec: (sql: string) => void }
-    }
-    // With literal specifiers tsc resolves the real drizzle types, which
-    // don't overlap with the narrowed shapes used here — go through unknown.
-    const { drizzle } = (await import('drizzle-orm/bun-sqlite')) as unknown as {
-      drizzle: (sqlite: unknown, options: { schema: Schema }) => Database
-    }
-    const { migrate } = (await import(
-      'drizzle-orm/bun-sqlite/migrator'
-    )) as unknown as {
-      migrate: (db: Database, config: { migrationsFolder: string }) => void
-    }
-
-    const sqlite = new BunDatabase(databasePath)
-
-    // SQLite disables foreign key enforcement by default, so cascades on
-    // references in the schema are silently ignored until this pragma is
-    // turned on per connection.
-    sqlite.exec('PRAGMA foreign_keys = ON')
-
-    const db = drizzle(sqlite, { schema })
-
-    migrate(db, { migrationsFolder })
-
-    return db as unknown as Database
+    // Loaded only under Bun so vitest (Node) never resolves `bun:sqlite`.
+    const { createBunDatabase } = await import('./bun-database')
+    return createBunDatabase(migrationsFolder)
   }
 
-  const { default: NodeDatabase } = await import('better-sqlite3')
-  const { drizzle } = await import('drizzle-orm/better-sqlite3')
-  const { migrate } = await import('drizzle-orm/better-sqlite3/migrator')
+  const [{ default: NodeDatabase }, { drizzle }, { migrate }] =
+    await Promise.all([
+      import('better-sqlite3'),
+      import('drizzle-orm/better-sqlite3'),
+      import('drizzle-orm/better-sqlite3/migrator')
+    ])
 
   const sqlite = new NodeDatabase(databasePath)
 

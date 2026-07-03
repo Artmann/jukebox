@@ -50,8 +50,8 @@ export function HomePage() {
       return []
     }
 
-    return [...allMedia]
-      .sort(
+    return allMedia
+      .toSorted(
         (a, b) =>
           new Date(b.item.createdAt).getTime() -
           new Date(a.item.createdAt).getTime()

@@ -49,17 +49,19 @@ function DetailModal({
   onClose: () => void
 }): ReactElement {
   return (
-    <div
-      className="fixed inset-0 bg-black/70 z-40 p-3"
-      onClick={onClose}
-    >
-      <div
-        className="rounded-md shadow-md bg-card text-foreground overflow-hidden relative"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <>
+      <button
+        aria-label={`Close details for ${item.title}`}
+        className="fixed inset-0 bg-black/70 z-40 cursor-default"
+        onClick={onClose}
+        type="button"
+      />
+
+      <div className="fixed inset-x-3 top-3 z-50 rounded-md shadow-md bg-card text-foreground overflow-hidden">
         <button
           className="absolute top-3 right-3 z-20 p-2 rounded-full bg-black/90 hover:bg-black/80 cursor-pointer"
           onClick={onClose}
+          type="button"
         >
           <X className="size-5 text-white" />
         </button>
@@ -69,12 +71,15 @@ function DetailModal({
             <iframe
               src={getYouTubeEmbedUrl(item.trailerUrl) ?? undefined}
               className="w-full h-full"
+              title={`${item.title} trailer`}
+              sandbox="allow-scripts allow-presentation allow-popups allow-popups-to-escape-sandbox"
               allow="autoplay; encrypted-media"
               allowFullScreen
             />
           ) : (
             <img
               src={item.backdropUrl ?? undefined}
+              alt={`Backdrop for ${item.title}`}
               className="w-full h-full object-cover"
             />
           )}
@@ -109,7 +114,7 @@ function DetailModal({
           <div>{item.overview}</div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -166,6 +171,7 @@ function GridItem({
           aria-label={`More information about ${item.title}`}
           className="shrink-0 p-1 rounded-full text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
           onClick={onShowMoreInformation}
+          type="button"
         >
           <Info className="size-4" />
         </button>

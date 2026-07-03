@@ -56,8 +56,6 @@ export const authMiddleware = createMiddleware(async (context, next) => {
 
   const now = Date.now()
 
-  await sweepExpiredSessions(now)
-
   if (!session || session.expiresAt <= now) {
     if (session) {
       await db
@@ -70,6 +68,8 @@ export const authMiddleware = createMiddleware(async (context, next) => {
       401
     )
   }
+
+  await sweepExpiredSessions(now)
 
   if (now - session.lastSeenAt > lastSeenThrottleMs) {
     await db

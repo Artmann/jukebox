@@ -63,39 +63,39 @@ async function scanEpisodesInDirectory(
     }
   }
 
-  const episodes: ScannedEpisode[] = []
+  const episodes = await Promise.all(
+    videoEntries.map(async (entry): Promise<ScannedEpisode | null> => {
+      const extension = extname(entry).toLowerCase()
+      const parsed = parseEpisodeFilename(entry)
 
-  for (const entry of videoEntries) {
-    const extension = extname(entry).toLowerCase()
-    const parsed = parseEpisodeFilename(entry)
+      if (!parsed) {
+        return null
+      }
 
-    if (!parsed) {
-      continue
-    }
+      const filePath = join(directory, entry)
+      let fileSize: number | null = null
 
-    const filePath = join(directory, entry)
-    let fileSize: number | null = null
+      try {
+        const fileStat = await stat(filePath)
+        fileSize = fileStat.size
+      } catch {
+        // Ignore stat errors
+      }
 
-    try {
-      const fileStat = await stat(filePath)
-      fileSize = fileStat.size
-    } catch {
-      // Ignore stat errors
-    }
-
-    episodes.push({
-      filePath,
-      fileName: entry,
-      fileSize,
-      extension,
-      seasonNumber: parsed.seasonNumber,
-      episodeNumber: parsed.episodeNumber,
-      title: parsed.title,
-      subtitleSiblings
+      return {
+        filePath,
+        fileName: entry,
+        fileSize,
+        extension,
+        seasonNumber: parsed.seasonNumber,
+        episodeNumber: parsed.episodeNumber,
+        title: parsed.title,
+        subtitleSiblings
+      }
     })
-  }
+  )
 
-  return episodes
+  return episodes.filter((episode): episode is ScannedEpisode => episode !== null)
 }
 
 async function scanShowFolder(folderPath: string): Promise<ScannedEpisode[]> {
@@ -107,23 +107,23 @@ async function scanShowFolder(folderPath: string): Promise<ScannedEpisode[]> {
     return []
   }
 
+  const subdirectoryFlags = await Promise.all(
+    entries.map(async (entry) => {
+      try {
+        const entryStat = await stat(join(folderPath, entry))
+
+        return entryStat.isDirectory() ? entry : null
+      } catch {
+        return null
+      }
+    })
+  )
+
+  const subdirectories = subdirectoryFlags.filter(
+    (entry): entry is string => entry !== null
+  )
+
   const episodes: ScannedEpisode[] = []
-  const subdirectories: string[] = []
-
-  for (const entry of entries) {
-    const entryPath = join(folderPath, entry)
-    let entryStat
-
-    try {
-      entryStat = await stat(entryPath)
-    } catch {
-      continue
-    }
-
-    if (entryStat.isDirectory()) {
-      subdirectories.push(entry)
-    }
-  }
 
   // Check for season subfolders
   const seasonFolders = subdirectories.filter(
@@ -131,28 +131,32 @@ async function scanShowFolder(folderPath: string): Promise<ScannedEpisode[]> {
   )
 
   if (seasonFolders.length > 0) {
-    for (const seasonFolder of seasonFolders) {
-      const seasonPath = join(folderPath, seasonFolder)
-      const seasonEpisodes = await scanEpisodesInDirectory(seasonPath)
-      episodes.push(...seasonEpisodes)
-    }
+    const seasonEpisodeLists = await Promise.all(
+      seasonFolders.map((seasonFolder) =>
+        scanEpisodesInDirectory(join(folderPath, seasonFolder))
+      )
+    )
+
+    episodes.push(...seasonEpisodeLists.flat())
   } else {
     // No season subfolders — try flat episodes in this directory
     const flatEpisodes = await scanEpisodesInDirectory(folderPath)
     episodes.push(...flatEpisodes)
 
     // Recurse into non-season subdirectories
-    for (const subdirectory of subdirectories) {
-      const subdirectoryPath = join(folderPath, subdirectory)
-      const subdirectoryEpisodes = await scanShowFolder(subdirectoryPath)
-      episodes.push(...subdirectoryEpisodes)
-    }
+    const subdirectoryEpisodeLists = await Promise.all(
+      subdirectories.map((subdirectory) =>
+        scanShowFolder(join(folderPath, subdirectory))
+      )
+    )
+
+    episodes.push(...subdirectoryEpisodeLists.flat())
   }
 
   return episodes
 }
 
-export async function discoverShows(
+async function discoverShows(
   libraryPath: string
 ): Promise<ScannedShow[]> {
   let entries: string[]
@@ -163,22 +167,26 @@ export async function discoverShows(
     return []
   }
 
+  const directoryFlags = await Promise.all(
+    entries.map(async (entry) => {
+      try {
+        const entryStat = await stat(join(libraryPath, entry))
+
+        return entryStat.isDirectory() ? entry : null
+      } catch {
+        return null
+      }
+    })
+  )
+
+  const directoryEntries = directoryFlags.filter(
+    (entry): entry is string => entry !== null
+  )
+
   const groupMap = new Map<string, ScannedShow>()
 
-  for (const entry of entries) {
+  for (const entry of directoryEntries) {
     const entryPath = join(libraryPath, entry)
-    let entryStat
-
-    try {
-      entryStat = await stat(entryPath)
-    } catch {
-      continue
-    }
-
-    if (!entryStat.isDirectory()) {
-      continue
-    }
-
     const normalized = normalizeShowName(entry)
     const key = normalized.name.toLowerCase()
 
@@ -202,32 +210,33 @@ export async function discoverShows(
     }
   }
 
-  const shows: ScannedShow[] = []
+  const showsWithEpisodes = await Promise.all(
+    Array.from(groupMap.values()).map(
+      async (show): Promise<ScannedShow | null> => {
+        const episodeLists = await Promise.all(
+          show.folders.map((folder) => scanShowFolder(folder))
+        )
 
-  for (const show of groupMap.values()) {
-    const allEpisodes: ScannedEpisode[] = []
+        const allEpisodes = episodeLists.flat()
 
-    for (const folder of show.folders) {
-      const episodes = await scanShowFolder(folder)
-      allEpisodes.push(...episodes)
-    }
+        allEpisodes.sort((a, b) => {
+          if (a.seasonNumber !== b.seasonNumber) {
+            return a.seasonNumber - b.seasonNumber
+          }
 
-    allEpisodes.sort((a, b) => {
-      if (a.seasonNumber !== b.seasonNumber) {
-        return a.seasonNumber - b.seasonNumber
+          return a.episodeNumber - b.episodeNumber
+        })
+
+        if (allEpisodes.length === 0) {
+          return null
+        }
+
+        return { ...show, episodes: allEpisodes }
       }
+    )
+  )
 
-      return a.episodeNumber - b.episodeNumber
-    })
-
-    if (allEpisodes.length === 0) {
-      continue
-    }
-
-    shows.push({ ...show, episodes: allEpisodes })
-  }
-
-  return shows
+  return showsWithEpisodes.filter((show): show is ScannedShow => show !== null)
 }
 
 export interface ShowScanProgress {

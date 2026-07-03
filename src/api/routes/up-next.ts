@@ -42,94 +42,99 @@ upNextRoutes.get('/', async (context) => {
     }
   }
 
-  const items: UpNextItem[] = []
+  const resolvedItems = await Promise.all(
+    Array.from(latestRowByShow.entries()).map(
+      async ([showId, row]): Promise<UpNextItem | null> => {
+        const lastEpisode = row.episode
+        const fraction =
+          row.duration && row.duration > 0 ? row.currentTime / row.duration : 0
+        const isComplete = fraction >= watchedThreshold
 
-  for (const [showId, row] of latestRowByShow.entries()) {
-    const fraction =
-      row.duration && row.duration > 0 ? row.currentTime / row.duration : 0
-    const isComplete = fraction >= watchedThreshold
+        if (!isComplete) {
+          // Episode is mid-watch; ContinueWatching already surfaces it.
+          return null
+        }
 
-    if (!isComplete) {
-      // Episode is mid-watch; ContinueWatching already surfaces it.
-      continue
-    }
+        const showEpisodes = await db
+          .select()
+          .from(schema.episodes)
+          .where(eq(schema.episodes.showId, showId))
+          .orderBy(schema.episodes.seasonNumber, schema.episodes.episodeNumber)
 
-    const showEpisodes = await db
-      .select()
-      .from(schema.episodes)
-      .where(eq(schema.episodes.showId, showId))
-      .orderBy(schema.episodes.seasonNumber, schema.episodes.episodeNumber)
+        const laterEpisodes = showEpisodes.filter((candidate) => {
+          if (candidate.seasonNumber > lastEpisode.seasonNumber) {
+            return true
+          }
 
-    const laterEpisodes = showEpisodes.filter((candidate) => {
-      if (candidate.seasonNumber > row.episode.seasonNumber) {
-        return true
+          if (candidate.seasonNumber < lastEpisode.seasonNumber) {
+            return false
+          }
+
+          return candidate.episodeNumber > lastEpisode.episodeNumber
+        })
+
+        if (laterEpisodes.length === 0) {
+          return null
+        }
+
+        const laterIds = new Set(laterEpisodes.map((candidate) => candidate.id))
+
+        const laterProgress = episodeProgressRows.filter(
+          (progressRow) =>
+            progressRow.episode.id !== lastEpisode.id &&
+            laterIds.has(progressRow.episode.id)
+        )
+
+        const progressByEpisodeId = new Map<
+          number,
+          { currentTime: number; duration: number | null }
+        >()
+
+        for (const progressRow of laterProgress) {
+          progressByEpisodeId.set(progressRow.episode.id, {
+            currentTime: progressRow.currentTime,
+            duration: progressRow.duration
+          })
+        }
+
+        const nextEpisode = laterEpisodes.find((candidate) => {
+          const progress = progressByEpisodeId.get(candidate.id)
+
+          if (!progress) {
+            return true
+          }
+
+          if (!progress.duration || progress.duration <= 0) {
+            return true
+          }
+
+          return progress.currentTime / progress.duration < watchedThreshold
+        })
+
+        if (!nextEpisode) {
+          return null
+        }
+
+        const [show] = await db
+          .select()
+          .from(schema.shows)
+          .where(eq(schema.shows.id, showId))
+          .limit(1)
+
+        if (!show) {
+          return null
+        }
+
+        return {
+          episode: nextEpisode,
+          show,
+          lastWatchedAt: row.updatedAt.toISOString()
+        }
       }
-
-      if (candidate.seasonNumber < row.episode.seasonNumber) {
-        return false
-      }
-
-      return candidate.episodeNumber > row.episode.episodeNumber
-    })
-
-    if (laterEpisodes.length === 0) {
-      continue
-    }
-
-    const laterIds = new Set(laterEpisodes.map((candidate) => candidate.id))
-
-    const laterProgress = episodeProgressRows.filter(
-      (progressRow) =>
-        progressRow.episode.id !== row.episode.id &&
-        laterIds.has(progressRow.episode.id)
     )
+  )
 
-    const progressByEpisodeId = new Map<
-      number,
-      { currentTime: number; duration: number | null }
-    >()
-
-    for (const progressRow of laterProgress) {
-      progressByEpisodeId.set(progressRow.episode.id, {
-        currentTime: progressRow.currentTime,
-        duration: progressRow.duration
-      })
-    }
-
-    const nextEpisode = laterEpisodes.find((candidate) => {
-      const progress = progressByEpisodeId.get(candidate.id)
-
-      if (!progress) {
-        return true
-      }
-
-      if (!progress.duration || progress.duration <= 0) {
-        return true
-      }
-
-      return progress.currentTime / progress.duration < watchedThreshold
-    })
-
-    if (!nextEpisode) {
-      continue
-    }
-
-    const [show] = await db
-      .select()
-      .from(schema.shows)
-      .where(eq(schema.shows.id, showId))
-      .limit(1)
-
-    if (!show) {
-      continue
-    }
-
-    items.push({
-      episode: nextEpisode,
-      show,
-      lastWatchedAt: row.updatedAt.toISOString()
-    })
-  }
+  const items = resolvedItems.filter((item): item is UpNextItem => item !== null)
 
   items.sort(
     (a, b) =>

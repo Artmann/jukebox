@@ -1,7 +1,16 @@
 import { Cast } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import { toast } from 'sonner'
 import type Player from 'video.js/dist/types/player'
+
+import { useSaveProgress } from '../hooks/useSaveProgress'
 
 interface CastButtonProps {
   episodeId?: number
@@ -9,11 +18,6 @@ interface CastButtonProps {
   player: Player | null
   streamUrl: string
   title: string
-}
-
-interface CastGlobals {
-  airplayAvailable: boolean
-  chromecastAvailable: boolean
 }
 
 interface RemotePlayerLike {
@@ -77,6 +81,47 @@ function absoluteUrl(pathOrUrl: string): string {
   return `${window.location.origin}${pathOrUrl}`
 }
 
+// AirPlay support is a browser capability (Safari only), so it can be
+// detected once at module load instead of being synced into state.
+function detectAirplaySupport(): boolean {
+  if (typeof HTMLVideoElement === 'undefined') {
+    return false
+  }
+
+  return 'webkitShowPlaybackTargetPicker' in HTMLVideoElement.prototype
+}
+
+const airplayAvailable = detectAirplaySupport()
+
+function readInitialCastingState(): boolean {
+  try {
+    const wnd = castWindow()
+    const framework = wnd.cast?.framework
+
+    if (!framework || !wnd.chrome?.cast) {
+      return false
+    }
+
+    const remote = new framework.RemotePlayer()
+
+    return remote.isConnected
+  } catch {
+    return false
+  }
+}
+
+function showAirplayPicker(): void {
+  const video = document.querySelector('video') as
+    | (HTMLVideoElement & {
+        webkitShowPlaybackTargetPicker?: () => void
+      })
+    | null
+
+  if (video?.webkitShowPlaybackTargetPicker) {
+    video.webkitShowPlaybackTargetPicker()
+  }
+}
+
 export function CastButton({
   episodeId,
   movieId,
@@ -84,34 +129,94 @@ export function CastButton({
   streamUrl,
   title
 }: CastButtonProps) {
-  const [availability, setAvailability] = useState<CastGlobals>({
-    airplayAvailable: false,
-    chromecastAvailable: false
+  // If the Cast SDK is already on the page the button can render right away;
+  // otherwise the SDK's ready callback flips this on once it loads.
+  const [chromecastAvailable, setChromecastAvailable] = useState(() => {
+    const wnd = castWindow()
+
+    return Boolean(wnd.cast?.framework && wnd.chrome?.cast)
   })
-  const [isCasting, setIsCasting] = useState(false)
   const remoteRef = useRef<RemotePlayerLike | null>(null)
   const controllerRef = useRef<RemotePlayerControllerLike | null>(null)
+  const castingListenersRef = useRef<Set<() => void> | null>(null)
+  const { mutate: saveProgress } = useSaveProgress()
 
-  // Detect AirPlay availability (Safari only).
-  useEffect(() => {
-    const video = document.querySelector('video') as
-      | (HTMLVideoElement & {
-          webkitShowPlaybackTargetPicker?: () => void
-        })
-      | null
+  const getCastingListeners = () => {
+    if (castingListenersRef.current === null) {
+      castingListenersRef.current = new Set()
+    }
 
-    const hasAirplay =
-      typeof video?.webkitShowPlaybackTargetPicker === 'function'
+    return castingListenersRef.current
+  }
 
-    setAvailability((previous) => ({
-      ...previous,
-      airplayAvailable: hasAirplay
-    }))
-  }, [player])
+  const subscribeToCasting = useCallback((onStoreChange: () => void) => {
+    getCastingListeners().add(onStoreChange)
 
-  // Detect Chromecast availability by waiting for the SDK.
+    return () => {
+      getCastingListeners().delete(onStoreChange)
+    }
+  }, [])
+
+  const getCastingSnapshot = useCallback(() => {
+    return remoteRef.current?.isConnected ?? readInitialCastingState()
+  }, [])
+
+  const isCasting = useSyncExternalStore(
+    subscribeToCasting,
+    getCastingSnapshot,
+    () => false
+  )
+
+  const notifyCastingChange = () => {
+    const listeners = castingListenersRef.current
+
+    if (listeners === null) {
+      return
+    }
+
+    for (const listener of listeners) {
+      listener()
+    }
+  }
+
+  const handleConnectedChange = useEffectEvent((remote: RemotePlayerLike) => {
+    notifyCastingChange()
+
+    if (player && !remote.isConnected && remote.currentTime > 0) {
+      // Resume locally from the remote position.
+      player.currentTime(remote.currentTime)
+      void player.play()
+    }
+  })
+
+  const handleRemoteTimeChange = useEffectEvent((remote: RemotePlayerLike) => {
+    if (!remote.isConnected) {
+      return
+    }
+
+    const progressUrl = episodeId
+      ? `/api/progress/episode/${episodeId}`
+      : movieId
+        ? `/api/progress/${movieId}`
+        : null
+
+    if (!progressUrl) {
+      return
+    }
+
+    // Best-effort progress save; failures stay in the mutation state.
+    saveProgress({
+      currentTime: remote.currentTime,
+      duration: remote.duration,
+      progressUrl
+    })
+  })
+
+  // Detect Chromecast availability by waiting for the SDK. Runs once per
+  // mount — the SDK, remote player, and controller are all app-global.
   useEffect(() => {
     let cancelled = false
+    let removeListeners: (() => void) | null = null
 
     const initialise = () => {
       if (cancelled) {
@@ -127,48 +232,15 @@ export function CastButton({
 
       try {
         const context = framework.CastContext.getInstance()
-        const remote = new framework.RemotePlayer()
-        const controller = new framework.RemotePlayerController(remote)
+        const remote = remoteRef.current ?? new framework.RemotePlayer()
+        const controller =
+          controllerRef.current ?? new framework.RemotePlayerController(remote)
 
         remoteRef.current = remote
         controllerRef.current = controller
 
-        const onConnectedChange = () => {
-          setIsCasting(remote.isConnected)
-
-          if (player && !remote.isConnected && remote.currentTime > 0) {
-            // Resume locally from the remote position.
-            player.currentTime(remote.currentTime)
-            void player.play()
-          }
-        }
-
-        const onTimeChange = () => {
-          if (!remote.isConnected) {
-            return
-          }
-
-          const progressUrl = episodeId
-            ? `/api/progress/episode/${episodeId}`
-            : movieId
-              ? `/api/progress/${movieId}`
-              : null
-
-          if (!progressUrl) {
-            return
-          }
-
-          void fetch(progressUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              currentTime: remote.currentTime,
-              duration: remote.duration
-            })
-          }).catch(() => {
-            // Best-effort progress save; ignore failures.
-          })
-        }
+        const onConnectedChange = () => handleConnectedChange(remote)
+        const onTimeChange = () => handleRemoteTimeChange(remote)
 
         controller.addEventListener(
           framework.RemotePlayerEventType.IS_CONNECTED_CHANGED,
@@ -179,12 +251,19 @@ export function CastButton({
           onTimeChange
         )
 
-        // Best-effort: mark availability. If the user has a Chromecast on LAN,
+        removeListeners = () => {
+          controller.removeEventListener(
+            framework.RemotePlayerEventType.IS_CONNECTED_CHANGED,
+            onConnectedChange
+          )
+          controller.removeEventListener(
+            framework.RemotePlayerEventType.CURRENT_TIME_CHANGED,
+            onTimeChange
+          )
+        }
+
+        // Best-effort availability. If the user has a Chromecast on LAN,
         // requestSession will show the picker; if not, it will error cleanly.
-        setAvailability((previous) => ({
-          ...previous,
-          chromecastAvailable: true
-        }))
         void context
       } catch (error) {
         console.warn('Cast framework initialisation failed:', error)
@@ -195,13 +274,16 @@ export function CastButton({
     const wnd = castWindow()
     const existing = wnd.__onGCastApiAvailable
 
-    wnd.__onGCastApiAvailable = (isAvailable: boolean) => {
+    const onCastApiAvailable = (isAvailable: boolean) => {
       existing?.(isAvailable)
 
       if (isAvailable) {
         initialise()
+        setChromecastAvailable(true)
       }
     }
+
+    wnd.__onGCastApiAvailable = onCastApiAvailable
 
     // If SDK already loaded, initialise immediately.
     if (wnd.cast?.framework && wnd.chrome?.cast) {
@@ -210,15 +292,13 @@ export function CastButton({
 
     return () => {
       cancelled = true
+      removeListeners?.()
 
-      const controller = controllerRef.current
-      const framework = castWindow().cast?.framework
-
-      if (controller && framework) {
-        // No specific handlers to remove — controller is re-created per mount.
+      if (wnd.__onGCastApiAvailable === onCastApiAvailable) {
+        wnd.__onGCastApiAvailable = existing
       }
     }
-  }, [player, episodeId, movieId])
+  }, [])
 
   const handleChromecast = async () => {
     const wnd = castWindow()
@@ -268,39 +348,21 @@ export function CastButton({
     }
   }
 
-  const handleAirplay = () => {
-    const video = document.querySelector('video') as
-      | (HTMLVideoElement & {
-          webkitShowPlaybackTargetPicker?: () => void
-        })
-      | null
-
-    if (video?.webkitShowPlaybackTargetPicker) {
-      video.webkitShowPlaybackTargetPicker()
-    }
-  }
-
   const handleClick = () => {
-    if (availability.airplayAvailable && availability.chromecastAvailable) {
-      // Both available — prefer Chromecast picker; Safari will still show
-      // its own AirPlay glyph natively inside the <video> element.
+    if (chromecastAvailable) {
+      // When both are available, prefer the Chromecast picker; Safari will
+      // still show its own AirPlay glyph natively inside the <video> element.
       void handleChromecast()
 
       return
     }
 
-    if (availability.chromecastAvailable) {
-      void handleChromecast()
-
-      return
-    }
-
-    if (availability.airplayAvailable) {
-      handleAirplay()
+    if (airplayAvailable) {
+      showAirplayPicker()
     }
   }
 
-  if (!availability.airplayAvailable && !availability.chromecastAvailable) {
+  if (!airplayAvailable && !chromecastAvailable) {
     return null
   }
 
@@ -309,6 +371,7 @@ export function CastButton({
       aria-label={isCasting ? 'Stop casting' : 'Cast'}
       className="p-2 flex justify-center items-center cursor-pointer"
       onClick={handleClick}
+      type="button"
     >
       <Cast
         className={`size-7 hover:scale-125 ${isCasting ? 'text-blue-400' : 'text-white'}`}

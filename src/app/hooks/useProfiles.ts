@@ -50,15 +50,15 @@ export function useActiveProfile() {
   })
 }
 
-function invalidateProfileScopedQueries(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: ['profiles'] })
-  void queryClient.invalidateQueries({ queryKey: ['active-profile'] })
-  void queryClient.invalidateQueries({ queryKey: ['continue-watching'] })
-  void queryClient.invalidateQueries({ queryKey: ['favorites'] })
-  void queryClient.invalidateQueries({ queryKey: ['favorite-status'] })
-  void queryClient.invalidateQueries({ queryKey: ['progress'] })
-  void queryClient.invalidateQueries({ queryKey: ['episode-progress'] })
-}
+const profileScopedQueryKeys = [
+  ['profiles'],
+  ['active-profile'],
+  ['continue-watching'],
+  ['favorites'],
+  ['favorite-status'],
+  ['progress'],
+  ['episode-progress']
+] as const
 
 export function useCreateProfile() {
   const queryClient = useQueryClient()
@@ -119,7 +119,9 @@ export function useDeleteProfile() {
       if (!response.ok) throw new Error(await readError(response))
     },
     onSuccess: () => {
-      invalidateProfileScopedQueries(queryClient)
+      for (const queryKey of profileScopedQueryKeys) {
+        void queryClient.invalidateQueries({ queryKey })
+      }
     }
   })
 }
@@ -138,7 +140,9 @@ export function useActivateProfile() {
       return (await response.json()) as Profile
     },
     onSuccess: () => {
-      invalidateProfileScopedQueries(queryClient)
+      for (const queryKey of profileScopedQueryKeys) {
+        void queryClient.invalidateQueries({ queryKey })
+      }
     }
   })
 }

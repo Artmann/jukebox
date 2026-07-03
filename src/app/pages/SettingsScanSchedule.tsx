@@ -1,6 +1,6 @@
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import { useEffect, useState, type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -32,18 +32,11 @@ export function SettingsScanSchedulePage(): ReactElement {
   const { data, isLoading } = useScanSchedule()
   const save = useSaveScanSchedule()
 
-  const [schedule, setSchedule] = useState<ScanSchedule>('off')
-  const [initialized, setInitialized] = useState(false)
+  // The select shows the server value until the user picks something else,
+  // so there is no hydrate-from-server effect and no copied state.
+  const [scheduleDraft, setScheduleDraft] = useState<ScanSchedule | null>(null)
 
-  useEffect(
-    function hydrateFromServer() {
-      if (!initialized && data) {
-        setSchedule(data.schedule)
-        setInitialized(true)
-      }
-    },
-    [data, initialized]
-  )
+  const schedule = scheduleDraft ?? data?.schedule ?? 'off'
 
   async function handleSave() {
     try {
@@ -80,7 +73,7 @@ export function SettingsScanSchedulePage(): ReactElement {
         <div className="grid gap-2">
           <Label htmlFor="scan-schedule">Frequency</Label>
           <Select
-            onValueChange={(value) => setSchedule(value as ScanSchedule)}
+            onValueChange={(value) => setScheduleDraft(value as ScanSchedule)}
             value={schedule}
           >
             <SelectTrigger

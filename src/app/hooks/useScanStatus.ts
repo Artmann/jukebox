@@ -40,7 +40,7 @@ async function getJson<Result>(url: string): Promise<Result> {
   return (await response.json()) as Result
 }
 
-export const scanStatusQueryKey = ['scan', 'status'] as const
+const scanStatusQueryKey = ['scan', 'status'] as const
 
 export function useScanStatus() {
   return useQuery({

@@ -15,6 +15,33 @@ const logger = {
   warn: (...args: unknown[]) => console.warn('[transcode]', ...args)
 }
 
+function waitForPath(
+  filePath: string,
+  timeoutMs: number,
+  pollIntervalMs: number
+): Promise<boolean> {
+  if (existsSync(filePath)) {
+    return Promise.resolve(true)
+  }
+
+  return new Promise((resolve) => {
+    const startedAt = Date.now()
+
+    const interval = setInterval(() => {
+      if (existsSync(filePath)) {
+        clearInterval(interval)
+        resolve(true)
+        return
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        clearInterval(interval)
+        resolve(false)
+      }
+    }, pollIntervalMs)
+  })
+}
+
 const reapIdleMs = 30 * 60 * 1000
 const reaperIntervalMs = 5 * 60 * 1000
 
@@ -159,7 +186,7 @@ export function startTranscode({
   return session
 }
 
-export function stopSession(key: string): void {
+function stopSession(key: string): void {
   const session = sessions.get(key)
 
   if (!session) {
@@ -313,13 +340,9 @@ transcodeRoutes.get('/:fileId/:segment', async (context) => {
   const segmentPath = path.join(session.tempDir, segment)
 
   // Wait briefly for the segment to appear if ffmpeg hasn't produced it yet.
-  const startedAt = Date.now()
+  const ready = await waitForPath(segmentPath, 15_000, 200)
 
-  while (!existsSync(segmentPath) && Date.now() - startedAt < 15000) {
-    await new Promise((resolve) => setTimeout(resolve, 200))
-  }
-
-  if (!existsSync(segmentPath)) {
+  if (!ready) {
     return context.json({ error: { message: 'Segment not ready' } }, 404)
   }
 

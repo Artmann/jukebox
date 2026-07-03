@@ -76,11 +76,11 @@ async function listDirectory(inputPath: string): Promise<BrowseResponse> {
   const dirents = await readdir(resolved, { withFileTypes: true })
 
   const entries: BrowseEntry[] = dirents
-    .filter((dirent) => dirent.isDirectory() && !dirent.name.startsWith('.'))
-    .map((dirent) => ({
-      name: dirent.name,
-      path: path.join(resolved, dirent.name)
-    }))
+    .flatMap((dirent) =>
+      dirent.isDirectory() && !dirent.name.startsWith('.')
+        ? [{ name: dirent.name, path: path.join(resolved, dirent.name) }]
+        : []
+    )
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 
   const parent = isAtFilesystemRoot(resolved) ? null : path.dirname(resolved)

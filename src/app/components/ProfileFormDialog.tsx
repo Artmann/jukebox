@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { XIcon } from 'lucide-react'
-import { useEffect, useState, type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,31 +29,6 @@ export function ProfileFormDialog({
   submitting,
   title
 }: ProfileFormDialogProps): ReactElement {
-  const [name, setName] = useState(initialValues?.name ?? '')
-  const [emoji, setEmoji] = useState<string>(
-    initialValues?.emoji ?? profileEmojis[0]
-  )
-
-  useEffect(
-    function resetWhenOpened() {
-      if (open) {
-        setName(initialValues?.name ?? '')
-        setEmoji(initialValues?.emoji ?? profileEmojis[0])
-      }
-    },
-    [initialValues?.emoji, initialValues?.name, open]
-  )
-
-  function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
-
-    const trimmed = name.trim()
-
-    if (!trimmed) return
-
-    void Promise.resolve(onSubmit({ name: trimmed, emoji }))
-  }
-
   return (
     <Dialog.Root
       onOpenChange={onOpenChange}
@@ -74,71 +49,111 @@ export function ProfileFormDialog({
             </Dialog.Close>
           </div>
 
-          <form
-            className="grid gap-4"
-            onSubmit={handleSubmit}
-          >
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-medium"
-                htmlFor="profile-name"
-              >
-                Name
-              </label>
-              <Input
-                autoFocus
-                id="profile-name"
-                maxLength={40}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="e.g. Ada"
-                value={name}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <span className="text-sm font-medium">Emoji</span>
-              <div className="grid grid-cols-6 gap-2">
-                {profileEmojis.map((option) => {
-                  const isSelected = option === emoji
-
-                  return (
-                    <button
-                      aria-pressed={isSelected}
-                      className={cn(
-                        'flex size-10 items-center justify-center rounded-md border text-xl transition-colors',
-                        isSelected
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:bg-accent'
-                      )}
-                      key={option}
-                      onClick={() => setEmoji(option)}
-                      type="button"
-                    >
-                      <span aria-hidden>{option}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                onClick={() => onOpenChange(false)}
-                type="button"
-                variant="ghost"
-              >
-                Cancel
-              </Button>
-              <Button
-                disabled={(submitting ?? false) || !name.trim()}
-                type="submit"
-              >
-                Save
-              </Button>
-            </div>
-          </form>
+          <ProfileForm
+            initialValues={initialValues}
+            onCancel={() => onOpenChange(false)}
+            onSubmit={onSubmit}
+            submitting={submitting}
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+interface ProfileFormProps {
+  initialValues?: ProfileFormValues
+  onCancel: () => void
+  onSubmit: (values: ProfileFormValues) => Promise<void> | void
+  submitting?: boolean
+}
+
+// Radix unmounts the dialog content while closed, so this form mounts fresh
+// from initialValues on every open — no reset effect needed.
+function ProfileForm({
+  initialValues,
+  onCancel,
+  onSubmit,
+  submitting
+}: ProfileFormProps): ReactElement {
+  const [name, setName] = useState(initialValues?.name ?? '')
+  const [emoji, setEmoji] = useState<string>(
+    initialValues?.emoji ?? profileEmojis[0]
+  )
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+
+    const trimmed = name.trim()
+
+    if (!trimmed) return
+
+    void Promise.resolve(onSubmit({ name: trimmed, emoji }))
+  }
+
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={handleSubmit}
+    >
+      <div className="grid gap-2">
+        <label
+          className="text-sm font-medium"
+          htmlFor="profile-name"
+        >
+          Name
+        </label>
+        <Input
+          autoFocus
+          id="profile-name"
+          maxLength={40}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="e.g. Ada"
+          value={name}
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <span className="text-sm font-medium">Emoji</span>
+        <div className="grid grid-cols-6 gap-2">
+          {profileEmojis.map((option) => {
+            const isSelected = option === emoji
+
+            return (
+              <button
+                aria-pressed={isSelected}
+                className={cn(
+                  'flex size-10 items-center justify-center rounded-md border text-xl transition-colors',
+                  isSelected
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border hover:bg-accent'
+                )}
+                key={option}
+                onClick={() => setEmoji(option)}
+                type="button"
+              >
+                <span aria-hidden>{option}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button
+          onClick={onCancel}
+          type="button"
+          variant="ghost"
+        >
+          Cancel
+        </Button>
+        <Button
+          disabled={(submitting ?? false) || !name.trim()}
+          type="submit"
+        >
+          Save
+        </Button>
+      </div>
+    </form>
   )
 }

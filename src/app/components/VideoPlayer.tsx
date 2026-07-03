@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type KeyboardEvent } from 'react'
 import videojs from 'video.js'
 import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
@@ -51,6 +51,16 @@ function pickSource(src: string): { src: string; type: string } {
   }
 
   return { src, type: 'video/mp4' }
+}
+
+function handleVideoPlayerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+  if (event.key !== 'Enter' && event.key !== ' ') {
+    return
+  }
+
+  // The button's native activation already toggles playback — just keep
+  // the page-level space hotkey from toggling it a second time.
+  event.stopPropagation()
 }
 
 export function VideoPlayer({
@@ -194,6 +204,7 @@ export function VideoPlayer({
     if (!playerRef.current) {
       return
     }
+
     if (playerRef.current.paused()) {
       void playerRef.current.play()
     } else {
@@ -202,10 +213,18 @@ export function VideoPlayer({
   }
 
   return (
-    <div
-      ref={videoRef}
-      className="w-full h-full cursor-pointer [&_video]:object-contain"
-      onClick={handleClick}
-    />
+    <div className="relative w-full h-full">
+      <div
+        className="absolute inset-0 [&_video]:object-contain"
+        ref={videoRef}
+      />
+      <button
+        aria-label="Toggle playback"
+        className="absolute inset-0 z-10 cursor-pointer appearance-none border-0 bg-transparent p-0 outline-none"
+        onClick={handleClick}
+        onKeyDown={handleVideoPlayerKeyDown}
+        type="button"
+      />
+    </div>
   )
 }

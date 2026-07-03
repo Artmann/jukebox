@@ -141,16 +141,14 @@ export function createScanManager(
       return
     }
 
-    for (const job of running) {
-      await database
-        .update(schema.scanJobs)
-        .set({
-          endedAt: now,
-          errorMessage: interruptedMessage,
-          status: 'error'
-        })
-        .where(eq(schema.scanJobs.id, job.id))
-    }
+    await database
+      .update(schema.scanJobs)
+      .set({
+        endedAt: now,
+        errorMessage: interruptedMessage,
+        status: 'error'
+      })
+      .where(eq(schema.scanJobs.status, 'running'))
 
     log.info(
       `Marked ${running.length} interrupted scan job(s) as failed after a restart.`

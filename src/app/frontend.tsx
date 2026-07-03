@@ -5,23 +5,16 @@
  * It is included in `src/index.html`.
  */
 
-import { lazy, StrictMode, Suspense } from 'react'
+import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import {
-  BrowserRouter,
-  Navigate,
-  Outlet,
-  Routes,
-  Route
-} from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { Toaster } from 'sonner'
 
 import { registerSW } from 'virtual:pwa-register'
 
-import { SearchPaletteProvider } from './components/SearchPaletteProvider'
-import { useAuthStatus } from './hooks/useAuth'
-import { useSetupStatus } from './hooks/useSetupStatus'
+import { AuthGuard } from './components/AuthGuard'
+import { SetupGuard } from './components/SetupGuard'
 import { HomePage } from './pages/Home'
 import { LoginPage } from './pages/Login'
 import { MoviesPage } from './pages/Movies'
@@ -33,59 +26,14 @@ import { SettingsScanSchedulePage } from './pages/SettingsScanSchedule'
 import { SetupPage } from './pages/Setup'
 import { ShowDetailPage } from './pages/ShowDetail'
 import { ShowsPage } from './pages/Shows'
+import { WatchPage } from './pages/WatchLazy'
 import './index.css'
-
-const WatchPage = lazy(() =>
-  import('./pages/Watch').then((module) => ({ default: module.WatchPage }))
-)
 
 const queryClient = new QueryClient()
 
 // Register the service worker for PWA support. In development the plugin is
 // configured with devOptions.enabled: false, so this becomes a no-op.
 registerSW({ immediate: true })
-
-function AuthGuard() {
-  const { data, isLoading } = useAuthStatus()
-
-  if (isLoading) {
-    return null
-  }
-
-  if (data?.enabled && !data.authenticated) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-      />
-    )
-  }
-
-  return (
-    <SearchPaletteProvider>
-      <Outlet />
-    </SearchPaletteProvider>
-  )
-}
-
-function SetupGuard() {
-  const { data, isLoading } = useSetupStatus()
-
-  if (isLoading) {
-    return null
-  }
-
-  if (data?.needsSetup) {
-    return (
-      <Navigate
-        to="/setup"
-        replace
-      />
-    )
-  }
-
-  return <Outlet />
-}
 
 const elem = document.getElementById('root')
 if (!elem) throw new Error('Root element not found')

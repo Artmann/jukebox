@@ -88,10 +88,14 @@ export function UpNextOverlay({
   }
 
   return (
-    <div
+    // A native non-modal dialog: rendered with `open` so it never steals
+    // focus or blocks the player the way showModal() would. The utility
+    // classes reset the browser's default dialog margin, inset, and border.
+    <dialog
+      aria-label="Up next"
       aria-live="polite"
-      className="absolute bottom-24 right-6 z-40 w-80 max-w-[calc(100vw-3rem)] rounded-lg bg-black/85 p-4 shadow-2xl ring-1 ring-white/10 backdrop-blur"
-      role="dialog"
+      className="absolute bottom-24 right-6 left-auto top-auto z-40 m-0 w-80 max-w-[calc(100vw-3rem)] rounded-lg border-0 bg-black/85 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur"
+      open
     >
       <div className="flex gap-3">
         <div className="w-20 flex-shrink-0 overflow-hidden rounded">
@@ -136,6 +140,6 @@ export function UpNextOverlay({
           Cancel
         </Button>
       </div>
-    </div>
+    </dialog>
   )
 }

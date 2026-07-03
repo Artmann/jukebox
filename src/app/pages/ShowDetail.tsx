@@ -1,13 +1,12 @@
 import { Loader2, PlayIcon } from 'lucide-react'
-import { useMemo, useState, useEffect, type ReactElement } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useMemo, useState, type ReactElement } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '../components/PageHeader'
 import { PosterImage } from '../components/PosterImage'
 import { useShow } from '../hooks/useShow'
-import type { Episode } from '../lib/media'
 
 interface EpisodeProgress {
   currentTime: number
@@ -60,7 +59,6 @@ function isWatched(progress: EpisodeProgress | undefined): boolean {
 
 export function ShowDetailPage(): ReactElement {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const { data: show, isLoading, error } = useShow(id)
 
   const showId = show?.id
@@ -106,29 +104,15 @@ export function ShowDetailPage(): ReactElement {
     return null
   }, [progressMap, show])
 
+  // The user's explicit pick wins; otherwise derive a default during render
+  // (the season currently being watched, falling back to the first season).
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null)
 
-  useEffect(() => {
-    if (selectedSeason !== null) {
-      return
-    }
-
-    if (!show) {
-      return
-    }
-
-    if (currentWatchingSeason !== null) {
-      setSelectedSeason(currentWatchingSeason)
-      return
-    }
-
-    const firstSeason = show.seasons[0]?.seasonNumber ?? 1
-    setSelectedSeason(firstSeason)
-  }, [show, currentWatchingSeason, selectedSeason])
-
-  function handleEpisodeClick(episode: Episode) {
-    void navigate(`/watch/episode/${episode.id}`)
-  }
+  const activeSeasonNumber =
+    selectedSeason ??
+    currentWatchingSeason ??
+    show?.seasons[0]?.seasonNumber ??
+    null
 
   if (isLoading) {
     return (
@@ -159,8 +143,9 @@ export function ShowDetailPage(): ReactElement {
   }
 
   const currentSeason =
-    show.seasons.find((season) => season.seasonNumber === selectedSeason) ??
-    show.seasons[0]
+    show.seasons.find(
+      (season) => season.seasonNumber === activeSeasonNumber
+    ) ?? show.seasons[0]
 
   const genres = show.genres
     ? show.genres.split(',').map((genre) => genre.trim())
@@ -211,7 +196,7 @@ export function ShowDetailPage(): ReactElement {
           {show.seasons.map((season) => (
             <button
               className={`cursor-pointer rounded-md px-4 min-h-11 text-sm font-medium transition-colors ${
-                season.seasonNumber === selectedSeason
+                season.seasonNumber === activeSeasonNumber
                   ? 'bg-foreground text-background'
                   : 'bg-muted text-muted-foreground hover:text-foreground'
               }`}
@@ -234,10 +219,10 @@ export function ShowDetailPage(): ReactElement {
               const inProgress = percent > 0 && !watched
 
               return (
-                <div
+                <Link
                   className="group flex items-start gap-4 rounded-lg px-3 py-3 cursor-pointer hover:bg-muted transition-colors"
                   key={episode.id}
-                  onClick={() => handleEpisodeClick(episode)}
+                  to={`/watch/episode/${episode.id}`}
                 >
                   <div className="flex-shrink-0 w-10 text-right text-sm text-muted-foreground pt-0.5">
                     {episode.episodeNumber}
@@ -283,7 +268,7 @@ export function ShowDetailPage(): ReactElement {
                   <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
                     <PlayIcon className="size-4 text-foreground" />
                   </div>
-                </div>
+                </Link>
               )
             })}
           </div>

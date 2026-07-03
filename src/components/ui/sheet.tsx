@@ -66,6 +66,15 @@ function SheetOverlay({
 
 type SheetSide = 'top' | 'right' | 'bottom' | 'left'
 
+const sideClasses: Record<SheetSide, string> = {
+  bottom:
+    'inset-x-0 bottom-0 h-auto max-h-[90vh] border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom rounded-t-xl',
+  left: 'inset-y-0 left-0 h-full w-3/4 max-w-sm border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left',
+  right:
+    'inset-y-0 right-0 h-full w-3/4 max-w-sm border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right',
+  top: 'inset-x-0 top-0 h-auto border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top'
+}
+
 interface SheetContentProps
   extends React.ComponentProps<typeof SheetPrimitive.Content> {
   hideCloseButton?: boolean
@@ -81,15 +90,6 @@ function SheetContent({
   side = 'right',
   ...props
 }: SheetContentProps) {
-  const sideClasses: Record<SheetSide, string> = {
-    bottom:
-      'inset-x-0 bottom-0 h-auto max-h-[90vh] border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom rounded-t-xl',
-    left: 'inset-y-0 left-0 h-full w-3/4 max-w-sm border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left',
-    right:
-      'inset-y-0 right-0 h-full w-3/4 max-w-sm border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right',
-    top: 'inset-x-0 top-0 h-auto border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top'
-  }
-
   return (
     <SheetPortal>
       <SheetOverlay className={overlayClassName} />

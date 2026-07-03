@@ -66,6 +66,7 @@ export function EpisodePanel({
           aria-label="Close episode panel"
           className="min-h-11 min-w-11 flex items-center justify-center text-white/60 hover:text-white cursor-pointer flex-shrink-0 ml-2"
           onClick={onClose}
+          type="button"
         >
           <X className="size-5" />
         </button>
@@ -81,6 +82,7 @@ export function EpisodePanel({
                 : 'text-white/60 hover:text-white hover:bg-white/10'
             }`}
             onClick={() => onSelectSeason(season.seasonNumber)}
+            type="button"
           >
             Season {season.seasonNumber}
           </button>
@@ -115,6 +117,7 @@ export function EpisodePanel({
                 onSelectEpisode(episode)
                 onClose()
               }}
+              type="button"
             >
               <div className="text-white/60 text-xs mb-1 flex items-center gap-1">
                 {watched && <Check className="size-3" />}

@@ -16,35 +16,36 @@ progressRoutes.get('/continue-watching', async (context) => {
     sql`(${schema.watchProgress.duration} IS NULL OR ${schema.watchProgress.currentTime} < ${schema.watchProgress.duration} * 0.9)`
   )
 
-  const movieResults = await db
-    .select({
-      currentTime: schema.watchProgress.currentTime,
-      duration: schema.watchProgress.duration,
-      movie: schema.movies,
-      updatedAt: schema.watchProgress.updatedAt
-    })
-    .from(schema.watchProgress)
-    .innerJoin(
-      schema.movies,
-      eq(schema.watchProgress.movieId, schema.movies.id)
-    )
-    .where(inProgressFilter)
-
-  const episodeResults = await db
-    .select({
-      currentTime: schema.watchProgress.currentTime,
-      duration: schema.watchProgress.duration,
-      episode: schema.episodes,
-      show: schema.shows,
-      updatedAt: schema.watchProgress.updatedAt
-    })
-    .from(schema.watchProgress)
-    .innerJoin(
-      schema.episodes,
-      eq(schema.watchProgress.episodeId, schema.episodes.id)
-    )
-    .innerJoin(schema.shows, eq(schema.episodes.showId, schema.shows.id))
-    .where(inProgressFilter)
+  const [movieResults, episodeResults] = await Promise.all([
+    db
+      .select({
+        currentTime: schema.watchProgress.currentTime,
+        duration: schema.watchProgress.duration,
+        movie: schema.movies,
+        updatedAt: schema.watchProgress.updatedAt
+      })
+      .from(schema.watchProgress)
+      .innerJoin(
+        schema.movies,
+        eq(schema.watchProgress.movieId, schema.movies.id)
+      )
+      .where(inProgressFilter),
+    db
+      .select({
+        currentTime: schema.watchProgress.currentTime,
+        duration: schema.watchProgress.duration,
+        episode: schema.episodes,
+        show: schema.shows,
+        updatedAt: schema.watchProgress.updatedAt
+      })
+      .from(schema.watchProgress)
+      .innerJoin(
+        schema.episodes,
+        eq(schema.watchProgress.episodeId, schema.episodes.id)
+      )
+      .innerJoin(schema.shows, eq(schema.episodes.showId, schema.shows.id))
+      .where(inProgressFilter)
+  ])
 
   const movies = movieResults.map((result) => ({
     ...result,
