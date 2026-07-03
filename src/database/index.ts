@@ -35,10 +35,14 @@ async function createDatabase(): Promise<Database> {
     const { Database: BunDatabase } = (await import(bunSqliteModule)) as {
       Database: new (path: string) => { exec: (sql: string) => void }
     }
-    const { drizzle } = (await import('drizzle-orm/bun-sqlite')) as {
+    // With literal specifiers tsc resolves the real drizzle types, which
+    // don't overlap with the narrowed shapes used here — go through unknown.
+    const { drizzle } = (await import('drizzle-orm/bun-sqlite')) as unknown as {
       drizzle: (sqlite: unknown, options: { schema: Schema }) => Database
     }
-    const { migrate } = (await import('drizzle-orm/bun-sqlite/migrator')) as {
+    const { migrate } = (await import(
+      'drizzle-orm/bun-sqlite/migrator'
+    )) as unknown as {
       migrate: (db: Database, config: { migrationsFolder: string }) => void
     }
 
