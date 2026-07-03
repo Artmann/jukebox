@@ -45,10 +45,36 @@ export interface ScanCompleteEvent extends ScanProgressPayload {
   errorMessage: string | null
 }
 
+export interface LibraryScanResult {
+  added: number
+  error: string | null
+  libraryId: number
+  name: string
+  status: 'complete' | 'error'
+  total: number
+  updated: number
+}
+
 export interface ScanManagerStatus {
   currentJob: ScanJob | null
   isRunning: boolean
   lastJob: ScanJob | null
+}
+
+export function parseLibraryResults(
+  serialized: string | null
+): LibraryScanResult[] {
+  if (serialized === null) {
+    return []
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(serialized)
+
+    return Array.isArray(parsed) ? (parsed as LibraryScanResult[]) : []
+  } catch {
+    return []
+  }
 }
 
 export type StartResult =
@@ -196,6 +222,18 @@ export function createScanManager(
     let totalUpdated = 0
     let totalFound = 0
     const libraryErrors: string[] = []
+    const libraryResults: LibraryScanResult[] = []
+
+    // Persist per-library results as they land so a page opened mid-scan (or
+    // after the scan finished) can reconstruct each library's outcome.
+    const persistLibraryResult = async (result: LibraryScanResult) => {
+      libraryResults.push(result)
+
+      await database
+        .update(schema.scanJobs)
+        .set({ libraryResults: JSON.stringify(libraryResults) })
+        .where(eq(schema.scanJobs.id, inserted.id))
+    }
 
     try {
       for (let index = 0; index < libraries.length; index++) {
@@ -243,6 +281,16 @@ export function createScanManager(
           totalUpdated += result.updated
           totalFound += result.total
 
+          await persistLibraryResult({
+            added: result.added,
+            error: null,
+            libraryId: library.id,
+            name: library.name,
+            status: 'complete',
+            total: result.total,
+            updated: result.updated
+          })
+
           emitter.emit('library-complete', {
             ...result,
             index,
@@ -255,6 +303,16 @@ export function createScanManager(
               : 'Unknown error'
 
           libraryErrors.push(`${library.name} — ${message}`)
+
+          await persistLibraryResult({
+            added: 0,
+            error: message,
+            libraryId: library.id,
+            name: library.name,
+            status: 'error',
+            total: 0,
+            updated: 0
+          })
 
           emitter.emit('library-error', {
             error: message,

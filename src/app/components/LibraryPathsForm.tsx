@@ -1,4 +1,4 @@
-import { FolderOpen, Plus, Trash2 } from 'lucide-react'
+import { CheckCircle, FolderOpen, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useState, type ReactElement } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -19,88 +19,86 @@ export interface LibraryEntry {
   type: 'movies' | 'shows'
 }
 
+export interface LibraryDraft extends LibraryEntry {
+  id: string
+}
+
+export type LibraryRowValidation =
+  | { status: 'checking' }
+  | { message: string; status: 'invalid' }
+  | { status: 'valid' }
+
 interface LibraryPathsFormProps {
   addButtonLabel?: string
   emptyButtonLabel?: string
-  onChange: (libraries: LibraryEntry[]) => void
-  value: LibraryEntry[]
+  onChange: (libraries: LibraryDraft[]) => void
+  /**
+   * Fired when a row's path is committed — the input loses focus with a
+   * non-empty path, or a folder is picked in the browse dialog. Lets the
+   * parent run live validation without reacting to every keystroke.
+   */
+  onPathCommitted?: (library: LibraryDraft) => void
+  validation?: Record<string, LibraryRowValidation>
+  value: LibraryDraft[]
 }
 
-// Entries have no id field and the prop contract can't change, so row keys
-// are generated lazily per entry object. When an entry is replaced by an
-// edit, updateLibrary carries the key over to the replacement object.
-const libraryEntryKeys = new WeakMap<LibraryEntry, string>()
-let libraryEntryKeyCounter = 0
-
-function getLibraryEntryKey(entry: LibraryEntry): string {
-  const existing = libraryEntryKeys.get(entry)
-
-  if (existing !== undefined) {
-    return existing
-  }
-
-  libraryEntryKeyCounter += 1
-
-  const created = `library-entry-${libraryEntryKeyCounter}`
-
-  libraryEntryKeys.set(entry, created)
-
-  return created
+export function makeLibraryDraft(
+  entry: LibraryEntry = { name: '', path: '', type: 'movies' }
+): LibraryDraft {
+  return { ...entry, id: crypto.randomUUID() }
 }
 
 export function LibraryPathsForm({
   addButtonLabel,
   emptyButtonLabel,
   onChange,
+  onPathCommitted,
+  validation,
   value
 }: LibraryPathsFormProps): ReactElement {
-  const [editingIndex, setEditingIndex] = useState<number | null>(null)
-  const [browsingIndex, setBrowsingIndex] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [browsingId, setBrowsingId] = useState<string | null>(null)
 
   function addLibrary() {
-    const newIndex = value.length
+    const draft = makeLibraryDraft()
 
-    onChange([...value, { name: '', path: '', type: 'movies' }])
-    setEditingIndex(newIndex)
+    onChange([...value, draft])
+    setEditingId(draft.id)
   }
 
-  function removeLibrary(index: number) {
-    onChange(value.filter((_, innerIndex) => innerIndex !== index))
+  function removeLibrary(id: string) {
+    onChange(value.filter((library) => library.id !== id))
 
-    if (editingIndex === index) {
-      setEditingIndex(null)
+    if (editingId === id) {
+      setEditingId(null)
+    }
+
+    if (browsingId === id) {
+      setBrowsingId(null)
     }
   }
 
   function updateLibrary(
-    index: number,
+    id: string,
     field: keyof LibraryEntry,
     fieldValue: string
   ) {
     onChange(
-      value.map((library, innerIndex) => {
-        if (innerIndex !== index) {
-          return library
-        }
-
-        const updated = { ...library, [field]: fieldValue }
-
-        libraryEntryKeys.set(updated, getLibraryEntryKey(library))
-
-        return updated
-      })
+      value.map((library) =>
+        library.id === id ? { ...library, [field]: fieldValue } : library
+      )
     )
   }
 
-  function handleBlur(index: number) {
-    const current = value[index]
+  function handleBlur(library: LibraryDraft) {
+    setEditingId(null)
 
-    if (current && current.path.trim() === '') {
-      removeLibrary(index)
+    if (library.path.trim() !== '') {
+      onPathCommitted?.(library)
     }
-
-    setEditingIndex(null)
   }
+
+  const browsingLibrary = value.find((library) => library.id === browsingId)
 
   if (value.length === 0) {
     return (
@@ -117,78 +115,100 @@ export function LibraryPathsForm({
 
   return (
     <div className="space-y-2">
-      {value.map((library, index) => (
-        <div
-          className="flex items-center gap-3"
-          key={getLibraryEntryKey(library)}
-        >
-          {editingIndex === index ? (
-            <Input
-              autoFocus
-              className="flex-[2]"
-              onBlur={() => handleBlur(index)}
-              onChange={(event) =>
-                updateLibrary(index, 'path', event.target.value)
-              }
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  event.currentTarget.blur()
-                }
-              }}
-              placeholder="/mnt/media/movies"
-              value={library.path}
-            />
-          ) : (
-            <button
-              className="flex-[2] cursor-pointer truncate rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
-              onClick={() => setEditingIndex(index)}
-              type="button"
-            >
-              {library.path || (
-                <span className="text-muted-foreground">
-                  /mnt/media/movies
-                </span>
+      {value.map((library) => {
+        const rowValidation = validation?.[library.id]
+
+        return (
+          <div key={library.id}>
+            <div className="flex items-center gap-3">
+              {editingId === library.id ? (
+                <Input
+                  autoFocus
+                  className="flex-[2]"
+                  onBlur={() => handleBlur(library)}
+                  onChange={(event) =>
+                    updateLibrary(library.id, 'path', event.target.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      event.currentTarget.blur()
+                    }
+                  }}
+                  placeholder="/mnt/media/movies"
+                  value={library.path}
+                />
+              ) : (
+                <button
+                  className="flex-[2] cursor-pointer truncate rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
+                  onClick={() => setEditingId(library.id)}
+                  type="button"
+                >
+                  {library.path || (
+                    <span className="text-muted-foreground">
+                      /mnt/media/movies
+                    </span>
+                  )}
+                </button>
               )}
-            </button>
-          )}
 
-          <Button
-            aria-label="Browse folders"
-            onClick={() => setBrowsingIndex(index)}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-          >
-            <FolderOpen className="size-4" />
-          </Button>
+              {rowValidation?.status === 'checking' && (
+                <Loader2
+                  aria-label="Checking folder"
+                  className="size-4 shrink-0 animate-spin text-muted-foreground"
+                />
+              )}
+              {rowValidation?.status === 'valid' && (
+                <CheckCircle
+                  aria-label="Folder found"
+                  className="size-4 shrink-0 text-foreground/60"
+                />
+              )}
 
-          <Select
-            onValueChange={(nextType) =>
-              updateLibrary(index, 'type', nextType)
-            }
-            value={library.type}
-          >
-            <SelectTrigger className="w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="movies">Movies</SelectItem>
-              <SelectItem value="shows">Shows</SelectItem>
-            </SelectContent>
-          </Select>
+              <Button
+                aria-label="Browse folders"
+                onClick={() => setBrowsingId(library.id)}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+              >
+                <FolderOpen className="size-4" />
+              </Button>
 
-          <Button
-            aria-label="Remove library"
-            onClick={() => removeLibrary(index)}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </div>
-      ))}
+              <Select
+                onValueChange={(nextType) =>
+                  updateLibrary(library.id, 'type', nextType)
+                }
+                value={library.type}
+              >
+                <SelectTrigger className="w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="movies">Movies</SelectItem>
+                  <SelectItem value="shows">Shows</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                aria-label="Remove library"
+                onClick={() => removeLibrary(library.id)}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+
+            {rowValidation?.status === 'invalid' && (
+              <p className="mt-1 px-3 text-xs text-destructive">
+                {rowValidation.message}
+              </p>
+            )}
+          </div>
+        )
+      })}
 
       <Button
         className="mt-1"
@@ -201,18 +221,27 @@ export function LibraryPathsForm({
         {addButtonLabel ?? 'Add another'}
       </Button>
 
-      {browsingIndex !== null && (
+      {browsingLibrary && (
         <DirectoryBrowserDialog
-          initialPath={value[browsingIndex]?.path}
+          initialPath={browsingLibrary.path}
           onOpenChange={(open) => {
             if (!open) {
-              setBrowsingIndex(null)
+              setBrowsingId(null)
             }
           }}
           onSelect={(selectedPath) => {
-            updateLibrary(browsingIndex, 'path', selectedPath)
+            // Target the row by its stable id — the list may have changed
+            // while the dialog was open.
+            const updated = { ...browsingLibrary, path: selectedPath }
+
+            onChange(
+              value.map((library) =>
+                library.id === browsingLibrary.id ? updated : library
+              )
+            )
+            onPathCommitted?.(updated)
           }}
-          open={browsingIndex !== null}
+          open={browsingLibrary !== undefined}
         />
       )}
     </div>

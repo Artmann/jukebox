@@ -1,8 +1,10 @@
+import type { Dirent } from 'fs'
 import { readdir, stat } from 'fs/promises'
 import { join, extname, basename } from 'path'
 import { db, schema } from '../database'
 import { eq } from 'drizzle-orm'
 import type { NewMovie } from '../database/schema'
+import { readLibraryRoot } from './library-validation'
 import { fetchMovieByExternalId, fetchMovieMetadata } from './metadata'
 import { cleanTitle, extractYear } from './filename-parser'
 import { subtitleExtensions, videoExtensions } from './media-extensions'
@@ -20,7 +22,15 @@ interface ScannedVideo {
  * piggybacks on the directory read instead of re-globbing per file.
  */
 async function* scanDirectory(dir: string): AsyncGenerator<ScannedVideo> {
-  const entries = await readdir(dir, { withFileTypes: true })
+  // Unreadable nested folders are tolerated (the root is validated up front
+  // in scanLibrary) — one bad subfolder shouldn't kill the whole scan.
+  let entries: Dirent[]
+
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
 
   const videoFiles: string[] = []
   const subtitleSiblings: string[] = []
@@ -75,6 +85,10 @@ export async function scanLibrary(
   let total = 0
 
   console.log(`Scanning: ${libraryPath}`)
+
+  // Validate the library root up front — an unreadable root throws an
+  // actionable error instead of silently scanning zero files.
+  await readLibraryRoot(libraryPath)
 
   for await (const { filePath, subtitleSiblings } of scanDirectory(
     libraryPath

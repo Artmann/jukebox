@@ -1,18 +1,42 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
 
+import { scanStatusQueryKey } from './useScanStatus'
 import type { LibraryProgress } from '../pages/scan-types'
 
 export function useScanEventStream(
   setLibraries: Dispatch<SetStateAction<LibraryProgress[] | null>>,
-  setLiveActive: Dispatch<SetStateAction<boolean>>
+  setLiveActive: Dispatch<SetStateAction<boolean>>,
+  markLiveSeen: () => void
 ) {
+  const queryClient = useQueryClient()
+
   useEffect(() => {
     const eventSource = new EventSource('/api/scan/stream')
+
+    // Resetting rows on the server's scan-started event (instead of after the
+    // start POST resolves) keeps resets strictly ordered with the library
+    // events on the same stream — a fast scan finishing before the POST
+    // returns can no longer be clobbered back to "Waiting".
+    eventSource.addEventListener('scan-started', () => {
+      markLiveSeen()
+      setLiveActive(true)
+      setLibraries(
+        (previous) =>
+          previous?.map((library) => ({
+            ...library,
+            error: undefined,
+            progress: { added: 0, total: 0, updated: 0 },
+            status: 'pending' as const
+          })) ?? null
+      )
+    })
 
     eventSource.addEventListener('library-start', (event) => {
       const payload = JSON.parse(event.data as string) as {
         libraryId: number
       }
+      markLiveSeen()
       setLiveActive(true)
       setLibraries(
         (previous) =>
@@ -94,10 +118,13 @@ export function useScanEventStream(
 
     eventSource.addEventListener('scan-complete', () => {
       setLiveActive(false)
+      // Refresh the summary line ("Scanned a few seconds ago · …") with the
+      // finished job's totals.
+      void queryClient.invalidateQueries({ queryKey: scanStatusQueryKey })
     })
 
     return () => {
       eventSource.close()
     }
-  }, [setLibraries, setLiveActive])
+  }, [markLiveSeen, queryClient, setLibraries, setLiveActive])
 }

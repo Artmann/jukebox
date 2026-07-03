@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 
 interface SetupStatus {
-  hasApiKey: boolean
   libraryCount: number
   needsSetup: boolean
 }
+
+export const setupStatusQueryKey = ['setupStatus'] as const
 
 async function fetchSetupStatus(): Promise<SetupStatus> {
   const response = await fetch('/api/setup')
@@ -18,7 +19,7 @@ async function fetchSetupStatus(): Promise<SetupStatus> {
 
 export function useSetupStatus() {
   return useQuery({
-    queryKey: ['setupStatus'],
+    queryKey: setupStatusQueryKey,
     queryFn: fetchSetupStatus
   })
 }
