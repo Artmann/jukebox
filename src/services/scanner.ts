@@ -217,5 +217,9 @@ export async function scanLibrary(
     console.log(`  Found: ${title}`)
   }
 
+  console.log(
+    `Finished scanning ${libraryPath}: ${total} video file(s) found.`
+  )
+
   return { added, updated, total }
 }

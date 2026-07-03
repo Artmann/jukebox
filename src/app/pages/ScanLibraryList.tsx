@@ -4,6 +4,22 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 import type { LibraryProgress } from './scan-types'
 
+function formatProgressCounts(
+  progress: LibraryProgress['progress']
+): string {
+  const parts = [`${progress.total} files`]
+
+  if (progress.added > 0) {
+    parts.push(`${progress.added} new`)
+  }
+
+  if (progress.updated > 0) {
+    parts.push(`${progress.updated} updated`)
+  }
+
+  return parts.join(' · ')
+}
+
 function LibraryProgressRow({
   isRunning,
   library
@@ -38,19 +54,19 @@ function LibraryProgressRow({
           </p>
         )}
 
-        {(library.status === 'scanning' || library.status === 'complete') && (
+        {library.status === 'scanning' && (
           <p className="text-xs text-muted-foreground">
-            {library.progress.total > 0 ? (
-              <>
-                {library.progress.total} files
-                {library.progress.added > 0 &&
-                  ` \u00b7 ${library.progress.added} new`}
-                {library.progress.updated > 0 &&
-                  ` \u00b7 ${library.progress.updated} updated`}
-              </>
-            ) : (
-              'Scanning…'
-            )}
+            {library.progress.total > 0
+              ? formatProgressCounts(library.progress)
+              : 'Scanning…'}
+          </p>
+        )}
+
+        {library.status === 'complete' && (
+          <p className="text-xs text-muted-foreground">
+            {library.progress.total > 0
+              ? formatProgressCounts(library.progress)
+              : 'No video files found'}
           </p>
         )}
 

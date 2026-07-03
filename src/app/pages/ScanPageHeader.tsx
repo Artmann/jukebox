@@ -45,22 +45,34 @@ export function ScanPageHeader({
   )
 }
 
-export function ScanStartButton({
+export function ScanActions({
   isPending,
   isRunning,
+  onContinue,
   onStart
 }: {
   isPending: boolean
   isRunning: boolean
+  onContinue: () => void
   onStart: () => void
 }) {
   return (
-    <div className="mt-12 animate-fade-up animate-delay-2">
+    <div className="mt-12 flex items-center gap-3 animate-fade-up animate-delay-2">
+      <Button
+        disabled={isRunning || isPending}
+        onClick={onContinue}
+        size="lg"
+        type="button"
+      >
+        Continue
+      </Button>
+
       <Button
         disabled={isRunning || isPending}
         onClick={onStart}
         size="lg"
         type="button"
+        variant="outline"
       >
         {isRunning
           ? 'Scan in progress…'

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import { ScanPage } from './Scan'
 
@@ -170,11 +170,13 @@ describe('ScanPage', () => {
     renderScan()
 
     await waitFor(() => {
-      expect(screen.getByRole('button')).toHaveTextContent('Start manual scan')
+      expect(
+        screen.getByRole('button', { name: 'Start manual scan' })
+      ).toBeInTheDocument()
     })
   })
 
-  it('disables the button while a scan is running', async () => {
+  it('disables both buttons while a scan is running', async () => {
     setFetchResponses({
       '/api/scan/libraries': {
         ok: true,
@@ -207,7 +209,10 @@ describe('ScanPage', () => {
     renderScan()
 
     await waitFor(() => {
-      expect(screen.getByRole('button')).toBeDisabled()
+      expect(
+        screen.getByRole('button', { name: 'Scan in progress…' })
+      ).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
     })
   })
 
@@ -245,10 +250,12 @@ describe('ScanPage', () => {
     renderScan()
 
     await waitFor(() => {
-      expect(screen.getByRole('button')).toHaveTextContent('Start manual scan')
+      expect(
+        screen.getByRole('button', { name: 'Start manual scan' })
+      ).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByRole('button', { name: 'Start manual scan' }))
 
     // A fast (e.g. empty-folder) scan finishes entirely while the start POST
     // is still in flight.
@@ -460,7 +467,9 @@ describe('ScanPage', () => {
     renderScan()
 
     await waitFor(() => {
-      expect(screen.getByRole('button')).toHaveTextContent('Start manual scan')
+      expect(
+        screen.getByRole('button', { name: 'Start manual scan' })
+      ).toBeInTheDocument()
     })
 
     const fetchMock = vi.mocked(global.fetch)
@@ -469,6 +478,120 @@ describe('ScanPage', () => {
     )
 
     expect(startCalls).toHaveLength(0)
+  })
+
+  it('shows No video files found for a completed library with zero files', async () => {
+    setFetchResponses({
+      '/api/scan/libraries': {
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' },
+            { id: 2, name: 'Blender', path: 'D:\\Blender', type: 'movies' }
+          ])
+      },
+      '/api/scan/status': {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            currentJob: null,
+            isRunning: false,
+            lastJob: {
+              added: 0,
+              endedAt: '2026-07-03T20:17:33.000Z',
+              errorMessage: null,
+              id: 95,
+              libraries: [
+                {
+                  added: 0,
+                  error: null,
+                  libraryId: 1,
+                  name: 'Movies',
+                  status: 'complete',
+                  total: 9,
+                  updated: 9
+                },
+                {
+                  added: 0,
+                  error: null,
+                  libraryId: 2,
+                  name: 'Blender',
+                  status: 'complete',
+                  total: 0,
+                  updated: 0
+                }
+              ],
+              startedAt: '2026-07-03T20:17:18.000Z',
+              status: 'done',
+              total: 9,
+              updated: 9
+            }
+          })
+      }
+    })
+
+    renderScan()
+
+    // The regression: a completed library with zero video files used to
+    // render a permanent "Scanning…" even though the scan was long done.
+    await waitFor(() => {
+      expect(screen.getByText('No video files found')).toBeInTheDocument()
+      expect(screen.queryByText('Scanning…')).not.toBeInTheDocument()
+    })
+  })
+
+  it('navigates home when Continue is clicked while idle', async () => {
+    setFetchResponses({
+      '/api/scan/libraries': {
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' }
+          ])
+      },
+      '/api/scan/status': {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            currentJob: null,
+            isRunning: false,
+            lastJob: null
+          })
+      }
+    })
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/scan']}>
+          <Routes>
+            <Route
+              element={<ScanPage />}
+              path="/scan"
+            />
+            <Route
+              element={<div>Home page</div>}
+              path="/"
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Continue' })
+      ).not.toBeDisabled()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Home page')).toBeInTheDocument()
+    })
   })
 
   it('shows an empty-libraries message when none are configured', async () => {
