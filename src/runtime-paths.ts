@@ -35,7 +35,7 @@ function resolveBinaryDirectory(): string {
 // executable, `import.meta.url` points at a virtual `$bunfs` path that does
 // not exist on disk, so we anchor the lookup at the binary's directory
 // instead — that is where the release archive places the support files.
-export function getApplicationRoot(): string {
+function getApplicationRoot(): string {
   if (isCompiledExecutable()) {
     return resolveBinaryDirectory()
   }

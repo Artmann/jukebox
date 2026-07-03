@@ -34,7 +34,7 @@ export function buildGenreRows(
   return rows
 }
 
-export function parseGenresFromMedia(mediaItem: MediaItem): string[] {
+function parseGenresFromMedia(mediaItem: MediaItem): string[] {
   const genresString = mediaItem.item.genres
 
   return parseGenres(genresString)

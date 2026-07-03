@@ -1,10 +1,5 @@
 import { FolderOpen, Plus, Trash2 } from 'lucide-react'
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ReactElement
-} from 'react'
+import { useState, type ReactElement } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,6 +26,28 @@ interface LibraryPathsFormProps {
   value: LibraryEntry[]
 }
 
+// Entries have no id field and the prop contract can't change, so row keys
+// are generated lazily per entry object. When an entry is replaced by an
+// edit, updateLibrary carries the key over to the replacement object.
+const libraryEntryKeys = new WeakMap<LibraryEntry, string>()
+let libraryEntryKeyCounter = 0
+
+function getLibraryEntryKey(entry: LibraryEntry): string {
+  const existing = libraryEntryKeys.get(entry)
+
+  if (existing !== undefined) {
+    return existing
+  }
+
+  libraryEntryKeyCounter += 1
+
+  const created = `library-entry-${libraryEntryKeyCounter}`
+
+  libraryEntryKeys.set(entry, created)
+
+  return created
+}
+
 export function LibraryPathsForm({
   addButtonLabel,
   emptyButtonLabel,
@@ -39,16 +56,6 @@ export function LibraryPathsForm({
 }: LibraryPathsFormProps): ReactElement {
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [browsingIndex, setBrowsingIndex] = useState<number | null>(null)
-  const pathInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(
-    function focusEditingInput() {
-      if (editingIndex !== null) {
-        pathInputRef.current?.focus()
-      }
-    },
-    [editingIndex]
-  )
 
   function addLibrary() {
     const newIndex = value.length
@@ -71,9 +78,17 @@ export function LibraryPathsForm({
     fieldValue: string
   ) {
     onChange(
-      value.map((library, innerIndex) =>
-        innerIndex === index ? { ...library, [field]: fieldValue } : library
-      )
+      value.map((library, innerIndex) => {
+        if (innerIndex !== index) {
+          return library
+        }
+
+        const updated = { ...library, [field]: fieldValue }
+
+        libraryEntryKeys.set(updated, getLibraryEntryKey(library))
+
+        return updated
+      })
     )
   }
 
@@ -105,11 +120,11 @@ export function LibraryPathsForm({
       {value.map((library, index) => (
         <div
           className="flex items-center gap-3"
-          key={index}
+          key={getLibraryEntryKey(library)}
         >
           {editingIndex === index ? (
             <Input
-              ref={pathInputRef}
+              autoFocus
               className="flex-[2]"
               onBlur={() => handleBlur(index)}
               onChange={(event) =>
@@ -118,7 +133,7 @@ export function LibraryPathsForm({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault()
-                  pathInputRef.current?.blur()
+                  event.currentTarget.blur()
                 }
               }}
               placeholder="/mnt/media/movies"

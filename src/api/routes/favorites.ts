@@ -9,25 +9,26 @@ const favoriteRoutes = new Hono<ProfileContext>()
 favoriteRoutes.get('/', async (context) => {
   const profileId = context.get('profileId')
 
-  const movieFavorites = await db
-    .select({
-      createdAt: schema.favorites.createdAt,
-      movie: schema.movies
-    })
-    .from(schema.favorites)
-    .innerJoin(schema.movies, eq(schema.favorites.movieId, schema.movies.id))
-    .where(eq(schema.favorites.profileId, profileId))
-    .orderBy(desc(schema.favorites.createdAt))
-
-  const showFavorites = await db
-    .select({
-      createdAt: schema.favorites.createdAt,
-      show: schema.shows
-    })
-    .from(schema.favorites)
-    .innerJoin(schema.shows, eq(schema.favorites.showId, schema.shows.id))
-    .where(eq(schema.favorites.profileId, profileId))
-    .orderBy(desc(schema.favorites.createdAt))
+  const [movieFavorites, showFavorites] = await Promise.all([
+    db
+      .select({
+        createdAt: schema.favorites.createdAt,
+        movie: schema.movies
+      })
+      .from(schema.favorites)
+      .innerJoin(schema.movies, eq(schema.favorites.movieId, schema.movies.id))
+      .where(eq(schema.favorites.profileId, profileId))
+      .orderBy(desc(schema.favorites.createdAt)),
+    db
+      .select({
+        createdAt: schema.favorites.createdAt,
+        show: schema.shows
+      })
+      .from(schema.favorites)
+      .innerJoin(schema.shows, eq(schema.favorites.showId, schema.shows.id))
+      .where(eq(schema.favorites.profileId, profileId))
+      .orderBy(desc(schema.favorites.createdAt))
+  ])
 
   const movies = movieFavorites.map((row) => ({
     ...row,

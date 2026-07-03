@@ -1,7 +1,7 @@
 import {
   createContext,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
@@ -87,7 +87,7 @@ export function SearchPaletteProvider({
 }
 
 export function useSearchPalette(): SearchPaletteContextValue {
-  const value = useContext(SearchPaletteContext)
+  const value = use(SearchPaletteContext)
 
   if (value === null) {
     throw new Error(

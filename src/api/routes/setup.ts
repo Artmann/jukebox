@@ -36,14 +36,14 @@ setupRoutes.post('/complete', async (context) => {
 
   const now = new Date()
 
-  for (const library of body.libraries) {
-    await db.insert(schema.libraries).values({
+  await db.insert(schema.libraries).values(
+    body.libraries.map((library) => ({
       name: library.name,
       path: library.path,
       type: library.type,
       createdAt: now
-    })
-  }
+    }))
+  )
 
   return context.json({ success: true })
 })

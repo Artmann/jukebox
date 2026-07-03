@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { Command } from 'cmdk'
 import { Loader2, Search } from 'lucide-react'
-import { useEffect, useState, type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { cn } from '@/lib/utils'
@@ -24,21 +24,38 @@ export function SearchPalette({
   onOpenChange,
   open
 }: SearchPaletteProps): ReactElement {
+  return (
+    <Dialog.Root
+      onOpenChange={onOpenChange}
+      open={open}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <Dialog.Content
+          aria-describedby={undefined}
+          className="fixed left-1/2 top-[12vh] z-50 w-[92vw] max-w-2xl -translate-x-1/2 overflow-hidden rounded-lg border bg-background shadow-2xl"
+        >
+          <Dialog.Title className="sr-only">Search your library</Dialog.Title>
+          <SearchPaletteContent onOpenChange={onOpenChange} />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+// Radix unmounts the dialog content while closed, so the query state here is
+// created fresh on every open — no "clear on close" effect needed.
+function SearchPaletteContent({
+  onOpenChange
+}: {
+  onOpenChange: (open: boolean) => void
+}): ReactElement {
   const [query, setQuery] = useState('')
   const debouncedQuery = useDebouncedValue(query, 200)
   const navigate = useNavigate()
 
   const trimmedQuery = debouncedQuery.trim()
   const { data, error, isFetching } = useSearch(debouncedQuery)
-
-  useEffect(
-    function resetWhenClosed() {
-      if (!open) {
-        setQuery('')
-      }
-    },
-    [open]
-  )
 
   function close() {
     onOpenChange(false)
@@ -65,117 +82,103 @@ export function SearchPalette({
     !showIndexEmptyState
 
   return (
-    <Dialog.Root
-      onOpenChange={onOpenChange}
-      open={open}
+    <Command
+      label="Search your library"
+      shouldFilter={false}
     >
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <Dialog.Content
-          aria-describedby={undefined}
-          className="fixed left-1/2 top-[12vh] z-50 w-[92vw] max-w-2xl -translate-x-1/2 overflow-hidden rounded-lg border bg-background shadow-2xl"
-        >
-          <Dialog.Title className="sr-only">Search your library</Dialog.Title>
-          <Command
-            label="Search your library"
-            shouldFilter={false}
+      <div className="flex items-center gap-2 border-b px-3">
+        <Search
+          aria-hidden
+          className="size-4 text-muted-foreground"
+        />
+        <Command.Input
+          autoFocus
+          className="flex h-12 w-full bg-transparent text-base outline-none placeholder:text-muted-foreground"
+          onValueChange={setQuery}
+          placeholder="Search movies, shows, episodes…"
+          value={query}
+        />
+        {isFetching ? (
+          <Loader2
+            aria-label="Searching"
+            className="size-4 animate-spin text-muted-foreground"
+          />
+        ) : null}
+      </div>
+
+      <Command.List className="max-h-[60vh] overflow-y-auto p-2">
+        {!hasQuery ? (
+          <PlaceholderMessage>
+            Start typing to search your library.
+          </PlaceholderMessage>
+        ) : null}
+
+        {error ? (
+          <PlaceholderMessage tone="error">
+            {error.message}
+          </PlaceholderMessage>
+        ) : null}
+
+        {showIndexEmptyState ? (
+          <PlaceholderMessage>
+            Search index isn&rsquo;t ready yet. Try again after the next
+            scan completes.
+          </PlaceholderMessage>
+        ) : null}
+
+        {showEmptyState ? (
+          <PlaceholderMessage>
+            No matches for &ldquo;{trimmedQuery}&rdquo;. Try a shorter
+            term or check your library.
+          </PlaceholderMessage>
+        ) : null}
+
+        {data && data.movies.length > 0 ? (
+          <Command.Group
+            className="px-1 py-1 text-xs uppercase tracking-wide text-muted-foreground"
+            heading="Movies"
           >
-            <div className="flex items-center gap-2 border-b px-3">
-              <Search
-                aria-hidden
-                className="size-4 text-muted-foreground"
+            {data.movies.map((movie) => (
+              <MovieItem
+                key={movie.id}
+                movie={movie}
+                onSelect={() => goTo(`/watch/${movie.id}`)}
               />
-              <Command.Input
-                autoFocus
-                className="flex h-12 w-full bg-transparent text-base outline-none placeholder:text-muted-foreground"
-                onValueChange={setQuery}
-                placeholder="Search movies, shows, episodes…"
-                value={query}
+            ))}
+          </Command.Group>
+        ) : null}
+
+        {data && data.shows.length > 0 ? (
+          <Command.Group
+            className="px-1 py-1 text-xs uppercase tracking-wide text-muted-foreground"
+            heading="Shows"
+          >
+            {data.shows.map((show) => (
+              <ShowItem
+                key={show.id}
+                onSelect={() => goTo(`/shows/${show.id}`)}
+                show={show}
               />
-              {isFetching ? (
-                <Loader2
-                  aria-label="Searching"
-                  className="size-4 animate-spin text-muted-foreground"
-                />
-              ) : null}
-            </div>
+            ))}
+          </Command.Group>
+        ) : null}
 
-            <Command.List className="max-h-[60vh] overflow-y-auto p-2">
-              {!hasQuery ? (
-                <PlaceholderMessage>
-                  Start typing to search your library.
-                </PlaceholderMessage>
-              ) : null}
-
-              {error ? (
-                <PlaceholderMessage tone="error">
-                  {error.message}
-                </PlaceholderMessage>
-              ) : null}
-
-              {showIndexEmptyState ? (
-                <PlaceholderMessage>
-                  Search index isn&rsquo;t ready yet. Try again after the next
-                  scan completes.
-                </PlaceholderMessage>
-              ) : null}
-
-              {showEmptyState ? (
-                <PlaceholderMessage>
-                  No matches for &ldquo;{trimmedQuery}&rdquo;. Try a shorter
-                  term or check your library.
-                </PlaceholderMessage>
-              ) : null}
-
-              {data && data.movies.length > 0 ? (
-                <Command.Group
-                  className="px-1 py-1 text-xs uppercase tracking-wide text-muted-foreground"
-                  heading="Movies"
-                >
-                  {data.movies.map((movie) => (
-                    <MovieItem
-                      key={movie.id}
-                      movie={movie}
-                      onSelect={() => goTo(`/watch/${movie.id}`)}
-                    />
-                  ))}
-                </Command.Group>
-              ) : null}
-
-              {data && data.shows.length > 0 ? (
-                <Command.Group
-                  className="px-1 py-1 text-xs uppercase tracking-wide text-muted-foreground"
-                  heading="Shows"
-                >
-                  {data.shows.map((show) => (
-                    <ShowItem
-                      key={show.id}
-                      onSelect={() => goTo(`/shows/${show.id}`)}
-                      show={show}
-                    />
-                  ))}
-                </Command.Group>
-              ) : null}
-
-              {data && data.episodes.length > 0 ? (
-                <Command.Group
-                  className="px-1 py-1 text-xs uppercase tracking-wide text-muted-foreground"
-                  heading="Episodes"
-                >
-                  {data.episodes.map((episode) => (
-                    <EpisodeItem
-                      episode={episode}
-                      key={episode.id}
-                      onSelect={() => goTo(`/watch/episode/${episode.id}`)}
-                    />
-                  ))}
-                </Command.Group>
-              ) : null}
-            </Command.List>
-          </Command>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        {data && data.episodes.length > 0 ? (
+          <Command.Group
+            className="px-1 py-1 text-xs uppercase tracking-wide text-muted-foreground"
+            heading="Episodes"
+          >
+            {data.episodes.map((episode) => (
+              <EpisodeItem
+                episode={episode}
+                key={episode.id}
+                onSelect={() => goTo(`/watch/episode/${episode.id}`)}
+              />
+            ))}
+          </Command.Group>
+        ) : null}
+      </Command.List>
+    </Command>
   )
 }
 

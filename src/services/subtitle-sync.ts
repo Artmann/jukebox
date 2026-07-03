@@ -13,11 +13,11 @@ export async function syncSubtitlesForMovie(
   movieId: number,
   discovered: DiscoveredSubtitle[]
 ): Promise<void> {
-  await db
-    .delete(schema.subtitles)
-    .where(eq(schema.subtitles.movieId, movieId))
-
   if (discovered.length === 0) {
+    await db
+      .delete(schema.subtitles)
+      .where(eq(schema.subtitles.movieId, movieId))
+
     return
   }
 
@@ -29,6 +29,10 @@ export async function syncSubtitlesForMovie(
     language: subtitle.language
   }))
 
+  await db
+    .delete(schema.subtitles)
+    .where(eq(schema.subtitles.movieId, movieId))
+
   await db.insert(schema.subtitles).values(rows)
 }
 
@@ -39,11 +43,11 @@ export async function syncSubtitlesForEpisode(
   episodeId: number,
   discovered: DiscoveredSubtitle[]
 ): Promise<void> {
-  await db
-    .delete(schema.subtitles)
-    .where(eq(schema.subtitles.episodeId, episodeId))
-
   if (discovered.length === 0) {
+    await db
+      .delete(schema.subtitles)
+      .where(eq(schema.subtitles.episodeId, episodeId))
+
     return
   }
 
@@ -54,6 +58,10 @@ export async function syncSubtitlesForEpisode(
     format: subtitle.format,
     language: subtitle.language
   }))
+
+  await db
+    .delete(schema.subtitles)
+    .where(eq(schema.subtitles.episodeId, episodeId))
 
   await db.insert(schema.subtitles).values(rows)
 }

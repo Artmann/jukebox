@@ -9,7 +9,7 @@ import { ScanIndicator } from './ScanIndicator'
 import { useSearchPalette } from './SearchPaletteProvider'
 
 export function PageHeader(): ReactElement {
-  const [scrollY, setScrollY] = useState(0)
+  const [scrollY, setScrollY] = useState(() => window.scrollY)
   const searchPalette = useSearchPalette()
 
   useEffect(function updateScrollPosition() {
@@ -17,9 +17,7 @@ export function PageHeader(): ReactElement {
       setScrollY(window.scrollY)
     }
 
-    onScroll()
-
-    window.addEventListener('scroll', onScroll)
+    window.addEventListener('scroll', onScroll, { passive: true })
 
     return () => {
       window.removeEventListener('scroll', onScroll)

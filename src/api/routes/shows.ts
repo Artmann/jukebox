@@ -13,15 +13,10 @@ showRoutes.get('/', async (context) => {
 
   const showsWithCounts = await Promise.all(
     shows.map(async (show) => {
-      const seasonRows = await db
-        .select()
-        .from(schema.seasons)
-        .where(eq(schema.seasons.showId, show.id))
-
-      const episodeRows = await db
-        .select()
-        .from(schema.episodes)
-        .where(eq(schema.episodes.showId, show.id))
+      const [seasonRows, episodeRows] = await Promise.all([
+        db.select().from(schema.seasons).where(eq(schema.seasons.showId, show.id)),
+        db.select().from(schema.episodes).where(eq(schema.episodes.showId, show.id))
+      ])
 
       return {
         ...show,
@@ -53,16 +48,14 @@ showRoutes.get('/episodes/:id', async (context) => {
     return context.json({ error: { message: 'Episode not found' } }, 404)
   }
 
-  const [show] = await db
-    .select()
-    .from(schema.shows)
-    .where(eq(schema.shows.id, episode.showId))
-    .limit(1)
-
-  const subtitleRows = await db
-    .select()
-    .from(schema.subtitles)
-    .where(eq(schema.subtitles.episodeId, id))
+  const [[show], subtitleRows] = await Promise.all([
+    db
+      .select()
+      .from(schema.shows)
+      .where(eq(schema.shows.id, episode.showId))
+      .limit(1),
+    db.select().from(schema.subtitles).where(eq(schema.subtitles.episodeId, id))
+  ])
 
   const subtitles = subtitleRows.map((row) => ({
     id: row.id,
@@ -172,17 +165,18 @@ showRoutes.get('/:id', async (context) => {
     return context.json({ error: { message: 'Show not found' } }, 404)
   }
 
-  const seasonRows = await db
-    .select()
-    .from(schema.seasons)
-    .where(eq(schema.seasons.showId, id))
-    .orderBy(schema.seasons.seasonNumber)
-
-  const episodeRows = await db
-    .select()
-    .from(schema.episodes)
-    .where(eq(schema.episodes.showId, id))
-    .orderBy(schema.episodes.seasonNumber, schema.episodes.episodeNumber)
+  const [seasonRows, episodeRows] = await Promise.all([
+    db
+      .select()
+      .from(schema.seasons)
+      .where(eq(schema.seasons.showId, id))
+      .orderBy(schema.seasons.seasonNumber),
+    db
+      .select()
+      .from(schema.episodes)
+      .where(eq(schema.episodes.showId, id))
+      .orderBy(schema.episodes.seasonNumber, schema.episodes.episodeNumber)
+  ])
 
   const seasons = seasonRows.map((season) => ({
     ...season,
