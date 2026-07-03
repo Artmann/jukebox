@@ -83,7 +83,7 @@ export function SetupPage() {
         throw new Error(data.error?.message ?? 'Setup failed')
       }
 
-      void navigate('/scan')
+      void navigate('/scan', { state: { autoStart: true } })
     } catch (caughtError) {
       toast.error(
         caughtError instanceof Error ? caughtError.message : 'Setup failed'

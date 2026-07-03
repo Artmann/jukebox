@@ -1,6 +1,6 @@
 import { ArrowLeft, CheckCircle, Circle, Loader2, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import dayjs from 'dayjs'
@@ -65,12 +65,14 @@ function summarizeTotals(libraries: LibraryProgress[]) {
 }
 
 export function ScanPage() {
+  const location = useLocation()
   const { data: status } = useScanStatus()
   const startScanMutation = useStartScan()
 
   const [libraries, setLibraries] = useState<LibraryProgress[] | null>(null)
   const [liveActive, setLiveActive] = useState(false)
   const loadedRef = useRef(false)
+  const autoStartedRef = useRef(false)
 
   const totals = useMemo(() => {
     if (!libraries) {
@@ -192,24 +194,46 @@ export function ScanPage() {
     }
   }, [])
 
-  const isRunning = liveActive || (status?.isRunning ?? false)
+  // If a scan is already running when this page opens (or SSE events were
+  // missed), reflect that in the UI instead of leaving every library on
+  // "Waiting".
+  useEffect(() => {
+    if (!status?.isRunning || libraries === null) {
+      return
+    }
 
-  async function handleStartScan() {
+    setLiveActive(true)
+    setLibraries((previous) => {
+      if (previous === null || !previous.some((library) => library.status === 'pending')) {
+        return previous
+      }
+
+      return previous.map((library) =>
+        library.status === 'pending'
+          ? { ...library, status: 'scanning' as const }
+          : library
+      )
+    })
+  }, [status?.isRunning])
+
+  const handleStartScan = useCallback(async () => {
     try {
       const response = await startScanMutation.mutateAsync()
 
       if (response.status === 'already-running') {
         toast.info('A scan is already running.')
+        setLiveActive(true)
 
         return
       }
 
+      setLiveActive(true)
       setLibraries(
         (previous) =>
           previous?.map((library) => ({
             ...library,
             progress: { added: 0, total: 0, updated: 0 },
-            status: 'pending',
+            status: 'scanning' as const,
             error: undefined
           })) ?? null
       )
@@ -221,7 +245,28 @@ export function ScanPage() {
 
       toast.error(message)
     }
-  }
+  }, [startScanMutation])
+
+  // After first-time setup, start the initial scan automatically.
+  useEffect(() => {
+    const autoStart = (location.state as { autoStart?: boolean } | null)
+      ?.autoStart
+
+    if (
+      !autoStart ||
+      autoStartedRef.current ||
+      libraries === null ||
+      libraries.length === 0 ||
+      status?.isRunning
+    ) {
+      return
+    }
+
+    autoStartedRef.current = true
+    void handleStartScan()
+  }, [handleStartScan, libraries, location.state, status?.isRunning])
+
+  const isRunning = liveActive || (status?.isRunning ?? false)
 
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-16">
