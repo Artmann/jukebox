@@ -2,6 +2,7 @@ import { HttpApiEndpoint, HttpApiGroup } from '@effect/platform'
 import { Schema } from 'effect'
 
 import { BadRequestWire } from '../errors'
+import { AuthMiddleware, ProfileMiddleware } from '../middleware'
 import { FavoriteItem, SuccessResponse } from '../schemas'
 
 export const FavoriteStatusParams = Schema.Struct({
@@ -26,7 +27,11 @@ export const FavoriteTargetRequest = Schema.Struct({
 
 export type FavoriteTargetRequest = typeof FavoriteTargetRequest.Type
 
+// ProfileMiddleware first, AuthMiddleware second — the builder applies
+// later-added middleware on the outside, so auth runs first, like Hono.
 export const favoritesGroup = HttpApiGroup.make('favorites')
+  .middleware(ProfileMiddleware)
+  .middleware(AuthMiddleware)
   .add(
     HttpApiEndpoint.get('listFavorites', '/favorites').addSuccess(
       Schema.Array(FavoriteItem)

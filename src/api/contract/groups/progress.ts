@@ -2,6 +2,7 @@ import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from '@effect/platform'
 import { Schema } from 'effect'
 
 import { BadRequestWire } from '../errors'
+import { AuthMiddleware, ProfileMiddleware } from '../middleware'
 import {
   ContinueWatchingItem,
   SuccessResponse,
@@ -10,6 +11,8 @@ import {
 } from '../schemas'
 
 export const progressGroup = HttpApiGroup.make('progress')
+  .middleware(ProfileMiddleware)
+  .middleware(AuthMiddleware)
   .add(
     HttpApiEndpoint.get(
       'listContinueWatching',

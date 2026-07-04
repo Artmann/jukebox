@@ -2,6 +2,7 @@ import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from '@effect/platform'
 import { Schema } from 'effect'
 
 import { BadRequestWire, LibraryInUseWire, NotFoundWire } from '../errors'
+import { AuthMiddleware, ProfileMiddleware } from '../middleware'
 import { Library, SuccessResponse } from '../schemas'
 
 export const DeleteLibraryParams = Schema.Struct({
@@ -63,6 +64,8 @@ export type SettingUpdateResponse = typeof SettingUpdateResponse.Type
 const settingKey = HttpApiSchema.param('key', Schema.String)
 
 export const settingsGroup = HttpApiGroup.make('settings')
+  .middleware(ProfileMiddleware)
+  .middleware(AuthMiddleware)
   .add(
     HttpApiEndpoint.get('listLibraries', '/settings/libraries').addSuccess(
       Schema.Array(Library)

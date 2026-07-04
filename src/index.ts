@@ -1,8 +1,10 @@
 import { readFileSync } from 'fs'
 
-import { HttpRouter, HttpServer, HttpServerResponse } from '@effect/platform'
+import { HttpServer } from '@effect/platform'
 import { Effect, Layer } from 'effect'
 
+import { DatabaseLive } from './database/layer'
+import { httpAppLive } from './http/app'
 import { HttpServerLive } from './http/server'
 import { getPackageJsonPath, isCompiledExecutable } from './runtime-paths'
 
@@ -81,12 +83,6 @@ function printWelcome(boundPort: number) {
   console.log(lines.join('\n'))
 }
 
-// Minimal router skeleton. Later phases replace this with the full HttpApi
-// rebuilt from the old Hono routes.
-const router = HttpRouter.empty.pipe(
-  HttpRouter.get('/api', HttpServerResponse.json({ message: 'Jukebox API' }))
-)
-
 // Print the welcome banner only after the HTTP server layer is running, so the
 // advertised URL is actually accepting connections.
 const welcomeLayer = Layer.effectDiscard(
@@ -95,7 +91,11 @@ const welcomeLayer = Layer.effectDiscard(
   )
 )
 
-const mainLayer = Layer.mergeAll(HttpServer.serve()(router), welcomeLayer).pipe(
+// The assembled HttpApi (8 implemented groups + Phase-4 stubs) served on the
+// dual-runtime server layer. Dev-mode Vite proxying and static file serving
+// arrive in Phase 6 — until then the frontend is not served from here.
+const mainLayer = Layer.mergeAll(httpAppLive, welcomeLayer).pipe(
+  Layer.provide(DatabaseLive),
   Layer.provide(HttpServerLive)
 )
 

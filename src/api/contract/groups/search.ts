@@ -2,6 +2,7 @@ import { HttpApiEndpoint, HttpApiGroup } from '@effect/platform'
 import { Schema } from 'effect'
 
 import { BadRequestWire } from '../errors'
+import { AuthMiddleware, ProfileMiddleware } from '../middleware'
 import { SearchResult } from '../schemas'
 
 // `limit` stays a raw string so the handler can reproduce today's exact
@@ -13,7 +14,10 @@ export const SearchParams = Schema.Struct({
 
 export type SearchParams = typeof SearchParams.Type
 
-export const searchGroup = HttpApiGroup.make('search').add(
+export const searchGroup = HttpApiGroup.make('search')
+  .middleware(ProfileMiddleware)
+  .middleware(AuthMiddleware)
+  .add(
   HttpApiEndpoint.get('search', '/search')
     .setUrlParams(SearchParams)
     .addSuccess(SearchResult)

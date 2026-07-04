@@ -37,6 +37,7 @@ export const jukeboxApi = HttpApi.make('jukebox')
   .prefix('/api')
 
 export * from './errors'
+export * from './middleware'
 export * from './schemas'
 export * from './groups/auth'
 export * from './groups/episode-progress'

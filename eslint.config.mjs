@@ -48,7 +48,7 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['../**', '!../errors', '!../schemas'],
+              group: ['../**', '!../errors', '!../middleware', '!../schemas'],
               message:
                 'The contract folder must not import from the rest of the server — it is shipped to the browser.'
             },

@@ -2,6 +2,7 @@ import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from '@effect/platform'
 import { Schema } from 'effect'
 
 import { BadRequestWire, NotFoundWire } from '../errors'
+import { AuthMiddleware, ProfileMiddleware } from '../middleware'
 import {
   Episode,
   EpisodeWithShow,
@@ -17,6 +18,8 @@ export const NextEpisodeParams = Schema.Struct({
 export type NextEpisodeParams = typeof NextEpisodeParams.Type
 
 export const showsGroup = HttpApiGroup.make('shows')
+  .middleware(ProfileMiddleware)
+  .middleware(AuthMiddleware)
   .add(
     HttpApiEndpoint.get('listShows', '/library/shows').addSuccess(
       Schema.Array(ShowWithCounts)

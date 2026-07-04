@@ -2,6 +2,7 @@ import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from '@effect/platform'
 import { Schema } from 'effect'
 
 import { BadRequestWire, NotFoundWire } from '../errors'
+import { AuthMiddleware, ProfileMiddleware } from '../middleware'
 import { Profile, SuccessResponse } from '../schemas'
 
 // Both fields optional: the routes validate presence/trimming themselves and
@@ -17,6 +18,8 @@ export type ProfileInput = typeof ProfileInput.Type
 const profileId = HttpApiSchema.param('id', Schema.NumberFromString)
 
 export const profilesGroup = HttpApiGroup.make('profiles')
+  .middleware(ProfileMiddleware)
+  .middleware(AuthMiddleware)
   .add(
     HttpApiEndpoint.get('listProfiles', '/profiles').addSuccess(
       Schema.Array(Profile)

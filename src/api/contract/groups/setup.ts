@@ -2,6 +2,7 @@ import { HttpApiEndpoint, HttpApiGroup } from '@effect/platform'
 import { Schema } from 'effect'
 
 import { BadRequestWire, SetupValidationErrorWire } from '../errors'
+import { ProfileMiddleware } from '../middleware'
 import { Library, SuccessResponse } from '../schemas'
 
 export const SetupStatus = Schema.Struct({
@@ -20,7 +21,10 @@ export const SetupCompleteRequest = Schema.Struct({
 
 export type SetupCompleteRequest = typeof SetupCompleteRequest.Type
 
+// No AuthMiddleware — Hono's auth middleware skips /api/setup paths. The
+// profile middleware still runs there (it runs on all of /api/*).
 export const setupGroup = HttpApiGroup.make('setup')
+  .middleware(ProfileMiddleware)
   .add(HttpApiEndpoint.get('getStatus', '/setup').addSuccess(SetupStatus))
   .add(
     HttpApiEndpoint.post('completeSetup', '/setup/complete')

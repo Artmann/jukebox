@@ -6,6 +6,7 @@ import {
   TooManyRequestsWire,
   UnauthorizedWire
 } from '../errors'
+import { ProfileMiddleware } from '../middleware'
 
 export const AuthStatus = Schema.Struct({
   authenticated: Schema.Boolean,
@@ -35,7 +36,10 @@ export const PasswordChangeResponse = Schema.Struct({
 
 export type PasswordChangeResponse = typeof PasswordChangeResponse.Type
 
+// No AuthMiddleware — Hono's auth middleware skips /api/auth paths. The
+// profile middleware still runs there (it runs on all of /api/*).
 export const authGroup = HttpApiGroup.make('auth')
+  .middleware(ProfileMiddleware)
   .add(HttpApiEndpoint.get('getStatus', '/auth/status').addSuccess(AuthStatus))
   .add(
     HttpApiEndpoint.post('login', '/auth/login')
