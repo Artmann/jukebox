@@ -1,8 +1,18 @@
 import { Effect } from 'effect'
 
 import type * as schema from '../../database/schema'
+import { parseLibraryResults } from '../../services/scan-manager'
+import { languageDisplayName } from '../../services/subtitles'
 import { InternalError } from '../contract/errors'
-import type { Library, Movie, Profile, Show } from '../contract/schemas'
+import type {
+  Episode,
+  Library,
+  Movie,
+  Profile,
+  ScanJobSummary,
+  Show,
+  SubtitleTrack
+} from '../contract/schemas'
 
 // Mirrors Hono's `app.onError` fallback message so unexpected failures keep
 // producing the same `{ error: { message } }` 500 body.
@@ -30,9 +40,7 @@ export const internalTry = <A>(run: () => A): Effect.Effect<A, InternalError> =>
 
 // Parity with Hono's `app.onError`: any defect (thrown exception that no
 // handler mapped) becomes a 500 `{ error: { message } }` instead of an
-// unhandled cause. Wrapped around every implemented handler. The Phase-4
-// stubs in stubs.ts fail with a typed InternalError directly, so they don't
-// need it.
+// unhandled cause. Wrapped around every handler.
 export const withInternalFallback = <A, E, R>(
   effect: Effect.Effect<A, E, R>
 ): Effect.Effect<A, E | InternalError, R> =>
@@ -43,6 +51,12 @@ export const withInternalFallback = <A, E, R>(
 // --- Row-to-wire serializers ------------------------------------------------
 // Hono relied on JSON.stringify turning drizzle Date columns into ISO strings;
 // the contract schemas expect those strings explicitly.
+
+export const serializeEpisode = (episode: schema.Episode): Episode => ({
+  ...episode,
+  createdAt: episode.createdAt.toISOString(),
+  updatedAt: episode.updatedAt.toISOString()
+})
 
 export const serializeLibrary = (library: schema.Library): Library => ({
   id: library.id,
@@ -62,8 +76,30 @@ export const serializeProfile = (profile: schema.Profile): Profile => ({
   createdAt: profile.createdAt.toISOString()
 })
 
+export const serializeScanJob = (job: schema.ScanJob): ScanJobSummary => ({
+  added: job.added,
+  endedAt: job.endedAt?.toISOString() ?? null,
+  errorMessage: job.errorMessage,
+  id: job.id,
+  libraries: parseLibraryResults(job.libraryResults),
+  startedAt: job.startedAt.toISOString(),
+  status: job.status as ScanJobSummary['status'],
+  total: job.total,
+  updated: job.updated
+})
+
 export const serializeShow = (show: schema.Show): Show => ({
   ...show,
   createdAt: show.createdAt.toISOString(),
   updatedAt: show.updatedAt.toISOString()
+})
+
+export const serializeSubtitleTrack = (
+  subtitle: schema.Subtitle
+): SubtitleTrack => ({
+  displayLanguage: languageDisplayName(subtitle.language),
+  format: subtitle.format as SubtitleTrack['format'],
+  id: subtitle.id,
+  isSupported: subtitle.format !== 'ass',
+  language: subtitle.language
 })

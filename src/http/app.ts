@@ -9,14 +9,19 @@ import { Cause, Effect, Layer, Option } from 'effect'
 
 import { jukeboxApi } from '../api/contract'
 import { authHandlersLive } from '../api/handlers/auth'
+import { episodeProgressHandlersLive } from '../api/handlers/episode-progress'
 import { favoritesHandlersLive } from '../api/handlers/favorites'
 import { filesystemHandlersLive } from '../api/handlers/filesystem'
 import { helloHandlersLive } from '../api/handlers/hello'
+import { libraryHandlersLive } from '../api/handlers/library'
 import { profilesHandlersLive } from '../api/handlers/profiles'
+import { progressHandlersLive } from '../api/handlers/progress'
+import { scanHandlersLive } from '../api/handlers/scan'
 import { searchHandlersLive } from '../api/handlers/search'
 import { settingsHandlersLive } from '../api/handlers/settings'
 import { setupHandlersLive } from '../api/handlers/setup'
-import { stubHandlersLive } from '../api/handlers/stubs'
+import { showsHandlersLive } from '../api/handlers/shows'
+import { upNextHandlersLive } from '../api/handlers/up-next'
 import { AuthMiddlewareLive } from '../api/middleware/auth-effect'
 import { ProfileMiddlewareLive } from '../api/middleware/profile-effect'
 
@@ -123,14 +128,19 @@ export const decodeErrorRemapLive = HttpApiBuilder.middleware((httpApp) =>
 export const apiLive = HttpApiBuilder.api(jukeboxApi).pipe(
   Layer.provide([
     authHandlersLive,
+    episodeProgressHandlersLive,
     favoritesHandlersLive,
     filesystemHandlersLive,
     helloHandlersLive,
+    libraryHandlersLive,
     profilesHandlersLive,
+    progressHandlersLive,
+    scanHandlersLive,
     searchHandlersLive,
     settingsHandlersLive,
     setupHandlersLive,
-    stubHandlersLive
+    showsHandlersLive,
+    upNextHandlersLive
   ]),
   Layer.provide([AuthMiddlewareLive, ProfileMiddlewareLive])
 )
