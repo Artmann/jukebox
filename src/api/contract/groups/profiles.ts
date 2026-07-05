@@ -15,7 +15,9 @@ export const ProfileInput = Schema.Struct({
 
 export type ProfileInput = typeof ProfileInput.Type
 
-const profileId = HttpApiSchema.param('id', Schema.NumberFromString)
+// Raw string so the handler reproduces today's exact 'Invalid profile id' 400
+// (and parseInt's prefix behaviour) instead of a schema decode summary.
+const profileId = HttpApiSchema.param('id', Schema.String)
 
 export const profilesGroup = HttpApiGroup.make('profiles')
   .middleware(ProfileMiddleware)

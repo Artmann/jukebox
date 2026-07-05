@@ -16,6 +16,20 @@ import {
   withInternalFallback
 } from './support'
 
+// The contract keeps the :id path param a raw string so this reproduces the
+// routes' parseInt behaviour: non-numeric ids answer 400 'Invalid profile id'
+// and numeric prefixes ('12abc') truncate to their number, exactly like Hono.
+const parseProfileId = (raw: string): Effect.Effect<number, BadRequest> =>
+  Effect.suspend(() => {
+    const id = parseInt(raw, 10)
+
+    if (isNaN(id)) {
+      return Effect.fail(new BadRequest({ message: 'Invalid profile id' }))
+    }
+
+    return Effect.succeed(id)
+  })
+
 // Ports src/api/routes/profiles.ts. The routes' 400s for insert/update
 // failures (UNIQUE name collisions and everything else) stay 400s here.
 export const profilesHandlersLive = HttpApiBuilder.group(
@@ -105,6 +119,7 @@ export const profilesHandlersLive = HttpApiBuilder.group(
         withInternalFallback(
           Effect.gen(function* () {
             const db = yield* Database
+            const id = yield* parseProfileId(path.id)
             const updates: Partial<schema.NewProfile> = {}
 
             if (typeof payload.name === 'string' && payload.name.trim()) {
@@ -132,7 +147,7 @@ export const profilesHandlersLive = HttpApiBuilder.group(
                 db
                   .update(schema.profiles)
                   .set(updates)
-                  .where(eq(schema.profiles.id, path.id))
+                  .where(eq(schema.profiles.id, id))
                   .returning()
             })
 
@@ -150,6 +165,7 @@ export const profilesHandlersLive = HttpApiBuilder.group(
         withInternalFallback(
           Effect.gen(function* () {
             const db = yield* Database
+            const id = yield* parseProfileId(path.id)
 
             const all = yield* internalTryPromise(() =>
               db.select({ id: schema.profiles.id }).from(schema.profiles)
@@ -164,13 +180,13 @@ export const profilesHandlersLive = HttpApiBuilder.group(
             }
 
             yield* internalTryPromise(() =>
-              db.delete(schema.profiles).where(eq(schema.profiles.id, path.id))
+              db.delete(schema.profiles).where(eq(schema.profiles.id, id))
             )
 
             const { id: activeId } = yield* CurrentProfile
 
-            if (activeId === path.id) {
-              const next = all.find((profile) => profile.id !== path.id)
+            if (activeId === id) {
+              const next = all.find((profile) => profile.id !== id)
 
               if (next) {
                 yield* appendProfileCookie(next.id)
@@ -185,12 +201,13 @@ export const profilesHandlersLive = HttpApiBuilder.group(
         withInternalFallback(
           Effect.gen(function* () {
             const db = yield* Database
+            const id = yield* parseProfileId(path.id)
 
             const [profile] = yield* internalTryPromise(() =>
               db
                 .select()
                 .from(schema.profiles)
-                .where(eq(schema.profiles.id, path.id))
+                .where(eq(schema.profiles.id, id))
                 .limit(1)
             )
 

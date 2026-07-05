@@ -80,7 +80,7 @@ export const settingsGroup = HttpApiGroup.make('settings')
   .add(
     HttpApiEndpoint.del(
       'deleteLibrary'
-    )`/settings/libraries/${HttpApiSchema.param('id', Schema.NumberFromString)}`
+    )`/settings/libraries/${HttpApiSchema.param('id', Schema.String)}`
       .setUrlParams(DeleteLibraryParams)
       .addSuccess(SuccessResponse)
       .addError(BadRequestWire)

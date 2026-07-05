@@ -5,11 +5,12 @@ import { BadRequestWire } from '../errors'
 import { AuthMiddleware, ProfileMiddleware } from '../middleware'
 import { SearchResult } from '../schemas'
 
-// `limit` stays a raw string so the handler can reproduce today's exact
-// validation error for non-integer or out-of-range values.
+// Both params stay raw/optional strings so the handler can reproduce today's
+// exact validation errors: the missing-`q` hint and the out-of-range `limit`
+// message.
 export const SearchParams = Schema.Struct({
   limit: Schema.optional(Schema.String),
-  q: Schema.String
+  q: Schema.optional(Schema.String)
 })
 
 export type SearchParams = typeof SearchParams.Type

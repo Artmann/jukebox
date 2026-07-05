@@ -189,10 +189,9 @@ function runSearch(
   return { episodes, indexEmpty, movies, shows }
 }
 
-// Ports src/api/routes/search.ts. The one parity deviation: a request without
-// `q` is rejected by the contract's url-params schema (the global decode
-// remap answers 400 `{ error: { message } }` with a schema summary) instead
-// of the route's hand-written hint message.
+// Ports src/api/routes/search.ts, including the hand-written hint for a
+// request without `q` — the contract keeps `q` optional so the handler can
+// answer with today's exact message instead of a schema decode summary.
 export const searchHandlersLive = HttpApiBuilder.group(
   jukeboxApi,
   'search',
@@ -200,7 +199,18 @@ export const searchHandlersLive = HttpApiBuilder.group(
     handlers.handle('search', ({ urlParams }) =>
       withInternalFallback(
         Effect.gen(function* () {
-          if (urlParams.q.length > maxQueryLength) {
+          const query = urlParams.q
+
+          if (query === undefined) {
+            return yield* Effect.fail(
+              new BadRequest({
+                message:
+                  'Add a `q` query parameter to search. Example: /api/search?q=dune'
+              })
+            )
+          }
+
+          if (query.length > maxQueryLength) {
             return yield* Effect.fail(
               new BadRequest({
                 message:
@@ -219,7 +229,7 @@ export const searchHandlersLive = HttpApiBuilder.group(
             )
           }
 
-          const matchExpression = buildFtsMatchQuery(urlParams.q)
+          const matchExpression = buildFtsMatchQuery(query)
 
           if (matchExpression === null) {
             return { episodes: [], indexEmpty: false, movies: [], shows: [] }

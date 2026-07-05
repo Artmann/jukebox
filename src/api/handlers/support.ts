@@ -30,7 +30,9 @@ export const internalTry = <A>(run: () => A): Effect.Effect<A, InternalError> =>
 
 // Parity with Hono's `app.onError`: any defect (thrown exception that no
 // handler mapped) becomes a 500 `{ error: { message } }` instead of an
-// unhandled cause. Wrapped around every implemented handler and every stub.
+// unhandled cause. Wrapped around every implemented handler. The Phase-4
+// stubs in stubs.ts fail with a typed InternalError directly, so they don't
+// need it.
 export const withInternalFallback = <A, E, R>(
   effect: Effect.Effect<A, E, R>
 ): Effect.Effect<A, E | InternalError, R> =>

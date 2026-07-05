@@ -169,7 +169,16 @@ export const settingsHandlersLive = HttpApiBuilder.group(
         withInternalFallback(
           Effect.gen(function* () {
             const db = yield* Database
-            const id = pathParams.id
+
+            // The contract keeps :id a raw string so a non-numeric id answers
+            // with today's exact 400 message instead of a schema summary.
+            const id = Number.parseInt(pathParams.id, 10)
+
+            if (!Number.isFinite(id)) {
+              return yield* Effect.fail(
+                new BadRequest({ message: 'Invalid library id.' })
+              )
+            }
 
             const [existing] = yield* internalTryPromise(() =>
               db

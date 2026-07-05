@@ -206,15 +206,99 @@ describe('auth middleware', () => {
   })
 })
 
-describe('decode-error remap', () => {
-  it('answers 400 with the { error: { message } } wire shape for a missing query param', async () => {
+describe('auth rate limiting', () => {
+  it('answers 429 with Retry-After after five failed logins from one IP', async () => {
+    // A stored hash that isn't scrypt-formatted makes verifyPassword answer
+    // false without running scrypt, keeping the five attempts fast enough
+    // that the Retry-After window stays a full 900 seconds.
+    await db.insert(schema.authConfig).values({
+      id: 1,
+      passwordHash: 'not-a-valid-hash',
+      updatedAt: Date.now()
+    })
+
+    const attemptLogin = () =>
+      handler(
+        new Request('http://localhost/api/auth/login', {
+          body: JSON.stringify({ password: 'wrong-password' }),
+          headers: {
+            'content-type': 'application/json',
+            'x-forwarded-for': '203.0.113.7'
+          },
+          method: 'POST'
+        })
+      )
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await attemptLogin()
+
+      expect(response.status).toEqual(401)
+    }
+
+    const limited = await attemptLogin()
+
+    expect(limited.status).toEqual(429)
+    expect(limited.headers.get('retry-after')).toEqual('900')
+    expect(await limited.json()).toEqual({
+      error: { message: 'Too many attempts. Try again in 15 minutes.' }
+    })
+  })
+})
+
+describe('bespoke validation messages', () => {
+  it('answers the hand-written hint when the search q param is missing', async () => {
     const response = await handler(new Request('http://localhost/api/search'))
 
     expect(response.status).toEqual(400)
     expect(await response.json()).toEqual({
       error: {
         message:
-          '{ readonly limit?: string | undefined; readonly q: string }\n└─ ["q"]\n   └─ is missing'
+          'Add a `q` query parameter to search. Example: /api/search?q=dune'
+      }
+    })
+  })
+
+  it('answers Invalid profile id for a non-numeric profile id', async () => {
+    await db
+      .insert(schema.profiles)
+      .values({ id: 1, name: 'Default', emoji: '🍿', createdAt: new Date(0) })
+
+    const response = await handler(
+      new Request('http://localhost/api/profiles/abc', {
+        body: JSON.stringify({ name: 'Renamed' }),
+        headers: {
+          'content-type': 'application/json',
+          cookie: profileCookie
+        },
+        method: 'PATCH'
+      })
+    )
+
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: { message: 'Invalid profile id' }
+    })
+  })
+})
+
+describe('decode-error remap', () => {
+  it('answers 400 with a human-friendly message for a type-mismatched body field', async () => {
+    const response = await handler(
+      new Request('http://localhost/api/favorites', {
+        body: JSON.stringify({ movieId: 'x' }),
+        headers: {
+          'content-type': 'application/json',
+          cookie: profileCookie
+        },
+        method: 'POST'
+      })
+    )
+
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: {
+        message:
+          '`movieId` is invalid: expected number, received "x". Correct the request and try again.'
       }
     })
   })
