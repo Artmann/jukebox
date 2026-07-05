@@ -5,9 +5,23 @@
 // remap, and an in-memory database — no socket, no mocks besides the
 // database singleton (swapped for the in-memory instance, same pattern as
 // the existing Hono route tests).
-import { HttpApiBuilder, HttpServer } from '@effect/platform'
+import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
+
+import { HttpApiBuilder } from '@effect/platform'
+import { NodeHttpServer } from '@effect/platform-node'
+import { eq } from 'drizzle-orm'
 import { Layer } from 'effect'
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest'
 
 import { createTestDatabase } from '../../database/test-database'
 
@@ -23,12 +37,14 @@ const { apiLive, decodeErrorRemapLive, rawRoutesLive } = await import(
   '../../http/app'
 )
 
+// NodeHttpServer.layerContext (not HttpServer.layerContext) so the raw
+// streaming routes get a real FileSystem instead of the noop one.
 const { dispose, handler } = HttpApiBuilder.toWebHandler(
   Layer.mergeAll(
     apiLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
     rawRoutesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
     decodeErrorRemapLive,
-    HttpServer.layerContext
+    NodeHttpServer.layerContext
   )
 )
 
@@ -945,6 +961,224 @@ describe('scan stream', () => {
     expect(response.status).toEqual(401)
     expect(await response.json()).toEqual({
       error: { message: 'Authentication required.' }
+    })
+  })
+})
+
+describe('video stream', () => {
+  let tempDir = ''
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'jukebox-stream-'))
+
+    await writeFile(join(tempDir, 'movie.mp4'), '0123456789')
+
+    await db.insert(schema.movies).values({
+      id: 10,
+      title: 'Inception',
+      filePath: join(tempDir, 'movie.mp4'),
+      fileName: 'movie.mp4',
+      createdAt: new Date(0),
+      updatedAt: new Date(0)
+    })
+  })
+
+  afterEach(async () => {
+    await rm(tempDir, { force: true, recursive: true })
+  })
+
+  it('streams the whole file with Accept-Ranges and Content-Length', async () => {
+    const response = await handler(
+      new Request('http://localhost/api/stream/10', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(200)
+    expect(response.headers.get('accept-ranges')).toEqual('bytes')
+    expect(response.headers.get('content-length')).toEqual('10')
+    expect(response.headers.get('content-type')).toEqual('video/mp4')
+    expect(await response.text()).toEqual('0123456789')
+  })
+
+  it('answers 206 with the requested byte range', async () => {
+    const response = await handler(
+      new Request('http://localhost/api/stream/10', {
+        headers: { cookie: profileCookie, range: 'bytes=2-5' }
+      })
+    )
+
+    expect(response.status).toEqual(206)
+    expect(response.headers.get('content-range')).toEqual('bytes 2-5/10')
+    expect(response.headers.get('content-length')).toEqual('4')
+    expect(await response.text()).toEqual('2345')
+  })
+
+  it('answers an open-ended range to the end of the file', async () => {
+    const response = await handler(
+      new Request('http://localhost/api/stream/10', {
+        headers: { cookie: profileCookie, range: 'bytes=7-' }
+      })
+    )
+
+    expect(response.status).toEqual(206)
+    expect(response.headers.get('content-range')).toEqual('bytes 7-9/10')
+    expect(await response.text()).toEqual('789')
+  })
+
+  it('answers 404 Movie not found for an unknown id', async () => {
+    const response = await handler(
+      new Request('http://localhost/api/stream/999', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(404)
+    expect(await response.json()).toEqual({
+      error: { message: 'Movie not found' }
+    })
+  })
+
+  it('answers 404 Video file not found when the file is gone', async () => {
+    await rm(join(tempDir, 'movie.mp4'))
+
+    const response = await handler(
+      new Request('http://localhost/api/stream/10', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(404)
+    expect(await response.json()).toEqual({
+      error: { message: 'Video file not found' }
+    })
+  })
+
+  it('streams an episode file through the episode route', async () => {
+    await seedShowWithTwoEpisodes()
+    await writeFile(join(tempDir, 'episode.mkv'), 'abcdef')
+    await db
+      .update(schema.episodes)
+      .set({ filePath: join(tempDir, 'episode.mkv') })
+      .where(eq(schema.episodes.id, 21))
+
+    const response = await handler(
+      new Request('http://localhost/api/stream/episode/21', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(200)
+    expect(response.headers.get('content-type')).toEqual('video/x-matroska')
+    expect(await response.text()).toEqual('abcdef')
+  })
+})
+
+describe('subtitle stream', () => {
+  let tempDir = ''
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'jukebox-subs-'))
+
+    await db.insert(schema.libraries).values({
+      id: 4,
+      name: 'Movies',
+      path: tempDir,
+      type: 'movies',
+      createdAt: new Date(0)
+    })
+
+    await db.insert(schema.movies).values({
+      id: 10,
+      title: 'Inception',
+      filePath: join(tempDir, 'movie.mp4'),
+      fileName: 'movie.mp4',
+      createdAt: new Date(0),
+      updatedAt: new Date(0)
+    })
+  })
+
+  afterEach(async () => {
+    await rm(tempDir, { force: true, recursive: true })
+  })
+
+  it('serves a .vtt file as-is with caching headers', async () => {
+    await writeFile(join(tempDir, 'movie.en.vtt'), 'WEBVTT\n\nHello')
+
+    await db.insert(schema.subtitles).values({
+      id: 3,
+      movieId: 10,
+      filePath: join(tempDir, 'movie.en.vtt'),
+      language: 'en',
+      format: 'vtt'
+    })
+
+    const response = await handler(
+      new Request('http://localhost/api/subtitles/3', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(200)
+    expect(response.headers.get('content-type')).toEqual(
+      'text/vtt; charset=utf-8'
+    )
+    expect(response.headers.get('cache-control')).toEqual(
+      'public, max-age=3600'
+    )
+    expect(await response.text()).toEqual('WEBVTT\n\nHello')
+  })
+
+  it('converts a .srt file to WebVTT on the fly', async () => {
+    await writeFile(
+      join(tempDir, 'movie.en.srt'),
+      '1\n00:00:01,000 --> 00:00:02,000\nHello\n'
+    )
+
+    await db.insert(schema.subtitles).values({
+      id: 3,
+      movieId: 10,
+      filePath: join(tempDir, 'movie.en.srt'),
+      language: 'en',
+      format: 'srt'
+    })
+
+    const response = await handler(
+      new Request('http://localhost/api/subtitles/3', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(200)
+
+    const text = await response.text()
+
+    expect(text).toContain('WEBVTT')
+    expect(text).toContain('00:00:01.000 --> 00:00:02.000')
+    expect(text).toContain('Hello')
+  })
+
+  it('answers 404 for a subtitle stored outside every library', async () => {
+    await db.insert(schema.subtitles).values({
+      id: 3,
+      movieId: 10,
+      filePath: join(tmpdir(), 'elsewhere', 'movie.en.vtt'),
+      language: 'en',
+      format: 'vtt'
+    })
+
+    const response = await handler(
+      new Request('http://localhost/api/subtitles/3', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(404)
+    expect(await response.json()).toEqual({
+      error: {
+        message:
+          'Subtitle is outside the configured library paths. Rescan your libraries.'
+      }
     })
   })
 })

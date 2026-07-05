@@ -25,6 +25,8 @@ import { upNextHandlersLive } from '../api/handlers/up-next'
 import { AuthMiddlewareLive } from '../api/middleware/auth-effect'
 import { ProfileMiddlewareLive } from '../api/middleware/profile-effect'
 import { scanStreamRouteLive } from '../api/streaming/scan-stream'
+import { subtitleStreamRouteLive } from '../api/streaming/subtitle-stream'
+import { videoStreamRoutesLive } from '../api/streaming/video-stream'
 
 // A schema decode failure carries per-issue details (field path + issue
 // kind). Turn each into a plain-words sentence naming the offending
@@ -149,7 +151,11 @@ export const apiLive = HttpApiBuilder.api(jukeboxApi).pipe(
 // Streaming endpoints sit outside the HttpApi contract (SSE, and later Range
 // video / HLS / subtitles) but register on the same router so they share the
 // server and the serve middleware.
-export const rawRoutesLive = Layer.mergeAll(scanStreamRouteLive)
+export const rawRoutesLive = Layer.mergeAll(
+  scanStreamRouteLive,
+  subtitleStreamRouteLive,
+  videoStreamRoutesLive
+)
 
 // The served app: HttpMiddleware.logger replaces hono/logger.
 export const httpAppLive = HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
