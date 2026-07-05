@@ -7,6 +7,8 @@ import { DatabaseLive } from './database/layer'
 import { httpAppLive } from './http/app'
 import { HttpServerLive } from './http/server'
 import { getPackageJsonPath, isCompiledExecutable } from './runtime-paths'
+import { scanManager } from './services/scan-manager'
+import { scheduler } from './services/scheduler'
 
 // Declared like `src/database/index.ts` so the Node build (vitest, tsc) never
 // depends on Bun's ambient global types.
@@ -91,10 +93,25 @@ const welcomeLayer = Layer.effectDiscard(
   )
 )
 
-// The assembled HttpApi (8 implemented groups + Phase-4 stubs) served on the
-// dual-runtime server layer. Dev-mode Vite proxying and static file serving
-// arrive in Phase 6 — until then the frontend is not served from here.
-const mainLayer = Layer.mergeAll(httpAppLive, welcomeLayer).pipe(
+// The same boot work the Hono server did: mark scan jobs orphaned by a crash
+// or restart, then start the scan scheduler. Ordered inside one acquire so
+// the scheduler can't kick off a scan while recovery is still rewriting job
+// rows; the release stops the scheduler's timer on shutdown. Both singletons
+// become scoped Effect services in Phase 5.
+const scanBootLayer = Layer.scopedDiscard(
+  Effect.acquireRelease(
+    Effect.promise(async () => {
+      await scanManager.recoverInterruptedJobs()
+      await scheduler.start()
+    }),
+    () => Effect.sync(() => scheduler.stop())
+  )
+)
+
+// The assembled HttpApi (all 14 groups) served on the dual-runtime server
+// layer. Dev-mode Vite proxying and static file serving arrive in Phase 6 —
+// until then the frontend is not served from here.
+const mainLayer = Layer.mergeAll(httpAppLive, welcomeLayer, scanBootLayer).pipe(
   Layer.provide(DatabaseLive),
   Layer.provide(HttpServerLive)
 )
