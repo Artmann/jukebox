@@ -16,9 +16,18 @@ if (isCompiledExecutable()) {
   process.env.NODE_ENV = process.env.NODE_ENV ?? 'production'
 }
 
-const port = process.env.PORT ? Number(process.env.PORT) : 1990
-const vitePort = 5173
 const isDevelopment = process.env.NODE_ENV !== 'production'
+
+// Dev defaults to 1991 so `bun dev` doesn't collide with an installed server:
+// the JukeboxLauncher runs the compiled executable on 1990, and the compiled
+// binary forces NODE_ENV=production above. Production and the packaged binary
+// keep 1990; PORT overrides either.
+const port = process.env.PORT
+  ? Number(process.env.PORT)
+  : isDevelopment
+    ? 1991
+    : 1990
+const vitePort = 5173
 
 // `JUKEBOX_BUILD_VERSION` is replaced at build time by
 // `scripts/build-executable.ts` via `bun build --define` so compiled binaries
