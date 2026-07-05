@@ -157,9 +157,13 @@ export const rawRoutesLive = Layer.mergeAll(
   videoStreamRoutesLive
 )
 
-// The served app: HttpMiddleware.logger replaces hono/logger.
-export const httpAppLive = HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
-  Layer.provide(decodeErrorRemapLive),
-  Layer.provide(rawRoutesLive),
-  Layer.provide(apiLive)
-)
+// The served app: HttpMiddleware.logger replaces hono/logger. The frontend
+// layer is either static file serving (production) or the Vite dev proxy —
+// src/index.ts decides from NODE_ENV, keeping vite out of this module.
+export const makeHttpAppLive = <E, R>(frontend: Layer.Layer<never, E, R>) =>
+  HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
+    Layer.provide(frontend),
+    Layer.provide(decodeErrorRemapLive),
+    Layer.provide(rawRoutesLive),
+    Layer.provide(apiLive)
+  )

@@ -4,8 +4,10 @@ import { HttpServer } from '@effect/platform'
 import { Effect, Layer } from 'effect'
 
 import { DatabaseLive } from './database/layer'
-import { httpAppLive } from './http/app'
+import { makeHttpAppLive } from './http/app'
 import { HttpServerLive } from './http/server'
+import { staticFilesLive } from './http/static'
+import { viteDevLive } from './http/vite-proxy'
 import { getPackageJsonPath, isCompiledExecutable } from './runtime-paths'
 import { scanManager } from './services/scan-manager'
 import { scheduler } from './services/scheduler'
@@ -108,13 +110,19 @@ const scanBootLayer = Layer.scopedDiscard(
   )
 )
 
-// The assembled HttpApi (all 14 groups) served on the dual-runtime server
-// layer. Dev-mode Vite proxying and static file serving arrive in Phase 6 —
-// until then the frontend is not served from here.
-const mainLayer = Layer.mergeAll(httpAppLive, welcomeLayer, scanBootLayer).pipe(
-  Layer.provide(DatabaseLive),
-  Layer.provide(HttpServerLive)
-)
+// Dev mode proxies non-/api requests to a Vite server it owns; production
+// serves the built client assets with an index.html SPA fallback.
+const isDevelopment = process.env.NODE_ENV !== 'production'
+
+const frontendLayer = isDevelopment ? viteDevLive : staticFilesLive
+
+// The assembled HttpApi (all 14 groups), the raw streaming routes, and the
+// frontend served on the dual-runtime server layer.
+const mainLayer = Layer.mergeAll(
+  makeHttpAppLive(frontendLayer),
+  welcomeLayer,
+  scanBootLayer
+).pipe(Layer.provide(DatabaseLive), Layer.provide(HttpServerLive))
 
 // `runMain` installs SIGINT/SIGTERM handling and interrupts the layer's
 // finalizers on shutdown, so no manual `process.on` handlers are needed. The
