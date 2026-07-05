@@ -1,18 +1,33 @@
 // @vitest-environment node
+
+// Wire tests for the settings group, ported from the Hono route tests in
+// src/api/routes/settings.test.ts: library CRUD (including the 409
+// LibraryInUse conflict and force delete), the scan-schedule routes with
+// their scheduler side effects, and the generic settings key/value routes.
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import path, { join } from 'path'
 
-import { Hono } from 'hono'
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { HttpApiBuilder } from '@effect/platform'
+import { NodeHttpServer } from '@effect/platform-node'
+import { Layer } from 'effect'
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest'
 
 import { createTestDatabase } from '../../database/test-database'
 
-const testDb = createTestDatabase()
+const testDatabase = createTestDatabase()
 
 vi.mock('../../database', () => ({
-  db: testDb.db,
-  schema: testDb.schema
+  db: testDatabase.db,
+  schema: testDatabase.schema
 }))
 
 vi.mock('../../services/scheduler', () => ({
@@ -24,37 +39,67 @@ vi.mock('../../services/scheduler', () => ({
   }
 }))
 
-const { settingsRoutes } = await import('./settings')
+const { databaseTestLayer } = await import('../../database/layer')
+const { apiLive, decodeErrorRemapLive, rawRoutesLive } = await import(
+  '../../http/app'
+)
 const { getSetting, scanScheduleSettingKey } = await import(
   '../../services/settings'
 )
 
-function buildApp(): Hono {
-  const app = new Hono()
-  app.route('/', settingsRoutes)
-  return app
+const { dispose, handler } = HttpApiBuilder.toWebHandler(
+  Layer.mergeAll(
+    apiLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    rawRoutesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    decodeErrorRemapLive,
+    NodeHttpServer.layerContext
+  )
+)
+
+const { db, schema } = testDatabase
+const profileCookie = 'jukebox_profile_id=1'
+
+function get(requestPath: string) {
+  return handler(
+    new Request(`http://localhost/api/settings${requestPath}`, {
+      headers: { cookie: profileCookie }
+    })
+  )
 }
 
-async function reset() {
-  await testDb.db.delete(testDb.schema.settings)
-  await testDb.db.delete(testDb.schema.watchProgress)
-  await testDb.db.delete(testDb.schema.favorites)
-  await testDb.db.delete(testDb.schema.episodes)
-  await testDb.db.delete(testDb.schema.seasons)
-  await testDb.db.delete(testDb.schema.shows)
-  await testDb.db.delete(testDb.schema.movies)
-  await testDb.db.delete(testDb.schema.libraries)
-  await testDb.db.delete(testDb.schema.profiles)
+function send(requestPath: string, method: string, payload?: unknown) {
+  return handler(
+    new Request(`http://localhost/api/settings${requestPath}`, {
+      body: payload === undefined ? undefined : JSON.stringify(payload),
+      headers: { 'content-type': 'application/json', cookie: profileCookie },
+      method
+    })
+  )
 }
+
+afterAll(async () => {
+  await dispose()
+})
 
 beforeEach(async () => {
-  await reset()
+  await db.delete(schema.settings)
+  await db.delete(schema.watchProgress)
+  await db.delete(schema.favorites)
+  await db.delete(schema.episodes)
+  await db.delete(schema.seasons)
+  await db.delete(schema.shows)
+  await db.delete(schema.movies)
+  await db.delete(schema.libraries)
+  await db.delete(schema.profiles)
+
+  await db
+    .insert(schema.profiles)
+    .values({ id: 1, name: 'Default', emoji: '🍿', createdAt: new Date(0) })
 })
 
 describe('GET /libraries', () => {
   it('returns an empty list by default', async () => {
-    const app = buildApp()
-    const response = await app.request('/libraries')
+    const response = await get('/libraries')
     const body = (await response.json()) as unknown[]
 
     expect(response.status).toEqual(200)
@@ -62,15 +107,14 @@ describe('GET /libraries', () => {
   })
 
   it('returns existing libraries', async () => {
-    await testDb.db.insert(testDb.schema.libraries).values({
+    await db.insert(schema.libraries).values({
       name: 'Movies',
       path: '/media/movies',
       type: 'movies',
       createdAt: new Date()
     })
 
-    const app = buildApp()
-    const response = await app.request('/libraries')
+    const response = await get('/libraries')
     const body = (await response.json()) as Array<{
       id: number
       name: string
@@ -101,15 +145,10 @@ describe('POST /libraries', () => {
   })
 
   it('rejects a non-existent path', async () => {
-    const app = buildApp()
-    const response = await app.request('/libraries', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Movies',
-        path: '/nope/does/not/exist',
-        type: 'movies'
-      })
+    const response = await send('/libraries', 'POST', {
+      name: 'Movies',
+      path: '/nope/does/not/exist',
+      type: 'movies'
     })
     const body = (await response.json()) as { error: { message: string } }
 
@@ -118,30 +157,20 @@ describe('POST /libraries', () => {
   })
 
   it('rejects an invalid type', async () => {
-    const app = buildApp()
-    const response = await app.request('/libraries', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Movies',
-        path: tempDir,
-        type: 'music'
-      })
+    const response = await send('/libraries', 'POST', {
+      name: 'Movies',
+      path: tempDir,
+      type: 'music'
     })
 
     expect(response.status).toEqual(400)
   })
 
   it('creates a library when the path is readable', async () => {
-    const app = buildApp()
-    const response = await app.request('/libraries', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Movies',
-        path: tempDir,
-        type: 'movies'
-      })
+    const response = await send('/libraries', 'POST', {
+      name: 'Movies',
+      path: tempDir,
+      type: 'movies'
     })
     const body = (await response.json()) as {
       id: number
@@ -160,17 +189,16 @@ describe('POST /libraries', () => {
   })
 
   it('rejects duplicate paths', async () => {
-    const app = buildApp()
-    await app.request('/libraries', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Movies', path: tempDir, type: 'movies' })
+    await send('/libraries', 'POST', {
+      name: 'Movies',
+      path: tempDir,
+      type: 'movies'
     })
 
-    const response = await app.request('/libraries', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Again', path: tempDir, type: 'movies' })
+    const response = await send('/libraries', 'POST', {
+      name: 'Again',
+      path: tempDir,
+      type: 'movies'
     })
     const body = (await response.json()) as { error: { message: string } }
 
@@ -181,15 +209,14 @@ describe('POST /libraries', () => {
 
 describe('DELETE /libraries/:id', () => {
   it('returns 404 when the library is missing', async () => {
-    const app = buildApp()
-    const response = await app.request('/libraries/999', { method: 'DELETE' })
+    const response = await send('/libraries/999', 'DELETE')
 
     expect(response.status).toEqual(404)
   })
 
   it('removes an empty library', async () => {
-    const [created] = await testDb.db
-      .insert(testDb.schema.libraries)
+    const [created] = await db
+      .insert(schema.libraries)
       .values({
         name: 'Movies',
         path: '/media/movies',
@@ -200,10 +227,7 @@ describe('DELETE /libraries/:id', () => {
 
     expect(created).toBeDefined()
 
-    const app = buildApp()
-    const response = await app.request(`/libraries/${created?.id ?? 0}`, {
-      method: 'DELETE'
-    })
+    const response = await send(`/libraries/${created?.id ?? 0}`, 'DELETE')
     const body = (await response.json()) as { success: boolean }
 
     expect(response.status).toEqual(200)
@@ -214,8 +238,8 @@ describe('DELETE /libraries/:id', () => {
     const libraryPath = path.resolve('/media/movies')
     const moviePath = path.join(libraryPath, 'test.mp4')
 
-    const [library] = await testDb.db
-      .insert(testDb.schema.libraries)
+    const [library] = await db
+      .insert(schema.libraries)
       .values({
         name: 'Movies',
         path: libraryPath,
@@ -224,7 +248,7 @@ describe('DELETE /libraries/:id', () => {
       })
       .returning()
 
-    await testDb.db.insert(testDb.schema.movies).values({
+    await db.insert(schema.movies).values({
       title: 'Test',
       filePath: moviePath,
       fileName: 'test.mp4',
@@ -232,17 +256,14 @@ describe('DELETE /libraries/:id', () => {
       updatedAt: new Date()
     })
 
-    const app = buildApp()
-    const response = await app.request(`/libraries/${library?.id ?? 0}`, {
-      method: 'DELETE'
-    })
+    const response = await send(`/libraries/${library?.id ?? 0}`, 'DELETE')
     const body = (await response.json()) as {
       error: { message: string; referenceCount: number }
     }
 
     expect(response.status).toEqual(409)
     expect(body.error.referenceCount).toEqual(1)
-    expect(body.error.message).toContain("Force remove")
+    expect(body.error.message).toContain('Force remove')
   })
 
   it('force-removes library and cascades movies plus watch progress', async () => {
@@ -250,8 +271,8 @@ describe('DELETE /libraries/:id', () => {
     const moviePath = path.join(libraryPath, 'test.mp4')
     const otherMoviePath = path.resolve('/other/elsewhere.mp4')
 
-    const [library] = await testDb.db
-      .insert(testDb.schema.libraries)
+    const [library] = await db
+      .insert(schema.libraries)
       .values({
         name: 'Movies',
         path: libraryPath,
@@ -260,8 +281,8 @@ describe('DELETE /libraries/:id', () => {
       })
       .returning()
 
-    const [insertedMovie] = await testDb.db
-      .insert(testDb.schema.movies)
+    const [insertedMovie] = await db
+      .insert(schema.movies)
       .values({
         title: 'Test',
         filePath: moviePath,
@@ -272,8 +293,8 @@ describe('DELETE /libraries/:id', () => {
       .returning()
 
     // Movie in a different library — must survive the cascade.
-    const [unrelatedMovie] = await testDb.db
-      .insert(testDb.schema.movies)
+    const [unrelatedMovie] = await db
+      .insert(schema.movies)
       .values({
         title: 'Other',
         filePath: otherMoviePath,
@@ -283,42 +304,35 @@ describe('DELETE /libraries/:id', () => {
       })
       .returning()
 
-    const [profile] = await testDb.db
-      .insert(testDb.schema.profiles)
-      .values({ name: 'tester', emoji: '🍿', createdAt: new Date() })
-      .returning()
-
-    await testDb.db.insert(testDb.schema.watchProgress).values({
-      profileId: profile?.id ?? 0,
+    await db.insert(schema.watchProgress).values({
+      profileId: 1,
       movieId: insertedMovie?.id ?? 0,
       currentTime: 42,
       updatedAt: new Date()
     })
 
-    const app = buildApp()
-    const response = await app.request(
+    const response = await send(
       `/libraries/${library?.id ?? 0}?force=true`,
-      { method: 'DELETE' }
+      'DELETE'
     )
 
     expect(response.status).toEqual(200)
 
-    const remainingMovies = await testDb.db.select().from(testDb.schema.movies)
+    const remainingMovies = await db.select().from(schema.movies)
+
     expect(remainingMovies.map((movie) => movie.id)).toEqual([
       unrelatedMovie?.id ?? -1
     ])
 
-    const remainingProgress = await testDb.db
-      .select()
-      .from(testDb.schema.watchProgress)
+    const remainingProgress = await db.select().from(schema.watchProgress)
+
     expect(remainingProgress).toEqual([])
   })
 })
 
 describe('GET / PUT /scan-schedule', () => {
   it('defaults to off when nothing is set', async () => {
-    const app = buildApp()
-    const response = await app.request('/scan-schedule')
+    const response = await get('/scan-schedule')
     const body = (await response.json()) as {
       nextRunAt: string | null
       schedule: string
@@ -329,31 +343,23 @@ describe('GET / PUT /scan-schedule', () => {
   })
 
   it('round-trips a valid value', async () => {
-    const app = buildApp()
-    const putResponse = await app.request('/scan-schedule', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ schedule: '6h' })
-    })
+    const putResponse = await send('/scan-schedule', 'PUT', { schedule: '6h' })
 
     expect(putResponse.status).toEqual(200)
 
-    const getResponse = await app.request('/scan-schedule')
+    const getResponse = await get('/scan-schedule')
     const body = (await getResponse.json()) as {
       nextRunAt: string | null
       schedule: string
     }
 
     expect(body.schedule).toEqual('6h')
-    expect(await getSetting(scanScheduleSettingKey, testDb.db)).toEqual('6h')
+    expect(await getSetting(scanScheduleSettingKey, db)).toEqual('6h')
   })
 
   it('rejects unknown values', async () => {
-    const app = buildApp()
-    const response = await app.request('/scan-schedule', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ schedule: 'hourly' })
+    const response = await send('/scan-schedule', 'PUT', {
+      schedule: 'hourly'
     })
 
     expect(response.status).toEqual(400)
@@ -362,8 +368,7 @@ describe('GET / PUT /scan-schedule', () => {
 
 describe('generic GET / PUT /:key', () => {
   it('returns null for unknown keys', async () => {
-    const app = buildApp()
-    const response = await app.request('/unknown-key')
+    const response = await get('/unknown-key')
     const body = (await response.json()) as { value: string | null }
 
     expect(response.status).toEqual(200)
@@ -371,36 +376,24 @@ describe('generic GET / PUT /:key', () => {
   })
 
   it('persists arbitrary string values', async () => {
-    const app = buildApp()
-    const putResponse = await app.request('/custom', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ value: 'hello' })
-    })
+    const putResponse = await send('/custom', 'PUT', { value: 'hello' })
 
     expect(putResponse.status).toEqual(200)
 
-    const getResponse = await app.request('/custom')
+    const getResponse = await get('/custom')
     const body = (await getResponse.json()) as { value: string | null }
 
     expect(body).toEqual({ value: 'hello' })
   })
 
   it('rejects non-string values', async () => {
-    const app = buildApp()
-    const response = await app.request('/custom', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ value: 42 })
-    })
+    const response = await send('/custom', 'PUT', { value: 42 })
 
     expect(response.status).toEqual(400)
   })
 
   it('rejects reads on reserved keys and points at the specific route', async () => {
-    const app = buildApp()
-
-    const scheduleResponse = await app.request('/scanSchedule')
+    const scheduleResponse = await get('/scanSchedule')
     const scheduleBody = (await scheduleResponse.json()) as {
       error: { message: string }
     }
@@ -410,12 +403,8 @@ describe('generic GET / PUT /:key', () => {
   })
 
   it('rejects writes on reserved keys so their validators cannot be bypassed', async () => {
-    const app = buildApp()
-
-    const scheduleResponse = await app.request('/scanSchedule', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ value: 'garbage' })
+    const scheduleResponse = await send('/scanSchedule', 'PUT', {
+      value: 'garbage'
     })
     const scheduleBody = (await scheduleResponse.json()) as {
       error: { message: string }
@@ -423,6 +412,6 @@ describe('generic GET / PUT /:key', () => {
 
     expect(scheduleResponse.status).toEqual(400)
     expect(scheduleBody.error.message).toContain('/api/settings/scan-schedule')
-    expect(await getSetting(scanScheduleSettingKey, testDb.db)).toEqual(null)
+    expect(await getSetting(scanScheduleSettingKey, db)).toEqual(null)
   })
 })

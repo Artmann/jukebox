@@ -1,20 +1,49 @@
 // @vitest-environment node
+
+// Wire tests for the setup group, ported from the Hono route tests in
+// src/api/routes/setup.test.ts.
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { HttpApiBuilder } from '@effect/platform'
+import { NodeHttpServer } from '@effect/platform-node'
+import { Layer } from 'effect'
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest'
 
 import { createTestDatabase } from '../../database/test-database'
 
-const testDb = createTestDatabase()
+const testDatabase = createTestDatabase()
 
 vi.mock('../../database', () => ({
-  db: testDb.db,
-  schema: testDb.schema
+  db: testDatabase.db,
+  schema: testDatabase.schema
 }))
 
-const { setupRoutes } = await import('./setup')
+const { databaseTestLayer } = await import('../../database/layer')
+const { apiLive, decodeErrorRemapLive, rawRoutesLive } = await import(
+  '../../http/app'
+)
+
+const { dispose, handler } = HttpApiBuilder.toWebHandler(
+  Layer.mergeAll(
+    apiLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    rawRoutesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    decodeErrorRemapLive,
+    NodeHttpServer.layerContext
+  )
+)
+
+const { db, schema } = testDatabase
+const profileCookie = 'jukebox_profile_id=1'
 
 interface FieldError {
   index: number
@@ -29,7 +58,12 @@ let moviesDirectory: string
 let showsDirectory: string
 
 async function request(path: string, options?: RequestInit) {
-  const response = await setupRoutes.request(path, options)
+  const response = await handler(
+    new Request(`http://localhost/api/setup${path}`, {
+      ...options,
+      headers: { ...options?.headers, cookie: profileCookie }
+    })
+  )
   const body = (await response.json()) as unknown
 
   return { body, status: response.status }
@@ -43,8 +77,17 @@ function postComplete(payload: unknown) {
   })
 }
 
+afterAll(async () => {
+  await dispose()
+})
+
 beforeEach(async () => {
-  await testDb.db.delete(testDb.schema.libraries)
+  await db.delete(schema.libraries)
+  await db.delete(schema.profiles)
+
+  await db
+    .insert(schema.profiles)
+    .values({ id: 1, name: 'Default', emoji: '🍿', createdAt: new Date(0) })
 
   moviesDirectory = await mkdtemp(join(tmpdir(), 'jukebox-setup-movies-'))
   showsDirectory = await mkdtemp(join(tmpdir(), 'jukebox-setup-shows-'))
@@ -57,21 +100,21 @@ afterEach(async () => {
 
 describe('GET /', () => {
   it('reports needsSetup when no libraries exist', async () => {
-    const { body, status } = await request('/')
+    const { body, status } = await request('')
 
     expect(status).toEqual(200)
     expect(body).toEqual({ libraries: [], libraryCount: 0, needsSetup: true })
   })
 
   it('reports setup done when libraries exist', async () => {
-    await testDb.db.insert(testDb.schema.libraries).values({
+    await db.insert(schema.libraries).values({
       name: 'Movies',
       path: moviesDirectory,
       type: 'movies',
       createdAt: new Date()
     })
 
-    const { body, status } = await request('/')
+    const { body, status } = await request('')
     const typed = body as {
       libraries: unknown[]
       libraryCount: number
@@ -158,7 +201,7 @@ describe('POST /complete', () => {
   })
 
   it('replaces existing libraries and defaults names from the folder', async () => {
-    await testDb.db.insert(testDb.schema.libraries).values({
+    await db.insert(schema.libraries).values({
       name: 'First Wave Season 1',
       path: join(tmpdir(), 'stale-old-library'),
       type: 'shows',
@@ -175,7 +218,7 @@ describe('POST /complete', () => {
     expect(status).toEqual(200)
     expect(body).toEqual({ success: true })
 
-    const rows = await testDb.db.select().from(testDb.schema.libraries)
+    const rows = await db.select().from(schema.libraries)
 
     expect(
       rows.map((row) => ({ name: row.name, path: row.path, type: row.type }))
@@ -190,7 +233,7 @@ describe('POST /complete', () => {
   })
 
   it('keeps existing libraries when the request is rejected', async () => {
-    await testDb.db.insert(testDb.schema.libraries).values({
+    await db.insert(schema.libraries).values({
       name: 'Existing',
       path: moviesDirectory,
       type: 'movies',
@@ -205,7 +248,7 @@ describe('POST /complete', () => {
 
     expect(status).toEqual(400)
 
-    const rows = await testDb.db.select().from(testDb.schema.libraries)
+    const rows = await db.select().from(schema.libraries)
 
     expect(rows).toHaveLength(1)
     expect(rows[0]?.name).toEqual('Existing')

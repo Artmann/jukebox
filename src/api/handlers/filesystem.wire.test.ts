@@ -1,25 +1,76 @@
 // @vitest-environment node
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
+
+// Wire tests for the filesystem group, ported from the Hono route tests in
+// src/api/routes/filesystem.test.ts.
+import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import path, { join } from 'path'
 
-import { Hono } from 'hono'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { HttpApiBuilder } from '@effect/platform'
+import { NodeHttpServer } from '@effect/platform-node'
+import { Layer } from 'effect'
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest'
 
-import { filesystemRoutes } from './filesystem'
+import { createTestDatabase } from '../../database/test-database'
 
-function buildApp(): Hono {
-  const app = new Hono()
+const testDatabase = createTestDatabase()
 
-  app.route('/', filesystemRoutes)
+vi.mock('../../database', () => ({
+  db: testDatabase.db,
+  schema: testDatabase.schema
+}))
 
-  return app
+const { databaseTestLayer } = await import('../../database/layer')
+const { apiLive, decodeErrorRemapLive, rawRoutesLive } = await import(
+  '../../http/app'
+)
+
+const { dispose, handler } = HttpApiBuilder.toWebHandler(
+  Layer.mergeAll(
+    apiLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    rawRoutesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    decodeErrorRemapLive,
+    NodeHttpServer.layerContext
+  )
+)
+
+const { db, schema } = testDatabase
+const profileCookie = 'jukebox_profile_id=1'
+
+function browse(browsePath?: string) {
+  const query =
+    browsePath === undefined
+      ? ''
+      : `?path=${encodeURIComponent(browsePath)}`
+
+  return handler(
+    new Request(`http://localhost/api/filesystem/browse${query}`, {
+      headers: { cookie: profileCookie }
+    })
+  )
 }
 
 let workDir: string
 
+afterAll(async () => {
+  await dispose()
+})
+
 beforeEach(async () => {
   workDir = await mkdtemp(join(tmpdir(), 'jukebox-fs-'))
+
+  await db.delete(schema.profiles)
+  await db
+    .insert(schema.profiles)
+    .values({ id: 1, name: 'Default', emoji: '🍿', createdAt: new Date(0) })
 })
 
 afterEach(async () => {
@@ -28,8 +79,7 @@ afterEach(async () => {
 
 describe('GET /browse', () => {
   it('returns roots when no path is provided', async () => {
-    const app = buildApp()
-    const response = await app.request('/browse')
+    const response = await browse()
     const body = (await response.json()) as {
       entries: Array<{ name: string; path: string }>
       parent: string | null
@@ -51,10 +101,7 @@ describe('GET /browse', () => {
     await mkdir(join(workDir, '.hidden'))
     await writeFile(join(workDir, 'notes.txt'), 'hi')
 
-    const app = buildApp()
-    const response = await app.request(
-      `/browse?path=${encodeURIComponent(workDir)}`
-    )
+    const response = await browse(workDir)
     const body = (await response.json()) as {
       entries: Array<{ name: string; path: string }>
       parent: string | null
@@ -72,10 +119,7 @@ describe('GET /browse', () => {
 
   it('returns 404 for a missing folder', async () => {
     const missing = join(workDir, 'does-not-exist')
-    const app = buildApp()
-    const response = await app.request(
-      `/browse?path=${encodeURIComponent(missing)}`
-    )
+    const response = await browse(missing)
     const body = (await response.json()) as { error: { message: string } }
 
     expect(response.status).toEqual(404)
@@ -88,10 +132,7 @@ describe('GET /browse', () => {
 
     await writeFile(filePath, 'hi')
 
-    const app = buildApp()
-    const response = await app.request(
-      `/browse?path=${encodeURIComponent(filePath)}`
-    )
+    const response = await browse(filePath)
     const body = (await response.json()) as { error: { message: string } }
 
     expect(response.status).toEqual(400)
@@ -104,10 +145,7 @@ describe('GET /browse', () => {
     await mkdir(child)
 
     const traversed = join(child, '..')
-    const app = buildApp()
-    const response = await app.request(
-      `/browse?path=${encodeURIComponent(traversed)}`
-    )
+    const response = await browse(traversed)
     const body = (await response.json()) as { path: string }
 
     expect(response.status).toEqual(200)

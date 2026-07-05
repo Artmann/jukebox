@@ -1,18 +1,39 @@
 // @vitest-environment node
-import { Hono } from 'hono'
+
+// Wire tests for the search group, ported from the Hono route tests in
+// src/api/routes/search.test.ts. The missing-`q` 400 hint is covered by
+// handlers.test.ts ('bespoke validation messages') and is not repeated here.
+import { HttpApiBuilder } from '@effect/platform'
+import { NodeHttpServer } from '@effect/platform-node'
 import { eq } from 'drizzle-orm'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Layer } from 'effect'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestDatabase } from '../../database/test-database'
 
-const testDb = createTestDatabase()
+const testDatabase = createTestDatabase()
 
 vi.mock('../../database', () => ({
-  db: testDb.db,
-  schema: testDb.schema
+  db: testDatabase.db,
+  schema: testDatabase.schema
 }))
 
-const { searchRoutes } = await import('./search')
+const { databaseTestLayer } = await import('../../database/layer')
+const { apiLive, decodeErrorRemapLive, rawRoutesLive } = await import(
+  '../../http/app'
+)
+
+const { dispose, handler } = HttpApiBuilder.toWebHandler(
+  Layer.mergeAll(
+    apiLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    rawRoutesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    decodeErrorRemapLive,
+    NodeHttpServer.layerContext
+  )
+)
+
+const { db, schema } = testDatabase
+const profileCookie = 'jukebox_profile_id=1'
 
 interface SearchResponse {
   episodes: Array<{
@@ -44,36 +65,45 @@ interface SearchResponse {
   }>
 }
 
-function buildApp(): Hono {
-  const app = new Hono()
-  app.route('/', searchRoutes)
-  return app
-}
-
-async function search(query: string, limit?: number): Promise<{
+async function search(
+  query: string,
+  limit?: number
+): Promise<{
   body: SearchResponse
   status: number
 }> {
-  const app = buildApp()
   const params = new URLSearchParams({ q: query })
 
   if (limit !== undefined) {
     params.set('limit', String(limit))
   }
 
-  const response = await app.request(`/?${params.toString()}`)
+  const response = await handler(
+    new Request(`http://localhost/api/search?${params.toString()}`, {
+      headers: { cookie: profileCookie }
+    })
+  )
   const body = (await response.json()) as SearchResponse
 
   return { body, status: response.status }
 }
 
-beforeEach(async () => {
-  await testDb.db.delete(testDb.schema.episodes)
-  await testDb.db.delete(testDb.schema.seasons)
-  await testDb.db.delete(testDb.schema.shows)
-  await testDb.db.delete(testDb.schema.movies)
+afterAll(async () => {
+  await dispose()
+})
 
-  await testDb.db.insert(testDb.schema.movies).values([
+beforeEach(async () => {
+  await db.delete(schema.episodes)
+  await db.delete(schema.seasons)
+  await db.delete(schema.shows)
+  await db.delete(schema.movies)
+  await db.delete(schema.profiles)
+
+  await db
+    .insert(schema.profiles)
+    .values({ id: 1, name: 'Default', emoji: '🍿', createdAt: new Date(0) })
+
+  await db.insert(schema.movies).values([
     {
       id: 1,
       title: 'Dune',
@@ -115,13 +145,14 @@ beforeEach(async () => {
     }
   ])
 
-  await testDb.db.insert(testDb.schema.shows).values([
+  await db.insert(schema.shows).values([
     {
       id: 10,
       title: 'Severance',
       folderPath: '/shows/severance',
       year: 2022,
-      overview: 'Office workers undergo a procedure that splits their memories.',
+      overview:
+        'Office workers undergo a procedure that splits their memories.',
       genres: 'Drama, Mystery',
       posterUrl: '/sev.jpg',
       backdropUrl: null,
@@ -142,7 +173,7 @@ beforeEach(async () => {
     }
   ])
 
-  await testDb.db.insert(testDb.schema.seasons).values([
+  await db.insert(schema.seasons).values([
     {
       id: 100,
       showId: 10,
@@ -163,7 +194,7 @@ beforeEach(async () => {
     }
   ])
 
-  await testDb.db.insert(testDb.schema.episodes).values([
+  await db.insert(schema.episodes).values([
     {
       id: 1000,
       showId: 10,
@@ -184,7 +215,7 @@ beforeEach(async () => {
       seasonId: 101,
       seasonNumber: 1,
       episodeNumber: 1,
-      title: 'The Emperor\u2019s Peace',
+      title: 'The Emperor’s Peace',
       filePath: '/shows/foundation/s1e1.mkv',
       fileName: 's1e1.mkv',
       overview: 'Hari Seldon faces the Empire.',
@@ -218,20 +249,6 @@ describe('search routes', () => {
         indexEmpty: false,
         movies: [],
         shows: []
-      })
-    })
-
-    it('returns 400 for a missing q parameter', async () => {
-      const app = buildApp()
-      const response = await app.request('/')
-      const body = (await response.json()) as { error: { message: string } }
-
-      expect(response.status).toEqual(400)
-      expect(body).toEqual({
-        error: {
-          message:
-            'Add a `q` query parameter to search. Example: /api/search?q=dune'
-        }
       })
     })
 
@@ -278,7 +295,7 @@ describe('search routes', () => {
           showId: 11,
           showTitle: 'Foundation',
           stillUrl: null,
-          title: 'The Emperor\u2019s Peace'
+          title: 'The Emperor’s Peace'
         }
       ])
     })
@@ -362,10 +379,13 @@ describe('search routes', () => {
     })
 
     it('returns 400 when the query exceeds 256 characters', async () => {
-      const app = buildApp()
       const longQuery = 'a'.repeat(257)
       const params = new URLSearchParams({ q: longQuery })
-      const response = await app.request(`/?${params.toString()}`)
+      const response = await handler(
+        new Request(`http://localhost/api/search?${params.toString()}`, {
+          headers: { cookie: profileCookie }
+        })
+      )
       const body = (await response.json()) as { error: { message: string } }
 
       expect(response.status).toEqual(400)
@@ -378,24 +398,26 @@ describe('search routes', () => {
     })
 
     it('returns 400 when limit is not a positive integer', async () => {
-      const app = buildApp()
-      const response = await app.request('/?q=dune&limit=abc')
+      const response = await handler(
+        new Request('http://localhost/api/search?q=dune&limit=abc', {
+          headers: { cookie: profileCookie }
+        })
+      )
       const body = (await response.json()) as { error: { message: string } }
 
       expect(response.status).toEqual(400)
       expect(body).toEqual({
         error: {
-          message:
-            '`limit` must be a positive integer between 1 and 50.'
+          message: '`limit` must be a positive integer between 1 and 50.'
         }
       })
     })
 
     it('flags an empty library so the UI can show "index not ready"', async () => {
-      await testDb.db.delete(testDb.schema.episodes)
-      await testDb.db.delete(testDb.schema.seasons)
-      await testDb.db.delete(testDb.schema.shows)
-      await testDb.db.delete(testDb.schema.movies)
+      await db.delete(schema.episodes)
+      await db.delete(schema.seasons)
+      await db.delete(schema.shows)
+      await db.delete(schema.movies)
 
       const { body, status } = await search('anything')
 
@@ -415,9 +437,7 @@ describe('search routes', () => {
     })
 
     it('reflects deletions through the FTS triggers', async () => {
-      await testDb.db
-        .delete(testDb.schema.movies)
-        .where(eq(testDb.schema.movies.id, 3))
+      await db.delete(schema.movies).where(eq(schema.movies.id, 3))
 
       const { body } = await search('inception')
 
@@ -425,31 +445,35 @@ describe('search routes', () => {
     })
 
     it('reflects updates through the FTS triggers', async () => {
-      await testDb.db
-        .update(testDb.schema.movies)
+      await db
+        .update(schema.movies)
         .set({ title: 'Tenet' })
-        .where(eq(testDb.schema.movies.id, 3))
+        .where(eq(schema.movies.id, 3))
 
       const { body: oldQuery } = await search('inception')
+
       expect(oldQuery.movies).toEqual([])
 
       const { body: newQuery } = await search('tenet')
+
       expect(newQuery.movies.map((movie) => movie.id)).toEqual([3])
     })
 
     it('keeps episode show_title in sync when a show is renamed', async () => {
-      await testDb.db
-        .update(testDb.schema.shows)
+      await db
+        .update(schema.shows)
         .set({ title: 'Apple Foundation' })
-        .where(eq(testDb.schema.shows.id, 11))
+        .where(eq(schema.shows.id, 11))
 
       // The original show title should no longer match the episode.
       const { body: oldQuery } = await search('foundation')
+
       // "Apple Foundation" still has "Foundation" in it, so that's still a hit
       // — instead search for a brand-new word we just added.
       expect(oldQuery.episodes.map((episode) => episode.id)).toEqual([1001])
 
       const { body: newQuery } = await search('apple')
+
       expect(newQuery.episodes.map((episode) => episode.id)).toEqual([1001])
     })
   })
