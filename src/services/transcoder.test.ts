@@ -9,7 +9,7 @@ import {
   _clearSessions,
   _listSessionKeys,
   startTranscode
-} from './transcode'
+} from './transcoder'
 
 interface FakeProcess extends EventEmitter {
   exitCode: number | null

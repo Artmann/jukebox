@@ -26,6 +26,7 @@ import { AuthMiddlewareLive } from '../api/middleware/auth-effect'
 import { ProfileMiddlewareLive } from '../api/middleware/profile-effect'
 import { scanStreamRouteLive } from '../api/streaming/scan-stream'
 import { subtitleStreamRouteLive } from '../api/streaming/subtitle-stream'
+import { transcodeStreamRoutesLive } from '../api/streaming/transcode-stream'
 import { videoStreamRoutesLive } from '../api/streaming/video-stream'
 
 // A schema decode failure carries per-issue details (field path + issue
@@ -154,6 +155,7 @@ export const apiLive = HttpApiBuilder.api(jukeboxApi).pipe(
 export const rawRoutesLive = Layer.mergeAll(
   scanStreamRouteLive,
   subtitleStreamRouteLive,
+  transcodeStreamRoutesLive,
   videoStreamRoutesLive
 )
 

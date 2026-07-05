@@ -1074,6 +1074,34 @@ describe('video stream', () => {
   })
 })
 
+describe('transcode stream', () => {
+  it('answers 404 File not found for an unknown file id', async () => {
+    const response = await handler(
+      new Request('http://localhost/api/transcode/movie-999/index.m3u8', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(404)
+    expect(await response.json()).toEqual({
+      error: { message: 'File not found' }
+    })
+  })
+
+  it('answers 404 when requesting a segment without a session', async () => {
+    const response = await handler(
+      new Request('http://localhost/api/transcode/movie-1/segment-000.ts', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(404)
+    expect(await response.json()).toEqual({
+      error: { message: 'Transcode session not found' }
+    })
+  })
+})
+
 describe('subtitle stream', () => {
   let tempDir = ''
 
