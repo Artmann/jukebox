@@ -19,11 +19,14 @@ vi.mock('../../database', () => ({
 }))
 
 const { databaseTestLayer } = await import('../../database/layer')
-const { apiLive, decodeErrorRemapLive } = await import('../../http/app')
+const { apiLive, decodeErrorRemapLive, rawRoutesLive } = await import(
+  '../../http/app'
+)
 
 const { dispose, handler } = HttpApiBuilder.toWebHandler(
   Layer.mergeAll(
     apiLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    rawRoutesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
     decodeErrorRemapLive,
     HttpServer.layerContext
   )
@@ -897,6 +900,51 @@ describe('scan group', () => {
         message:
           'No libraries configured. Add a library in Settings before scanning.'
       }
+    })
+  })
+})
+
+describe('scan stream', () => {
+  it('opens an SSE stream and sends the ready frame first', async () => {
+    const response = await handler(
+      new Request('http://localhost/api/scan/stream', {
+        headers: { cookie: profileCookie }
+      })
+    )
+
+    expect(response.status).toEqual(200)
+    expect(response.headers.get('content-type')).toEqual('text/event-stream')
+
+    const body = response.body
+
+    if (body === null) {
+      throw new Error('Expected the SSE response to have a streaming body.')
+    }
+
+    const reader = body.getReader()
+    const { value } = await reader.read()
+    const text = new TextDecoder().decode(value)
+
+    expect(text).toContain('event: ready')
+    expect(text).toContain('data: {"at":"')
+
+    await reader.cancel()
+  })
+
+  it('answers 401 with the wire body when a password is set', async () => {
+    await db.insert(schema.authConfig).values({
+      id: 1,
+      passwordHash: 'scrypt$c2FsdA==$aGFzaA==',
+      updatedAt: Date.now()
+    })
+
+    const response = await handler(
+      new Request('http://localhost/api/scan/stream')
+    )
+
+    expect(response.status).toEqual(401)
+    expect(await response.json()).toEqual({
+      error: { message: 'Authentication required.' }
     })
   })
 })
