@@ -14,7 +14,7 @@ interface EpisodePanelProps {
   onSelectEpisode: (episode: Episode) => void
   onSelectSeason: (seasonNumber: number) => void
   progressMap?: EpisodeProgressMap
-  seasons: SeasonWithEpisodes[]
+  seasons: ReadonlyArray<SeasonWithEpisodes>
   selectedSeason: number
   showTitle: string
 }

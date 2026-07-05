@@ -35,21 +35,30 @@ class MockEventSource {
   }
 }
 
+// The typed api client hands globalThis.fetch an absolute URL, so mock
+// matching happens on the request's pathname.
+function requestPathname(url: string | URL): string {
+  return new URL(url, 'http://localhost:3000').pathname
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { 'content-type': 'application/json' },
+    status
+  })
+}
+
 function setFetchResponses(
   responses: Record<string, { ok: boolean; json: () => Promise<unknown> }>
 ) {
-  global.fetch = vi.fn((url: string | URL) => {
-    const key = typeof url === 'string' ? url : url.toString()
-    const matched = responses[key]
+  global.fetch = vi.fn(async (url: string | URL) => {
+    const matched = responses[requestPathname(url)]
 
     if (!matched) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({})
-      } as Response)
+      return jsonResponse({})
     }
 
-    return Promise.resolve(matched as unknown as Response)
+    return jsonResponse(await matched.json(), matched.ok ? 200 : 500)
   }) as unknown as typeof fetch
 }
 
@@ -217,34 +226,30 @@ describe('ScanPage', () => {
   })
 
   it('keeps a row complete when SSE events land before the start POST resolves', async () => {
-    let resolveStart: (value: unknown) => void = () => {}
+    let resolveStart: (value: Response) => void = () => {}
 
-    const startPromise = new Promise((resolve) => {
+    const startPromise = new Promise<Response>((resolve) => {
       resolveStart = resolve
     })
 
     global.fetch = vi.fn((url: string | URL) => {
-      const key = typeof url === 'string' ? url : url.toString()
+      const pathname = requestPathname(url)
 
-      if (key === '/api/scan/start') {
-        return startPromise as Promise<Response>
+      if (pathname === '/api/scan/start') {
+        return startPromise
       }
 
-      if (key === '/api/scan/libraries') {
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve([
-              { id: 1, name: 'Shows', path: 'D:\\Media\\Shows', type: 'shows' }
-            ])
-        } as unknown as Response)
+      if (pathname === '/api/scan/libraries') {
+        return Promise.resolve(
+          jsonResponse([
+            { id: 1, name: 'Shows', path: 'D:\\Media\\Shows', type: 'shows' }
+          ])
+        )
       }
 
-      return Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({ currentJob: null, isRunning: false, lastJob: null })
-      } as unknown as Response)
+      return Promise.resolve(
+        jsonResponse({ currentJob: null, isRunning: false, lastJob: null })
+      )
     }) as unknown as typeof fetch
 
     renderScan()
@@ -268,10 +273,7 @@ describe('ScanPage', () => {
     })
 
     await act(async () => {
-      resolveStart({
-        ok: true,
-        json: () => Promise.resolve({ status: 'started' })
-      })
+      resolveStart(jsonResponse({ status: 'started' }))
       await startPromise
     })
 
@@ -437,7 +439,7 @@ describe('ScanPage', () => {
     await waitFor(() => {
       const fetchMock = vi.mocked(global.fetch)
       const startCalls = fetchMock.mock.calls.filter(
-        ([url]) => typeof url === 'string' && url === '/api/scan/start'
+        ([url]) => requestPathname(url as string | URL) === '/api/scan/start'
       )
 
       expect(startCalls).toHaveLength(1)
@@ -474,7 +476,7 @@ describe('ScanPage', () => {
 
     const fetchMock = vi.mocked(global.fetch)
     const startCalls = fetchMock.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url === '/api/scan/start'
+      ([url]) => requestPathname(url as string | URL) === '/api/scan/start'
     )
 
     expect(startCalls).toHaveLength(0)

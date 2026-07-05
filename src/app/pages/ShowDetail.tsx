@@ -4,26 +4,20 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
+import type { EpisodeProgressEntry } from '../../api/contract'
 import { PageHeader } from '../components/PageHeader'
 import { PosterImage } from '../components/PosterImage'
 import { useShow } from '../hooks/useShow'
+import { api } from '../lib/api-client'
 
-interface EpisodeProgress {
-  currentTime: number
-  duration: number | null
-  updatedAt: string
-}
+type EpisodeProgress = EpisodeProgressEntry
 
 type EpisodeProgressMap = Record<number, EpisodeProgress>
 
 async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
-  const response = await fetch(`/api/progress/episode/show/${showId}`)
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch show progress')
-  }
-
-  return (await response.json()) as EpisodeProgressMap
+  return api((client) =>
+    client.episodeProgress.getShowProgress({ path: { showId } })
+  )
 }
 
 function formatRuntime(minutes: number | null): string {

@@ -8,7 +8,7 @@ import type { SubtitleTrack } from '../lib/media'
 interface VideoPlayerProps {
   src: string
   poster?: string
-  subtitles?: SubtitleTrack[]
+  subtitles?: ReadonlyArray<SubtitleTrack>
   onReady?: (player: Player) => void
 }
 

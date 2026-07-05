@@ -109,28 +109,30 @@ describe('LibraryPathsForm', () => {
 
   it('applies a browsed folder to the row the dialog was opened for, even after another row is removed', async () => {
     global.fetch = vi.fn((url: string | URL) => {
-      const key = typeof url === 'string' ? url : url.toString()
+      // The typed api client passes an absolute URL with an encoded query.
+      const key = url.toString()
       const isSubfolder = key.includes(encodeURIComponent('/media/b/sub'))
 
-      return Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve(
-            isSubfolder
-              ? {
-                  entries: [],
-                  parent: '/media/b',
-                  path: '/media/b/sub',
-                  separator: '/'
-                }
-              : {
-                  entries: [{ name: 'sub', path: '/media/b/sub' }],
-                  parent: '/media',
-                  path: '/media/b',
-                  separator: '/'
-                }
-          )
-      } as unknown as Response)
+      const body = isSubfolder
+        ? {
+            entries: [],
+            parent: '/media/b',
+            path: '/media/b/sub',
+            separator: '/'
+          }
+        : {
+            entries: [{ name: 'sub', path: '/media/b/sub' }],
+            parent: '/media',
+            path: '/media/b',
+            separator: '/'
+          }
+
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          headers: { 'content-type': 'application/json' },
+          status: 200
+        })
+      )
     }) as unknown as typeof fetch
 
     const first = draft({ path: '/media/a', type: 'movies' })

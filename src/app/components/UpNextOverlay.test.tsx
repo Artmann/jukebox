@@ -16,9 +16,7 @@ const show: Show = {
   posterUrl: null,
   backdropUrl: null,
   createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-  seasonCount: 1,
-  episodeCount: 2
+  updatedAt: '2026-01-01T00:00:00.000Z'
 }
 
 const nextEpisode: Episode = {

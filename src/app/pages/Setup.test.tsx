@@ -26,19 +26,32 @@ vi.mock('react-router-dom', async () => {
 interface FetchRule {
   body: unknown
   ok?: boolean
+  status?: number
+}
+
+// The typed api client hands globalThis.fetch an absolute URL, so mock
+// matching happens on the request's path.
+function requestPath(url: string | URL): string {
+  const parsed = new URL(url, 'http://localhost:3000')
+
+  return parsed.pathname + parsed.search
 }
 
 function setFetchRules(rules: Record<string, FetchRule>) {
   global.fetch = vi.fn((url: string | URL) => {
-    const key = typeof url === 'string' ? url : url.toString()
+    const key = requestPath(url)
     const matched = Object.entries(rules).find(([prefix]) =>
       key.startsWith(prefix)
     )?.[1] ?? { body: {}, ok: true }
 
-    return Promise.resolve({
-      ok: matched.ok ?? true,
-      json: () => Promise.resolve(matched.body)
-    } as Response)
+    const ok = matched.ok ?? true
+
+    return Promise.resolve(
+      new Response(JSON.stringify(matched.body), {
+        headers: { 'content-type': 'application/json' },
+        status: matched.status ?? (ok ? 200 : 400)
+      })
+    )
   }) as unknown as typeof fetch
 }
 
@@ -60,8 +73,25 @@ function completeSetupCalls() {
   const fetchMock = vi.mocked(global.fetch)
 
   return fetchMock.mock.calls.filter(
-    ([url]) => typeof url === 'string' && url === '/api/setup/complete'
+    ([url]) => requestPath(url as string | URL) === '/api/setup/complete'
   )
+}
+
+function requestBodyJson(options: RequestInit | undefined): unknown {
+  const body = options?.body
+
+  if (typeof body === 'string') {
+    return JSON.parse(body)
+  }
+
+  // The typed client encodes JSON bodies as a Uint8Array. instanceof is
+  // unreliable across the jsdom/node realm boundary, so detect it
+  // structurally.
+  if (ArrayBuffer.isView(body)) {
+    return JSON.parse(new TextDecoder().decode(body))
+  }
+
+  throw new Error('Expected the request to carry a JSON body.')
 }
 
 async function addFolderWithPath(path: string) {
@@ -84,7 +114,9 @@ describe('SetupPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setFetchRules({
-      '/api/setup': { body: { libraries: [] } }
+      '/api/setup': {
+        body: { libraries: [], libraryCount: 0, needsSetup: true }
+      }
     })
   })
 
@@ -139,7 +171,9 @@ describe('SetupPage', () => {
         body: {
           libraries: [
             { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' }
-          ]
+          ],
+          libraryCount: 1,
+          needsSetup: false
         }
       }
     })
@@ -154,8 +188,12 @@ describe('SetupPage', () => {
   it('submits successfully and navigates to the scan page with auto-start', async () => {
     setFetchRules({
       '/api/setup/complete': { body: { success: true } },
-      '/api/setup': { body: { libraries: [] } },
-      '/api/filesystem/browse': { body: { entries: [], parent: null } }
+      '/api/setup': {
+        body: { libraries: [], libraryCount: 0, needsSetup: true }
+      },
+      '/api/filesystem/browse': {
+        body: { entries: [], parent: null, path: '/media', separator: '/' }
+      }
     })
 
     renderSetup()
@@ -174,7 +212,7 @@ describe('SetupPage', () => {
 
     const [, options] = completeSetupCalls()[0] as [string, RequestInit]
 
-    expect(JSON.parse(options.body as string)).toEqual({
+    expect(requestBodyJson(options)).toEqual({
       libraries: [{ name: '', path: '/media/movies', type: 'movies' }]
     })
 
@@ -191,8 +229,12 @@ describe('SetupPage', () => {
         body: { error: { message: 'Server error' } },
         ok: false
       },
-      '/api/setup': { body: { libraries: [] } },
-      '/api/filesystem/browse': { body: { entries: [], parent: null } }
+      '/api/setup': {
+        body: { libraries: [], libraryCount: 0, needsSetup: true }
+      },
+      '/api/filesystem/browse': {
+        body: { entries: [], parent: null, path: '/media', separator: '/' }
+      }
     })
 
     renderSetup()
@@ -229,8 +271,12 @@ describe('SetupPage', () => {
         },
         ok: false
       },
-      '/api/setup': { body: { libraries: [] } },
-      '/api/filesystem/browse': { body: { entries: [], parent: null } }
+      '/api/setup': {
+        body: { libraries: [], libraryCount: 0, needsSetup: true }
+      },
+      '/api/filesystem/browse': {
+        body: { entries: [], parent: null, path: '/media', separator: '/' }
+      }
     })
 
     renderSetup()
@@ -259,8 +305,12 @@ describe('SetupPage', () => {
 
   it('blocks duplicate paths before reaching the server', async () => {
     setFetchRules({
-      '/api/setup': { body: { libraries: [] } },
-      '/api/filesystem/browse': { body: { entries: [], parent: null } }
+      '/api/setup': {
+        body: { libraries: [], libraryCount: 0, needsSetup: true }
+      },
+      '/api/filesystem/browse': {
+        body: { entries: [], parent: null, path: '/media', separator: '/' }
+      }
     })
 
     renderSetup()
@@ -287,7 +337,9 @@ describe('SetupPage', () => {
 
   it('marks a row invalid when live validation fails', async () => {
     setFetchRules({
-      '/api/setup': { body: { libraries: [] } },
+      '/api/setup': {
+        body: { libraries: [], libraryCount: 0, needsSetup: true }
+      },
       '/api/filesystem/browse': {
         body: {
           error: { message: "Folder doesn't exist. Check the path." }
@@ -313,9 +365,16 @@ describe('SetupPage', () => {
 
   it('marks a row valid when live validation succeeds', async () => {
     setFetchRules({
-      '/api/setup': { body: { libraries: [] } },
+      '/api/setup': {
+        body: { libraries: [], libraryCount: 0, needsSetup: true }
+      },
       '/api/filesystem/browse': {
-        body: { entries: [], parent: '/media', path: '/media/movies' }
+        body: {
+          entries: [],
+          parent: '/media',
+          path: '/media/movies',
+          separator: '/'
+        }
       }
     })
 

@@ -37,7 +37,7 @@ interface VideoControlsProps {
   onToggleEpisodes?: () => void
   showEpisodesButton?: boolean
   streamUrl?: string
-  subtitles?: SubtitleTrack[]
+  subtitles?: ReadonlyArray<SubtitleTrack>
 }
 
 const skipSeconds = 10

@@ -15,7 +15,7 @@ interface WatchEpisodePanelsProps {
   onSelectSeason: (seasonNumber: number) => void
   open: boolean
   progressMap?: EpisodeProgressMap
-  seasons: SeasonWithEpisodes[]
+  seasons: ReadonlyArray<SeasonWithEpisodes>
   selectedSeason: number
   showTitle: string
 }

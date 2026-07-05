@@ -1,7 +1,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
-import type { Movie } from './useMovies'
+import type { MovieWithSubtitles, WatchProgressSummary } from '../../api/contract'
 import { useNextEpisode } from './useNextEpisode'
+import { api } from '../lib/api-client'
 import type {
   Episode,
   Show,
@@ -9,76 +10,25 @@ import type {
   SubtitleTrack
 } from '../lib/media'
 
-export interface MovieWithSubtitles extends Movie {
-  subtitles: SubtitleTrack[]
-}
+export type { MovieWithSubtitles } from '../../api/contract'
 
-export interface WatchProgress {
-  currentTime: number
-  duration: number | null
-}
+export type WatchProgress = WatchProgressSummary
 
 export type EpisodeProgressMap = Record<
   number,
   { currentTime: number; duration: number | null }
 >
 
-interface EpisodeWithShow {
-  episode: Episode
-  show: Show
-  subtitles: SubtitleTrack[]
-}
-
-async function fetchMovie(id: string): Promise<MovieWithSubtitles> {
-  const response = await fetch(`/api/library/movies/${id}`)
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch movie')
-  }
-
-  return (await response.json()) as MovieWithSubtitles
-}
-
-async function fetchMovieProgress(movieId: number): Promise<WatchProgress> {
-  const response = await fetch(`/api/progress/${movieId}`)
-
-  return (await response.json()) as WatchProgress
-}
-
-async function fetchEpisodeWithShow(id: string): Promise<EpisodeWithShow> {
-  const response = await fetch(`/api/library/shows/episodes/${id}`)
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch episode')
-  }
-
-  return (await response.json()) as EpisodeWithShow
-}
-
-async function fetchShowForEpisode(showId: number): Promise<ShowWithSeasons> {
-  const response = await fetch(`/api/library/shows/${showId}`)
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch show')
-  }
-
-  return (await response.json()) as ShowWithSeasons
-}
-
-async function fetchEpisodeProgress(episodeId: number): Promise<WatchProgress> {
-  const response = await fetch(`/api/progress/episode/${episodeId}`)
-
-  return (await response.json()) as WatchProgress
-}
-
 async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
-  const response = await fetch(`/api/progress/episode/show/${showId}`)
-
-  if (!response.ok) {
+  try {
+    return await api((client) =>
+      client.episodeProgress.getShowProgress({ path: { showId } })
+    )
+  } catch {
+    // Progress is decoration on the episode list — start from a clean map
+    // rather than failing the whole watch page.
     return {}
   }
-
-  return (await response.json()) as EpisodeProgressMap
 }
 
 export interface WatchData {
@@ -92,7 +42,7 @@ export interface WatchData {
   nextEpisodeShow: Show | null
   savedProgress: WatchProgress | undefined
   show: ShowWithSeasons | undefined
-  subtitles: SubtitleTrack[]
+  subtitles: ReadonlyArray<SubtitleTrack>
 }
 
 /**
@@ -109,7 +59,8 @@ export function useWatchData(
     error: movieError
   } = useQuery({
     queryKey: ['movie', id],
-    queryFn: () => fetchMovie(id ?? ''),
+    queryFn: () =>
+      api((client) => client.library.getMovie({ path: { id: Number(id) } })),
     enabled: !!id && !isEpisode,
     // Keep previous data so the player tree doesn't unmount while fetching
     // the next movie — disposing the player mid-swap leaves consumers with
@@ -123,7 +74,8 @@ export function useWatchData(
     error: episodeError
   } = useQuery({
     queryKey: ['episode', id],
-    queryFn: () => fetchEpisodeWithShow(id ?? ''),
+    queryFn: () =>
+      api((client) => client.shows.getEpisode({ path: { id: Number(id) } })),
     enabled: !!id && isEpisode,
     // Keep previous data so the player tree stays mounted across episode
     // transitions (see note on the movie query above).
@@ -135,7 +87,10 @@ export function useWatchData(
 
   const { data: show } = useQuery({
     queryKey: ['show-for-episode', episodeShow?.id],
-    queryFn: () => fetchShowForEpisode(episodeShow?.id ?? 0),
+    queryFn: () =>
+      api((client) =>
+        client.shows.getShow({ path: { id: episodeShow?.id ?? 0 } })
+      ),
     enabled: !!episodeShow
   })
 
@@ -153,8 +108,16 @@ export function useWatchData(
     ],
     queryFn: () =>
       isEpisode
-        ? fetchEpisodeProgress(episode?.id ?? 0)
-        : fetchMovieProgress(movie?.id ?? 0),
+        ? api((client) =>
+            client.episodeProgress.getEpisodeProgress({
+              path: { episodeId: episode?.id ?? 0 }
+            })
+          )
+        : api((client) =>
+            client.progress.getMovieProgress({
+              path: { movieId: movie?.id ?? 0 }
+            })
+          ),
     enabled: isEpisode ? !!episode : !!movie
   })
 

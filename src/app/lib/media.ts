@@ -1,74 +1,32 @@
-import type { Movie } from '../hooks/useMovies'
-
-export type SubtitleFormat = 'ass' | 'srt' | 'vtt'
-
-export interface SubtitleTrack {
-  id: number
-  displayLanguage: string
-  format: SubtitleFormat
-  isSupported: boolean
-  language: string
-}
-
-export interface Show {
-  id: number
-  title: string
-  folderPath: string
-  externalId: string | null
-  year: number | null
-  overview: string | null
-  genres: string | null
-  rating: number | null
-  posterUrl: string | null
-  backdropUrl: string | null
-  createdAt: string
-  updatedAt: string
-  seasonCount: number
-  episodeCount: number
-}
-
-export interface ShowWithSeasons extends Omit<
+import type {
+  Episode,
+  Movie,
+  SeasonWithEpisodes,
   Show,
-  'seasonCount' | 'episodeCount'
-> {
-  seasons: SeasonWithEpisodes[]
+  ShowWithSeasons,
+  SubtitleTrack
+} from '../../api/contract'
+
+// The entity shapes live in the api contract now — this module keeps the
+// names the app has always used and the merge helper for the library grid.
+export type {
+  Episode,
+  SeasonWithEpisodes,
+  Show,
+  ShowWithSeasons,
+  SubtitleTrack
 }
 
-export interface SeasonWithEpisodes {
-  id: number
-  showId: number
-  seasonNumber: number
-  name: string | null
-  overview: string | null
-  posterUrl: string | null
-  episodeCount: number | null
-  episodes: Episode[]
-}
-
-export interface Episode {
-  id: number
-  showId: number
-  seasonId: number
-  seasonNumber: number
-  episodeNumber: number
-  title: string
-  filePath: string
-  fileName: string
-  fileSize: number | null
-  extension: string | null
-  externalId: string | null
-  overview: string | null
-  runtime: number | null
-  stillUrl: string | null
-  createdAt: string
-  updatedAt: string
-}
+export type SubtitleFormat = SubtitleTrack['format']
 
 export type MediaItem =
   | { type: 'movie'; item: Movie }
   | { type: 'show'; item: Show }
 
-export function mergeMedia(movies: Movie[], shows: Show[]): MediaItem[] {
+export function mergeMedia(
+  movies: ReadonlyArray<Movie>,
+  shows: ReadonlyArray<Show>
+): MediaItem[] {
   const items: MediaItem[] = [
     ...movies.map((item) => ({ type: 'movie' as const, item })),
     ...shows.map((item) => ({ type: 'show' as const, item }))

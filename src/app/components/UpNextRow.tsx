@@ -5,7 +5,7 @@ import type { UpNextItem } from '../hooks/useUpNext'
 import { PosterImage } from './PosterImage'
 
 interface UpNextRowProps {
-  items: UpNextItem[]
+  items: ReadonlyArray<UpNextItem>
 }
 
 export function UpNextRow({ items }: UpNextRowProps): ReactElement | null {

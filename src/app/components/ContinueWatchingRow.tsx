@@ -5,7 +5,7 @@ import type { ContinueWatchingItem } from '../hooks/useContinueWatching'
 import { PosterImage } from './PosterImage'
 
 interface ContinueWatchingRowProps {
-  items: ContinueWatchingItem[]
+  items: ReadonlyArray<ContinueWatchingItem>
 }
 
 export function ContinueWatchingRow({

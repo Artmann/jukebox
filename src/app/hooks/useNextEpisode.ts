@@ -1,29 +1,29 @@
 import { useQuery } from '@tanstack/react-query'
 
-import type { Episode, Show } from '../lib/media'
+import type { NextEpisodeResponse } from '../../api/contract'
+import { api, ApiError } from '../lib/api-client'
 
-export interface NextEpisodeResponse {
-  episode: Episode
-  show: Show
-}
+export type { NextEpisodeResponse } from '../../api/contract'
 
 async function fetchNextEpisode(
   showId: number,
   afterEpisodeId: number
 ): Promise<NextEpisodeResponse | null> {
-  const response = await fetch(
-    `/api/library/shows/${showId}/next-episode?afterEpisodeId=${afterEpisodeId}`
-  )
+  try {
+    return await api((client) =>
+      client.shows.getNextEpisode({
+        path: { showId },
+        urlParams: { afterEpisodeId }
+      })
+    )
+  } catch (error) {
+    // No next episode is a normal outcome, not a failure.
+    if (error instanceof ApiError && error.status === 404) {
+      return null
+    }
 
-  if (response.status === 404) {
-    return null
+    throw error
   }
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch next episode')
-  }
-
-  return (await response.json()) as NextEpisodeResponse
 }
 
 interface UseNextEpisodeOptions {

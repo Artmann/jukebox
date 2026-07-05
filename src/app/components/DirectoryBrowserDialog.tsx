@@ -10,45 +10,16 @@ import {
   SheetDescription,
   SheetTitle
 } from '@/components/ui/sheet'
-
-interface BrowseEntry {
-  name: string
-  path: string
-}
-
-interface BrowseResponse {
-  entries: BrowseEntry[]
-  parent: string | null
-  path: string
-  separator: string
-}
-
-interface ApiError {
-  error?: { message?: string }
-}
+import type { BrowseResponse } from '../../api/contract'
+import { api } from '../lib/api-client'
 
 async function fetchBrowse(browsePath: string): Promise<BrowseResponse> {
-  const query =
-    browsePath.length > 0 ? `?path=${encodeURIComponent(browsePath)}` : ''
-  const response = await fetch(`/api/filesystem/browse${query}`)
-
-  if (!response.ok) {
-    let message = response.statusText
-
-    try {
-      const body = (await response.json()) as ApiError
-
-      if (body.error?.message) {
-        message = body.error.message
-      }
-    } catch {
-      // fall through with statusText
-    }
-
-    throw new Error(message)
-  }
-
-  return (await response.json()) as BrowseResponse
+  // An empty path lists the filesystem roots (drives on Windows).
+  return api((client) =>
+    client.filesystem.browse({
+      urlParams: browsePath.length > 0 ? { path: browsePath } : {}
+    })
+  )
 }
 
 interface DirectoryBrowserDialogProps {

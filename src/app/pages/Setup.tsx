@@ -11,17 +11,7 @@ import {
   type LibraryRowValidation
 } from '../components/library-draft'
 import { setupStatusQueryKey } from '../hooks/useSetupStatus'
-
-interface SetupData {
-  libraries: Array<{ id: number; name: string; path: string; type: string }>
-}
-
-interface SetupErrorBody {
-  error?: {
-    fieldErrors?: Array<{ index: number; message: string }>
-    message?: string
-  }
-}
+import { api, ApiError } from '../lib/api-client'
 
 export function SetupPage() {
   const navigate = useNavigate()
@@ -44,13 +34,7 @@ export function SetupPage() {
 
   async function loadExistingConfig() {
     try {
-      const response = await fetch('/api/setup')
-
-      if (!response.ok) {
-        return
-      }
-
-      const data = (await response.json()) as SetupData
+      const data = await api((client) => client.setup.getStatus())
 
       if (data.libraries.length > 0) {
         setLibraries(
@@ -58,11 +42,14 @@ export function SetupPage() {
             makeLibraryDraft({
               name: library.name,
               path: library.path,
-              type: library.type as 'movies' | 'shows'
+              type: library.type
             })
           )
         )
       }
+    } catch {
+      // Start with an empty form when the status can't be loaded — setup
+      // still works, and submitting validates everything server-side.
     } finally {
       setLoaded(true)
     }
@@ -103,43 +90,46 @@ export function SetupPage() {
     }))
 
     try {
-      const response = await fetch(
-        `/api/filesystem/browse?path=${encodeURIComponent(library.path.trim())}`
+      await api((client) =>
+        client.filesystem.browse({
+          urlParams: { path: library.path.trim() }
+        })
       )
-
-      if (response.ok) {
-        if (isCurrent()) {
-          setValidation((previous) => ({
-            ...previous,
-            [library.id]: { status: 'valid' }
-          }))
-        }
-
-        return
-      }
-
-      const body = (await response.json()) as SetupErrorBody
-      const message =
-        body.error?.message ??
-        "Folder doesn't exist or isn't readable. Check the path."
 
       if (isCurrent()) {
         setValidation((previous) => ({
           ...previous,
-          [library.id]: { message, status: 'invalid' }
+          [library.id]: { status: 'valid' }
         }))
       }
-    } catch {
-      // Network hiccup — clear the pending check rather than blocking the
+    } catch (caughtError) {
+      // The server answered with a verdict — show it on the row. A network
+      // hiccup instead clears the pending check rather than blocking the
       // user with a wrong verdict. Submit still validates server-side.
-      if (isCurrent()) {
-        setValidation((previous) => {
-          const next = { ...previous }
-          delete next[library.id]
-
-          return next
-        })
+      if (!isCurrent()) {
+        return
       }
+
+      if (caughtError instanceof ApiError) {
+        const message =
+          caughtError.message.length > 0
+            ? caughtError.message
+            : "Folder doesn't exist or isn't readable. Check the path."
+
+        setValidation((previous) => ({
+          ...previous,
+          [library.id]: { message, status: 'invalid' }
+        }))
+
+        return
+      }
+
+      setValidation((previous) => {
+        const next = { ...previous }
+        delete next[library.id]
+
+        return next
+      })
     }
   }
 
@@ -189,15 +179,13 @@ export function SetupPage() {
         type: library.type
       }))
 
-      const response = await fetch('/api/setup/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ libraries: payload })
-      })
-
-      if (!response.ok) {
-        const data = (await response.json()) as SetupErrorBody
-        const fieldErrors = data.error?.fieldErrors ?? []
+      try {
+        await api((client) =>
+          client.setup.completeSetup({ payload: { libraries: payload } })
+        )
+      } catch (caughtError) {
+        const fieldErrors =
+          caughtError instanceof ApiError ? caughtError.fieldErrors : []
 
         if (fieldErrors.length > 0) {
           setValidation((previous) => {
@@ -218,9 +206,7 @@ export function SetupPage() {
           })
         }
 
-        throw new Error(
-          data.error?.message ?? "Couldn't save your libraries. Try again."
-        )
+        throw caughtError
       }
 
       // The guard that redirects to /setup caches this — refresh it so the

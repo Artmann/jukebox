@@ -8,6 +8,7 @@ import {
   useStartScan,
   type ScanStatus
 } from '../hooks/useScanStatus'
+import { api } from '../lib/api-client'
 import { ScanLibraryList } from './ScanLibraryList'
 import { ScanActions, ScanPageHeader } from './ScanPageHeader'
 import {
@@ -18,14 +19,8 @@ import {
   type LibraryProgress
 } from './scan-types'
 
-async function fetchLibraries(): Promise<LibraryInfo[]> {
-  const response = await fetch('/api/scan/libraries')
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch libraries')
-  }
-
-  return (await response.json()) as LibraryInfo[]
+async function fetchLibraries(): Promise<ReadonlyArray<LibraryInfo>> {
+  return api((client) => client.scan.listLibraries())
 }
 
 function jobFromStatus(status: ScanStatus | undefined) {

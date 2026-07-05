@@ -1,8 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useEffectEvent, useRef } from 'react'
+import invariant from 'tiny-invariant'
 import type Player from 'video.js/dist/types/player'
 
+import { api } from '../lib/api-client'
+
 const saveIntervalMs = 10000
+
+const episodeProgressPattern = /^\/api\/progress\/episode\/(\d+)$/
+const movieProgressPattern = /^\/api\/progress\/(\d+)$/
 
 export interface SaveProgressInput {
   currentTime: number
@@ -15,15 +21,31 @@ async function putProgress({
   duration,
   progressUrl
 }: SaveProgressInput): Promise<void> {
-  const response = await fetch(progressUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ currentTime, duration })
-  })
+  const payload = { currentTime, duration }
 
-  if (!response.ok) {
-    throw new Error(`Failed to save watch progress (${response.status})`)
+  const episodeMatch = episodeProgressPattern.exec(progressUrl)
+
+  if (episodeMatch) {
+    await api((client) =>
+      client.episodeProgress.saveEpisodeProgress({
+        path: { episodeId: Number(episodeMatch[1]) },
+        payload
+      })
+    )
+
+    return
   }
+
+  const movieMatch = movieProgressPattern.exec(progressUrl)
+
+  invariant(movieMatch, `Unrecognized progress url: ${progressUrl}`)
+
+  await api((client) =>
+    client.progress.saveMovieProgress({
+      path: { movieId: Number(movieMatch[1]) },
+      payload
+    })
+  )
 }
 
 /**

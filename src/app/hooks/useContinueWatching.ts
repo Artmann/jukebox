@@ -1,38 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 
-import type { Movie } from './useMovies'
-import type { Episode, Show } from '../lib/media'
+import { api } from '../lib/api-client'
 
-export interface ContinueWatchingMovieItem {
-  type: 'movie'
-  currentTime: number
-  duration: number | null
-  movie: Movie
-  updatedAt: string
-}
-
-export interface ContinueWatchingEpisodeItem {
-  type: 'episode'
-  currentTime: number
-  duration: number | null
-  episode: Episode
-  show: Show
-  updatedAt: string
-}
-
-export type ContinueWatchingItem =
-  | ContinueWatchingMovieItem
-  | ContinueWatchingEpisodeItem
-
-async function fetchContinueWatching(): Promise<ContinueWatchingItem[]> {
-  const response = await fetch('/api/progress/continue-watching')
-  if (!response.ok) throw new Error('Failed to fetch continue watching')
-  return (await response.json()) as ContinueWatchingItem[]
-}
+export type {
+  ContinueWatchingEpisodeItem,
+  ContinueWatchingItem,
+  ContinueWatchingMovieItem
+} from '../../api/contract'
 
 export function useContinueWatching() {
   return useQuery({
     queryKey: ['continue-watching'],
-    queryFn: fetchContinueWatching
+    queryFn: () => api((client) => client.progress.listContinueWatching())
   })
 }

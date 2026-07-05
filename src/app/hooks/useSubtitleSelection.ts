@@ -13,7 +13,7 @@ interface SubtitleSelection {
   // navigating to another episode) the player tears down and recreates its
   // remote text tracks, so a selection for the old list self-evicts and the
   // menu falls back to "Off" without any state resetting.
-  forSubtitles: SubtitleTrack[] | undefined
+  forSubtitles: ReadonlyArray<SubtitleTrack> | undefined
   id: string
 }
 
@@ -24,7 +24,7 @@ interface SubtitleSelection {
  */
 export function useSubtitleSelection(
   player: Player | null,
-  subtitles: SubtitleTrack[] | undefined
+  subtitles: ReadonlyArray<SubtitleTrack> | undefined
 ): { activeSubtitleId: string; selectSubtitle: (id: string) => void } {
   const [selection, setSelection] = useState<SubtitleSelection | null>(null)
 

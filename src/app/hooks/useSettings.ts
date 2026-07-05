@@ -1,50 +1,24 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient
-} from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import type { ScanScheduleValue } from '../../api/contract'
 import type { LibraryEntry } from '../components/library-draft'
+import { api, type ApiError } from '../lib/api-client'
 
-interface ApiError {
-  error?: { message?: string; referenceCount?: number }
-}
+export type { Library } from '../../api/contract'
+export type { ScanScheduleResponse as ScanScheduleStatus } from '../../api/contract'
 
-async function readError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as ApiError
+export type ScanSchedule = ScanScheduleValue
 
-    return body.error?.message ?? response.statusText
-  } catch {
-    return response.statusText
-  }
-}
-
-export interface Library extends LibraryEntry {
-  id: number
-}
-
-export type ScanSchedule = 'off' | '6h' | '12h' | '24h'
-
-export interface DeleteLibraryError extends Error {
-  referenceCount?: number
-  status: number
-}
-
-async function getJson<Result>(url: string): Promise<Result> {
-  const response = await fetch(url)
-
-  if (!response.ok) {
-    throw new Error(await readError(response))
-  }
-
-  return (await response.json()) as Result
-}
+/**
+ * Thrown by useRemoveLibrary. `status === 409` with a referenceCount means
+ * the library still has scanned items and needs the force flag.
+ */
+export type DeleteLibraryError = ApiError
 
 export function useSettingsLibraries() {
   return useQuery({
     queryKey: ['settings', 'libraries'],
-    queryFn: () => getJson<Library[]>('/api/settings/libraries')
+    queryFn: () => api((client) => client.settings.listLibraries())
   })
 }
 
@@ -52,19 +26,8 @@ export function useAddLibrary() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (input: LibraryEntry) => {
-      const response = await fetch('/api/settings/libraries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input)
-      })
-
-      if (!response.ok) {
-        throw new Error(await readError(response))
-      }
-
-      return (await response.json()) as Library
-    },
+    mutationFn: (input: LibraryEntry) =>
+      api((client) => client.settings.createLibrary({ payload: input })),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ['settings', 'libraries']
@@ -78,32 +41,14 @@ export function useRemoveLibrary() {
 
   return useMutation({
     mutationFn: async (input: { id: number; force?: boolean }) => {
-      const query = input.force === true ? '?force=true' : ''
-      const response = await fetch(
-        `/api/settings/libraries/${input.id}${query}`,
-        { method: 'DELETE' }
+      // Failures reach the caller as an ApiError carrying the status and,
+      // for 409 library-in-use conflicts, the referenceCount.
+      await api((client) =>
+        client.settings.deleteLibrary({
+          path: { id: String(input.id) },
+          urlParams: input.force === true ? { force: 'true' } : {}
+        })
       )
-
-      if (!response.ok) {
-        let referenceCount: number | undefined
-        let message = response.statusText
-
-        try {
-          const body = (await response.json()) as ApiError
-
-          message = body.error?.message ?? message
-          referenceCount = body.error?.referenceCount
-        } catch {
-          // Keep the default statusText message.
-        }
-
-        const error: DeleteLibraryError = Object.assign(
-          new Error(message),
-          { referenceCount, status: response.status }
-        )
-
-        throw error
-      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({
@@ -113,16 +58,10 @@ export function useRemoveLibrary() {
   })
 }
 
-export interface ScanScheduleStatus {
-  nextRunAt: string | null
-  schedule: ScanSchedule
-}
-
 export function useScanSchedule() {
   return useQuery({
     queryKey: ['settings', 'scan-schedule'],
-    queryFn: () =>
-      getJson<ScanScheduleStatus>('/api/settings/scan-schedule')
+    queryFn: () => api((client) => client.settings.getScanSchedule())
   })
 }
 
@@ -130,19 +69,10 @@ export function useSaveScanSchedule() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (schedule: ScanSchedule) => {
-      const response = await fetch('/api/settings/scan-schedule', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schedule })
-      })
-
-      if (!response.ok) {
-        throw new Error(await readError(response))
-      }
-
-      return (await response.json()) as ScanScheduleStatus
-    },
+    mutationFn: (schedule: ScanSchedule) =>
+      api((client) =>
+        client.settings.updateScanSchedule({ payload: { schedule } })
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ['settings', 'scan-schedule']

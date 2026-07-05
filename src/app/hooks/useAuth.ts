@@ -1,39 +1,14 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient
-} from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-export interface AuthStatus {
-  enabled: boolean
-  authenticated: boolean
-}
+import { api, unreachableServerMessage } from '../lib/api-client'
 
-interface ApiError {
-  error?: { message?: string }
-}
+export type { AuthStatus } from '../../api/contract'
 
-async function readError(response: Response): Promise<string> {
+async function fetchAuthStatus() {
   try {
-    const body = (await response.json()) as ApiError
-
-    return body.error?.message ?? response.statusText
+    return await api((client) => client.auth.getStatus())
   } catch {
-    return response.statusText
-  }
-}
-
-async function fetchAuthStatus(): Promise<AuthStatus> {
-  try {
-    const response = await fetch('/api/auth/status')
-
-    if (!response.ok) {
-      throw new Error(await readError(response))
-    }
-
-    return (await response.json()) as AuthStatus
-  } catch {
-    throw new Error("Couldn't reach server. Check your connection.")
+    throw new Error(unreachableServerMessage)
   }
 }
 
@@ -50,21 +25,9 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: async (password: string) => {
-      let response: Response
-
-      try {
-        response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password })
-        })
-      } catch {
-        throw new Error("Couldn't reach server. Check your connection.")
-      }
-
-      if (!response.ok) {
-        throw new Error(await readError(response))
-      }
+      // Transport failures already surface as "Couldn't reach server. Check
+      // your connection." — server rejections keep their own message.
+      await api((client) => client.auth.login({ payload: { password } }))
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['auth-status'] })
@@ -77,17 +40,7 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: async () => {
-      let response: Response
-
-      try {
-        response = await fetch('/api/auth/logout', { method: 'POST' })
-      } catch {
-        throw new Error("Couldn't reach server. Check your connection.")
-      }
-
-      if (!response.ok) {
-        throw new Error(await readError(response))
-      }
+      await api((client) => client.auth.logout())
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['auth-status'] })
@@ -99,28 +52,8 @@ export function useChangePassword() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (input: {
-      currentPassword?: string
-      newPassword: string
-    }) => {
-      let response: Response
-
-      try {
-        response = await fetch('/api/auth/password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(input)
-        })
-      } catch {
-        throw new Error("Couldn't reach server. Check your connection.")
-      }
-
-      if (!response.ok) {
-        throw new Error(await readError(response))
-      }
-
-      return (await response.json()) as { enabled: boolean }
-    },
+    mutationFn: (input: { currentPassword?: string; newPassword: string }) =>
+      api((client) => client.auth.changePassword({ payload: input })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['auth-status'] })
     }

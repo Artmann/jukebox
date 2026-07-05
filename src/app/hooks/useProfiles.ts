@@ -1,52 +1,20 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient
-} from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-export interface Profile {
-  id: number
-  name: string
-  emoji: string
-  createdAt: string
-}
+import { api } from '../lib/api-client'
 
-interface ApiError {
-  error?: { message?: string }
-}
-
-async function readError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as ApiError
-    return body.error?.message ?? response.statusText
-  } catch {
-    return response.statusText
-  }
-}
-
-async function fetchProfiles(): Promise<Profile[]> {
-  const response = await fetch('/api/profiles')
-  if (!response.ok) throw new Error(await readError(response))
-  return (await response.json()) as Profile[]
-}
-
-async function fetchActiveProfile(): Promise<Profile> {
-  const response = await fetch('/api/profiles/active')
-  if (!response.ok) throw new Error(await readError(response))
-  return (await response.json()) as Profile
-}
+export type { Profile } from '../../api/contract'
 
 export function useProfiles() {
   return useQuery({
     queryKey: ['profiles'],
-    queryFn: fetchProfiles
+    queryFn: () => api((client) => client.profiles.listProfiles())
   })
 }
 
 export function useActiveProfile() {
   return useQuery({
     queryKey: ['active-profile'],
-    queryFn: fetchActiveProfile
+    queryFn: () => api((client) => client.profiles.getActiveProfile())
   })
 }
 
@@ -64,17 +32,8 @@ export function useCreateProfile() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (input: { name: string; emoji: string }) => {
-      const response = await fetch('/api/profiles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input)
-      })
-
-      if (!response.ok) throw new Error(await readError(response))
-
-      return (await response.json()) as Profile
-    },
+    mutationFn: (input: { name: string; emoji: string }) =>
+      api((client) => client.profiles.createProfile({ payload: input })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['profiles'] })
     }
@@ -85,22 +44,15 @@ export function useUpdateProfile() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (input: {
-      id: number
-      name?: string
-      emoji?: string
-    }) => {
+    mutationFn: (input: { id: number; name?: string; emoji?: string }) => {
       const { id, ...patch } = input
 
-      const response = await fetch(`/api/profiles/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch)
-      })
-
-      if (!response.ok) throw new Error(await readError(response))
-
-      return (await response.json()) as Profile
+      return api((client) =>
+        client.profiles.updateProfile({
+          path: { id: String(id) },
+          payload: patch
+        })
+      )
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['profiles'] })
@@ -114,9 +66,9 @@ export function useDeleteProfile() {
 
   return useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetch(`/api/profiles/${id}`, { method: 'DELETE' })
-
-      if (!response.ok) throw new Error(await readError(response))
+      await api((client) =>
+        client.profiles.deleteProfile({ path: { id: String(id) } })
+      )
     },
     onSuccess: () => {
       for (const queryKey of profileScopedQueryKeys) {
@@ -130,15 +82,10 @@ export function useActivateProfile() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id: number) => {
-      const response = await fetch(`/api/profiles/${id}/activate`, {
-        method: 'POST'
-      })
-
-      if (!response.ok) throw new Error(await readError(response))
-
-      return (await response.json()) as Profile
-    },
+    mutationFn: (id: number) =>
+      api((client) =>
+        client.profiles.activateProfile({ path: { id: String(id) } })
+      ),
     onSuccess: () => {
       for (const queryKey of profileScopedQueryKeys) {
         void queryClient.invalidateQueries({ queryKey })

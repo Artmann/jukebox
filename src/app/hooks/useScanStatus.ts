@@ -1,64 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-export interface LibraryScanResult {
-  added: number
-  error: string | null
-  libraryId: number
-  name: string
-  status: 'complete' | 'error'
-  total: number
-  updated: number
-}
+import { api } from '../lib/api-client'
 
-export interface ScanJobSummary {
-  added: number
-  endedAt: string | null
-  errorMessage: string | null
-  id: number
-  libraries: LibraryScanResult[]
-  startedAt: string
-  status: 'running' | 'done' | 'error'
-  total: number
-  updated: number
-}
-
-export interface ScanStatus {
-  currentJob: ScanJobSummary | null
-  isRunning: boolean
-  lastJob: ScanJobSummary | null
-}
-
-async function readError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as {
-      error?: { message?: string }
-    }
-
-    return body.error?.message ?? response.statusText
-  } catch {
-    return response.statusText
-  }
-}
-
-async function getJson<Result>(url: string): Promise<Result> {
-  const response = await fetch(url)
-
-  if (!response.ok) {
-    throw new Error(await readError(response))
-  }
-
-  return (await response.json()) as Result
-}
+export type {
+  LibraryScanResult,
+  ScanJobSummary,
+  ScanStatus
+} from '../../api/contract'
 
 export const scanStatusQueryKey = ['scan', 'status'] as const
 
 export function useScanStatus() {
   return useQuery({
     queryKey: scanStatusQueryKey,
-    queryFn: () => getJson<ScanStatus>('/api/scan/status'),
-    refetchInterval: (query) =>
-      query.state.data?.isRunning ? 2_000 : false
+    queryFn: () => api((client) => client.scan.getStatus()),
+    refetchInterval: (query) => (query.state.data?.isRunning ? 2_000 : false)
   })
 }
 
@@ -66,17 +23,7 @@ export function useStartScan() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async () => {
-      const response = await fetch('/api/scan/start', { method: 'POST' })
-
-      if (!response.ok) {
-        throw new Error(await readError(response))
-      }
-
-      return (await response.json()) as {
-        status: 'started' | 'already-running'
-      }
-    },
+    mutationFn: () => api((client) => client.scan.startScan()),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: scanStatusQueryKey })
     }
