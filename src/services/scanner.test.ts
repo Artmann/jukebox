@@ -3,24 +3,41 @@ import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Effect, Layer } from 'effect'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { databaseTestLayer } from '../database/layer'
 import { createTestDatabase } from '../database/test-database'
+import { libraryUnreadableMessage } from './library-validation'
+import { Metadata } from './metadata'
+import { Scanner } from './scanner'
 
 const testDb = createTestDatabase()
 
-vi.mock('../database', () => ({
-  db: testDb.db,
-  schema: testDb.schema
-}))
+// Metadata is stubbed to always miss so scans use the parsed filename title
+// and never make a real HTTP request. Provided in place of the baked-in
+// Metadata.Default via Scanner.DefaultWithoutDependencies.
+const metadataStub = Layer.succeed(Metadata, {
+  fetchMovieByExternalId: () => Effect.succeed(null),
+  fetchMovieMetadata: () => Effect.succeed(null),
+  fetchSeasonMetadata: () => Effect.succeed(null),
+  fetchShowByExternalId: () => Effect.succeed(null),
+  fetchShowMetadata: () => Effect.succeed(null)
+} as unknown as Metadata)
 
-vi.mock('./metadata', () => ({
-  fetchMovieByExternalId: vi.fn().mockResolvedValue(null),
-  fetchMovieMetadata: vi.fn().mockResolvedValue(null)
-}))
+const scannerLayer = Scanner.DefaultWithoutDependencies.pipe(
+  Layer.provide(metadataStub),
+  Layer.provide(databaseTestLayer(testDb.db))
+)
 
-const { scanLibrary } = await import('./scanner')
-const { libraryUnreadableMessage } = await import('./library-validation')
+const scanLibrary = (path: string) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const scanner = yield* Scanner
+
+      return yield* scanner.scanLibrary(path)
+    }).pipe(Effect.provide(scannerLayer))
+  )
 
 let temporaryDirectory: string
 

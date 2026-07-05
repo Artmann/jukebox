@@ -2,20 +2,19 @@ import { readdir, stat } from 'fs/promises'
 import { extname, join } from 'path'
 
 import { and, eq } from 'drizzle-orm'
+import { Effect } from 'effect'
 
-import { db, schema } from '../database'
+import { Database } from '../database/layer'
+import * as schema from '../database/schema'
 import type { NewEpisode, NewSeason, NewShow } from '../database/schema'
 import { parseEpisodeFilename } from './episode-parser'
 import { readLibraryRoot } from './library-validation'
 import { subtitleExtensions, videoExtensions } from './media-extensions'
+import { Metadata } from './metadata'
+import type { EpisodeMetadata } from './metadata'
 import { normalizeShowName, parseSeasonFolder } from './show-parser'
 import { syncSubtitlesForEpisode } from './subtitle-sync'
 import { discoverSubtitlesForVideo } from './subtitles'
-import {
-  fetchSeasonMetadata,
-  fetchShowByExternalId,
-  fetchShowMetadata
-} from './metadata'
 
 export type { NormalizedShow } from './show-parser'
 export { normalizeShowName } from './show-parser'
@@ -96,7 +95,9 @@ async function scanEpisodesInDirectory(
     })
   )
 
-  return episodes.filter((episode): episode is ScannedEpisode => episode !== null)
+  return episodes.filter(
+    (episode): episode is ScannedEpisode => episode !== null
+  )
 }
 
 async function scanShowFolder(folderPath: string): Promise<ScannedEpisode[]> {
@@ -243,247 +244,328 @@ export interface ShowScanProgress {
   updated: number
 }
 
-export async function scanShowLibrary(
-  libraryPath: string,
-  onProgress?: (progress: ShowScanProgress) => void | Promise<void>
-): Promise<{ added: number; updated: number; total: number }> {
-  let added = 0
-  let updated = 0
-  let total = 0
+function toError(caught: unknown): Error {
+  return caught instanceof Error ? caught : new Error(String(caught))
+}
 
-  console.log(`Scanning: ${libraryPath}`)
+const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, Error> =>
+  Effect.tryPromise({ catch: toError, try: run })
 
-  const discoveredShows = await discoverShows(libraryPath)
+// The scan output lines are user-facing in the server log, so they stay on
+// console.log with the same text as before the Effect migration.
+const consoleLog = (message: string): Effect.Effect<void> =>
+  Effect.sync(() => {
+    console.log(message)
+  })
 
-  for (const discoveredShow of discoveredShows) {
-    const { name, year, episodes } = discoveredShow
-    const folderPath = discoveredShow.folders[0] ?? ''
+// Scans a show library path and inserts/updates shows, seasons, and episodes.
+// Directory walking (discoverShows and its helpers) stays plain async — the
+// recursion and its tolerance semantics are inherited unchanged.
+export class ShowScanner extends Effect.Service<ShowScanner>()(
+  'jukebox/ShowScanner',
+  {
+    dependencies: [Metadata.Default],
+    effect: Effect.gen(function* () {
+      const database = yield* Database
+      const metadata = yield* Metadata
 
-    // Find or create the show record
-    const existingShows = await db
-      .select()
-      .from(schema.shows)
-      .where(eq(schema.shows.folderPath, folderPath))
-      .limit(1)
+      const scanShowLibrary = (
+        libraryPath: string,
+        onProgress?: (progress: ShowScanProgress) => Effect.Effect<void>
+      ): Effect.Effect<ShowScanProgress, Error> =>
+        Effect.gen(function* () {
+          let added = 0
+          let updated = 0
+          let total = 0
 
-    let showId: number
-    let externalId: string | null
+          yield* consoleLog(`Scanning: ${libraryPath}`)
 
-    if (existingShows.length > 0 && existingShows[0]) {
-      const existingShow = existingShows[0]
-      showId = existingShow.id
-      externalId = existingShow.externalId ?? null
-
-      // Refresh any missing artwork/overview for shows that have an external
-      // id but are missing data (e.g. after a migration that cleared URLs).
-      if (
-        externalId !== null &&
-        (!existingShow.posterUrl ||
-          !existingShow.backdropUrl ||
-          !existingShow.overview)
-      ) {
-        console.log(`  Refreshing metadata for show: ${existingShow.title}`)
-        const refreshed = await fetchShowByExternalId(externalId)
-
-        if (refreshed) {
-          await db
-            .update(schema.shows)
-            .set({
-              year: existingShow.year ?? refreshed.year,
-              overview: existingShow.overview ?? refreshed.overview,
-              genres: existingShow.genres ?? refreshed.genres,
-              rating: existingShow.rating ?? refreshed.rating,
-              posterUrl: existingShow.posterUrl ?? refreshed.posterUrl,
-              backdropUrl: existingShow.backdropUrl ?? refreshed.backdropUrl,
-              updatedAt: new Date()
-            })
-            .where(eq(schema.shows.id, showId))
-        }
-      }
-    } else {
-      console.log(`  Fetching metadata for show: ${name}`)
-      const metadata = await fetchShowMetadata(name, year ?? undefined)
-
-      const now = new Date()
-      const newShow: NewShow = {
-        title: metadata?.title ?? name,
-        folderPath,
-        externalId: metadata?.externalId ?? null,
-        year: metadata?.year ?? year ?? null,
-        overview: metadata?.overview ?? null,
-        genres: metadata?.genres ?? null,
-        rating: metadata?.rating ?? null,
-        posterUrl: metadata?.posterUrl ?? null,
-        backdropUrl: metadata?.backdropUrl ?? null,
-        createdAt: now,
-        updatedAt: now
-      }
-
-      const inserted = await db
-        .insert(schema.shows)
-        .values(newShow)
-        .returning({ id: schema.shows.id })
-
-      showId = inserted[0]?.id ?? 0
-      externalId = metadata?.externalId ?? null
-    }
-
-    // Group episodes by season number
-    const seasonMap = new Map<number, ScannedEpisode[]>()
-
-    for (const episode of episodes) {
-      const seasonEpisodes = seasonMap.get(episode.seasonNumber) ?? []
-      seasonEpisodes.push(episode)
-      seasonMap.set(episode.seasonNumber, seasonEpisodes)
-    }
-
-    for (const [seasonNumber, seasonEpisodes] of seasonMap) {
-      // Fetch season metadata once per season
-      let metadataEpisodes: {
-        episodeNumber: number
-        title: string
-        overview: string
-        runtime: number | null
-        stillUrl: string | null
-      }[] = []
-
-      // Find or create the season record
-      const existingSeasons = await db
-        .select()
-        .from(schema.seasons)
-        .where(
-          and(
-            eq(schema.seasons.showId, showId),
-            eq(schema.seasons.seasonNumber, seasonNumber)
+          const discoveredShows = yield* tryPromise(() =>
+            discoverShows(libraryPath)
           )
-        )
-        .limit(1)
 
-      let seasonId: number
+          for (const discoveredShow of discoveredShows) {
+            const { name, year, episodes } = discoveredShow
+            const folderPath = discoveredShow.folders[0] ?? ''
 
-      if (existingSeasons.length > 0 && existingSeasons[0]) {
-        seasonId = existingSeasons[0].id
+            // Find or create the show record
+            const existingShows = yield* tryPromise(() =>
+              database
+                .select()
+                .from(schema.shows)
+                .where(eq(schema.shows.folderPath, folderPath))
+                .limit(1)
+            )
 
-        if (externalId !== null) {
-          const seasonMetadata = await fetchSeasonMetadata(
-            externalId,
-            seasonNumber
-          )
-          metadataEpisodes = seasonMetadata?.episodes ?? []
-        }
-      } else {
-        let seasonMetadata = null
+            let showId: number
+            let externalId: string | null
 
-        if (externalId !== null) {
-          console.log(
-            `  Fetching metadata for season ${seasonNumber} of: ${name}`
-          )
-          seasonMetadata = await fetchSeasonMetadata(externalId, seasonNumber)
-          metadataEpisodes = seasonMetadata?.episodes ?? []
-        }
+            if (existingShows.length > 0 && existingShows[0]) {
+              const existingShow = existingShows[0]
+              showId = existingShow.id
+              externalId = existingShow.externalId ?? null
 
-        const newSeason: NewSeason = {
-          showId,
-          seasonNumber,
-          name: seasonMetadata?.name ?? null,
-          overview: seasonMetadata?.overview ?? null,
-          posterUrl: seasonMetadata?.posterUrl ?? null,
-          episodeCount: seasonEpisodes.length
-        }
+              // Refresh any missing artwork/overview for shows that have an
+              // external id but are missing data (e.g. after a migration that
+              // cleared URLs).
+              if (
+                externalId !== null &&
+                (!existingShow.posterUrl ||
+                  !existingShow.backdropUrl ||
+                  !existingShow.overview)
+              ) {
+                yield* consoleLog(
+                  `  Refreshing metadata for show: ${existingShow.title}`
+                )
 
-        const insertedSeason = await db
-          .insert(schema.seasons)
-          .values(newSeason)
-          .returning({ id: schema.seasons.id })
+                const refreshed =
+                  yield* metadata.fetchShowByExternalId(externalId)
 
-        seasonId = insertedSeason[0]?.id ?? 0
-      }
+                if (refreshed) {
+                  const refreshedShowId = showId
 
-      for (const scannedEpisode of seasonEpisodes) {
-        total++
+                  yield* tryPromise(() =>
+                    database
+                      .update(schema.shows)
+                      .set({
+                        year: existingShow.year ?? refreshed.year,
+                        overview: existingShow.overview ?? refreshed.overview,
+                        genres: existingShow.genres ?? refreshed.genres,
+                        rating: existingShow.rating ?? refreshed.rating,
+                        posterUrl:
+                          existingShow.posterUrl ?? refreshed.posterUrl,
+                        backdropUrl:
+                          existingShow.backdropUrl ?? refreshed.backdropUrl,
+                        updatedAt: new Date()
+                      })
+                      .where(eq(schema.shows.id, refreshedShowId))
+                  )
+                }
+              }
+            } else {
+              yield* consoleLog(`  Fetching metadata for show: ${name}`)
 
-        const metadataEpisode = metadataEpisodes.find(
-          (e) => e.episodeNumber === scannedEpisode.episodeNumber
-        )
+              const showMetadata = yield* metadata.fetchShowMetadata(
+                name,
+                year ?? undefined
+              )
 
-        const episodeTitle =
-          metadataEpisode?.title ??
-          scannedEpisode.title ??
-          `Episode ${scannedEpisode.episodeNumber}`
+              const now = new Date()
+              const newShow: NewShow = {
+                title: showMetadata?.title ?? name,
+                folderPath,
+                externalId: showMetadata?.externalId ?? null,
+                year: showMetadata?.year ?? year ?? null,
+                overview: showMetadata?.overview ?? null,
+                genres: showMetadata?.genres ?? null,
+                rating: showMetadata?.rating ?? null,
+                posterUrl: showMetadata?.posterUrl ?? null,
+                backdropUrl: showMetadata?.backdropUrl ?? null,
+                createdAt: now,
+                updatedAt: now
+              }
 
-        // Check for existing episode
-        const existingEpisodes = await db
-          .select()
-          .from(schema.episodes)
-          .where(eq(schema.episodes.filePath, scannedEpisode.filePath))
-          .limit(1)
+              const inserted = yield* tryPromise(() =>
+                database
+                  .insert(schema.shows)
+                  .values(newShow)
+                  .returning({ id: schema.shows.id })
+              )
 
-        const now = new Date()
+              showId = inserted[0]?.id ?? 0
+              externalId = showMetadata?.externalId ?? null
+            }
 
-        let episodeId: number | null
+            // Group episodes by season number
+            const seasonMap = new Map<number, ScannedEpisode[]>()
 
-        if (existingEpisodes.length > 0 && existingEpisodes[0]) {
-          episodeId = existingEpisodes[0].id
+            for (const episode of episodes) {
+              const seasonEpisodes = seasonMap.get(episode.seasonNumber) ?? []
+              seasonEpisodes.push(episode)
+              seasonMap.set(episode.seasonNumber, seasonEpisodes)
+            }
 
-          await db
-            .update(schema.episodes)
-            .set({
-              title: episodeTitle,
-              fileName: scannedEpisode.fileName,
-              fileSize: scannedEpisode.fileSize,
-              extension: scannedEpisode.extension,
-              updatedAt: now
-            })
-            .where(eq(schema.episodes.filePath, scannedEpisode.filePath))
+            for (const [seasonNumber, seasonEpisodes] of seasonMap) {
+              // Fetch season metadata once per season
+              let metadataEpisodes: EpisodeMetadata[] = []
 
-          updated++
-          await onProgress?.({ added, total, updated })
-        } else {
-          const newEpisode: NewEpisode = {
-            showId,
-            seasonId,
-            seasonNumber,
-            episodeNumber: scannedEpisode.episodeNumber,
-            title: episodeTitle,
-            filePath: scannedEpisode.filePath,
-            fileName: scannedEpisode.fileName,
-            fileSize: scannedEpisode.fileSize,
-            extension: scannedEpisode.extension,
-            externalId: null,
-            overview: metadataEpisode?.overview ?? null,
-            runtime: metadataEpisode?.runtime ?? null,
-            stillUrl: metadataEpisode?.stillUrl ?? null,
-            createdAt: now,
-            updatedAt: now
+              // Find or create the season record
+              const existingSeasons = yield* tryPromise(() =>
+                database
+                  .select()
+                  .from(schema.seasons)
+                  .where(
+                    and(
+                      eq(schema.seasons.showId, showId),
+                      eq(schema.seasons.seasonNumber, seasonNumber)
+                    )
+                  )
+                  .limit(1)
+              )
+
+              let seasonId: number
+
+              if (existingSeasons.length > 0 && existingSeasons[0]) {
+                seasonId = existingSeasons[0].id
+
+                if (externalId !== null) {
+                  const seasonMetadata = yield* metadata.fetchSeasonMetadata(
+                    externalId,
+                    seasonNumber
+                  )
+                  metadataEpisodes = seasonMetadata?.episodes ?? []
+                }
+              } else {
+                let seasonMetadata = null
+
+                if (externalId !== null) {
+                  yield* consoleLog(
+                    `  Fetching metadata for season ${seasonNumber} of: ${name}`
+                  )
+                  seasonMetadata = yield* metadata.fetchSeasonMetadata(
+                    externalId,
+                    seasonNumber
+                  )
+                  metadataEpisodes = seasonMetadata?.episodes ?? []
+                }
+
+                const newSeason: NewSeason = {
+                  showId,
+                  seasonNumber,
+                  name: seasonMetadata?.name ?? null,
+                  overview: seasonMetadata?.overview ?? null,
+                  posterUrl: seasonMetadata?.posterUrl ?? null,
+                  episodeCount: seasonEpisodes.length
+                }
+
+                const insertedSeason = yield* tryPromise(() =>
+                  database
+                    .insert(schema.seasons)
+                    .values(newSeason)
+                    .returning({ id: schema.seasons.id })
+                )
+
+                seasonId = insertedSeason[0]?.id ?? 0
+              }
+
+              for (const scannedEpisode of seasonEpisodes) {
+                total++
+
+                const metadataEpisode = metadataEpisodes.find(
+                  (episode) =>
+                    episode.episodeNumber === scannedEpisode.episodeNumber
+                )
+
+                const episodeTitle =
+                  metadataEpisode?.title ??
+                  scannedEpisode.title ??
+                  `Episode ${scannedEpisode.episodeNumber}`
+
+                // Check for existing episode
+                const existingEpisodes = yield* tryPromise(() =>
+                  database
+                    .select()
+                    .from(schema.episodes)
+                    .where(eq(schema.episodes.filePath, scannedEpisode.filePath))
+                    .limit(1)
+                )
+
+                const now = new Date()
+
+                let episodeId: number | null
+
+                if (existingEpisodes.length > 0 && existingEpisodes[0]) {
+                  episodeId = existingEpisodes[0].id
+
+                  yield* tryPromise(() =>
+                    database
+                      .update(schema.episodes)
+                      .set({
+                        title: episodeTitle,
+                        fileName: scannedEpisode.fileName,
+                        fileSize: scannedEpisode.fileSize,
+                        extension: scannedEpisode.extension,
+                        updatedAt: now
+                      })
+                      .where(
+                        eq(schema.episodes.filePath, scannedEpisode.filePath)
+                      )
+                  )
+
+                  updated++
+
+                  if (onProgress) {
+                    yield* onProgress({ added, total, updated })
+                  }
+                } else {
+                  const resolvedSeasonId = seasonId
+                  const resolvedShowId = showId
+
+                  const newEpisode: NewEpisode = {
+                    showId: resolvedShowId,
+                    seasonId: resolvedSeasonId,
+                    seasonNumber,
+                    episodeNumber: scannedEpisode.episodeNumber,
+                    title: episodeTitle,
+                    filePath: scannedEpisode.filePath,
+                    fileName: scannedEpisode.fileName,
+                    fileSize: scannedEpisode.fileSize,
+                    extension: scannedEpisode.extension,
+                    externalId: null,
+                    overview: metadataEpisode?.overview ?? null,
+                    runtime: metadataEpisode?.runtime ?? null,
+                    stillUrl: metadataEpisode?.stillUrl ?? null,
+                    createdAt: now,
+                    updatedAt: now
+                  }
+
+                  const insertedEpisode = yield* tryPromise(() =>
+                    database
+                      .insert(schema.episodes)
+                      .values(newEpisode)
+                      .returning({ id: schema.episodes.id })
+                  )
+
+                  episodeId = insertedEpisode[0]?.id ?? null
+                  added++
+
+                  if (onProgress) {
+                    yield* onProgress({ added, total, updated })
+                  }
+                }
+
+                const resolvedEpisodeId = episodeId
+
+                if (resolvedEpisodeId !== null) {
+                  const discoveredSubtitles = discoverSubtitlesForVideo(
+                    scannedEpisode.filePath,
+                    scannedEpisode.subtitleSiblings
+                  )
+
+                  yield* tryPromise(() =>
+                    syncSubtitlesForEpisode(
+                      database,
+                      resolvedEpisodeId,
+                      discoveredSubtitles
+                    )
+                  )
+                }
+              }
+            }
+
+            yield* consoleLog(
+              `  Found show: ${name} (${episodes.length} episodes)`
+            )
           }
 
-          const insertedEpisode = await db
-            .insert(schema.episodes)
-            .values(newEpisode)
-            .returning({ id: schema.episodes.id })
-
-          episodeId = insertedEpisode[0]?.id ?? null
-          added++
-          await onProgress?.({ added, total, updated })
-        }
-
-        if (episodeId !== null) {
-          const discoveredSubtitles = discoverSubtitlesForVideo(
-            scannedEpisode.filePath,
-            scannedEpisode.subtitleSiblings
+          yield* consoleLog(
+            `Finished scanning ${libraryPath}: ${total} episode file(s) found.`
           )
 
-          await syncSubtitlesForEpisode(episodeId, discoveredSubtitles)
-        }
-      }
-    }
+          return { added, updated, total }
+        })
 
-    console.log(`  Found show: ${name} (${episodes.length} episodes)`)
+      return { scanShowLibrary }
+    })
   }
-
-  console.log(
-    `Finished scanning ${libraryPath}: ${total} episode file(s) found.`
-  )
-
-  return { added, updated, total }
-}
+) {}

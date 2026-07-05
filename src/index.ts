@@ -9,8 +9,6 @@ import { HttpServerLive } from './http/server'
 import { staticFilesLive } from './http/static'
 import { viteDevLive } from './http/vite-proxy'
 import { getPackageJsonPath, isCompiledExecutable } from './runtime-paths'
-import { scanManager } from './services/scan-manager'
-import { scheduler } from './services/scheduler'
 
 // Declared like `src/database/index.ts` so the Node build (vitest, tsc) never
 // depends on Bun's ambient global types.
@@ -95,21 +93,6 @@ const welcomeLayer = Layer.effectDiscard(
   )
 )
 
-// The same boot work the Hono server did: mark scan jobs orphaned by a crash
-// or restart, then start the scan scheduler. Ordered inside one acquire so
-// the scheduler can't kick off a scan while recovery is still rewriting job
-// rows; the release stops the scheduler's timer on shutdown. Both singletons
-// become scoped Effect services in Phase 5.
-const scanBootLayer = Layer.scopedDiscard(
-  Effect.acquireRelease(
-    Effect.promise(async () => {
-      await scanManager.recoverInterruptedJobs()
-      await scheduler.start()
-    }),
-    () => Effect.sync(() => scheduler.stop())
-  )
-)
-
 // Dev mode proxies non-/api requests to a Vite server it owns; production
 // serves the built client assets with an index.html SPA fallback.
 const isDevelopment = process.env.NODE_ENV !== 'production'
@@ -117,12 +100,14 @@ const isDevelopment = process.env.NODE_ENV !== 'production'
 const frontendLayer = isDevelopment ? viteDevLive : staticFilesLive
 
 // The assembled HttpApi (all 14 groups), the raw streaming routes, and the
-// frontend served on the dual-runtime server layer.
-const mainLayer = Layer.mergeAll(
-  makeHttpAppLive(frontendLayer),
-  welcomeLayer,
-  scanBootLayer
-).pipe(Layer.provide(DatabaseLive), Layer.provide(HttpServerLive))
+// frontend served on the dual-runtime server layer. The scan services inside
+// makeHttpAppLive run crash recovery and arm the scheduler as part of their
+// scoped build, and stop cleanly on shutdown — this is the boot work the old
+// Hono server did explicitly.
+const mainLayer = Layer.mergeAll(makeHttpAppLive(frontendLayer), welcomeLayer).pipe(
+  Layer.provide(DatabaseLive),
+  Layer.provide(HttpServerLive)
+)
 
 // `runMain` installs SIGINT/SIGTERM handling and interrupts the layer's
 // finalizers on shutdown, so no manual `process.on` handlers are needed. The

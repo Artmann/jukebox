@@ -1,4 +1,5 @@
-import { log } from 'tiny-typescript-logger'
+import { FetchHttpClient, HttpClient } from '@effect/platform'
+import { Data, Effect } from 'effect'
 
 const defaultApiBaseUrl = 'https://movie-data-api.artgaard.workers.dev'
 
@@ -95,28 +96,17 @@ export interface SeasonMetadata {
   episodes: EpisodeMetadata[]
 }
 
-async function apiGet<Result>(path: string): Promise<Result> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`)
+export class MetadataNotFound extends Data.TaggedError('MetadataNotFound')<{
+  message: string
+}> {}
 
-  if (response.status === 404) {
-    throw new NotFoundError(path)
-  }
+export class MetadataRequestFailed extends Data.TaggedError(
+  'MetadataRequestFailed'
+)<{
+  message: string
+}> {}
 
-  if (!response.ok) {
-    throw new Error(
-      `Metadata API request failed with status ${response.status} for ${path}`
-    )
-  }
-
-  return (await response.json()) as Result
-}
-
-class NotFoundError extends Error {
-  constructor(path: string) {
-    super(`Metadata API returned 404 for ${path}`)
-    this.name = 'NotFoundError'
-  }
-}
+type MetadataError = MetadataNotFound | MetadataRequestFailed
 
 function mapMovie(apiMovie: ApiMovie): MovieMetadata {
   return {
@@ -163,148 +153,147 @@ function mapSeason(apiSeason: ApiSeason): SeasonMetadata {
   }
 }
 
-export async function fetchMovieMetadata(
-  title: string,
-  year?: number
-): Promise<MovieMetadata | null> {
-  try {
-    const search = new URLSearchParams({ title })
+// Warn-and-degrade: metadata is best-effort, so lookups keep answering null
+// instead of failing the scan. The message text matches the old logger output.
+const degradeToNull = (subject: string) => (error: MetadataError) =>
+  Effect.logWarning(
+    `Metadata lookup for ${subject} failed — continuing without metadata: ${error.message}`
+  ).pipe(Effect.as(null))
 
-    if (year !== undefined) {
-      search.set('year', year.toString())
+export class Metadata extends Effect.Service<Metadata>()('jukebox/Metadata', {
+  dependencies: [FetchHttpClient.layer],
+  effect: Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient
+
+    const apiGet = <Result>(
+      path: string
+    ): Effect.Effect<Result, MetadataError> =>
+      Effect.gen(function* () {
+        const response = yield* client.get(`${getApiBaseUrl()}${path}`)
+
+        if (response.status === 404) {
+          return yield* new MetadataNotFound({
+            message: `Metadata API returned 404 for ${path}`
+          })
+        }
+
+        if (response.status < 200 || response.status >= 300) {
+          return yield* new MetadataRequestFailed({
+            message: `Metadata API request failed with status ${response.status} for ${path}`
+          })
+        }
+
+        return (yield* response.json) as Result
+      }).pipe(
+        Effect.scoped,
+        Effect.catchTags({
+          RequestError: (error) =>
+            new MetadataRequestFailed({ message: error.message }),
+          ResponseError: (error) =>
+            new MetadataRequestFailed({ message: error.message })
+        })
+      )
+
+    const fetchMovieByExternalId = (
+      externalId: string
+    ): Effect.Effect<MovieMetadata | null> =>
+      apiGet<ApiMovie>(`/movies/${encodeURIComponent(externalId)}`).pipe(
+        Effect.map(mapMovie),
+        Effect.catchTags({
+          MetadataNotFound: () => Effect.succeed(null),
+          MetadataRequestFailed: degradeToNull(`movie id=${externalId}`)
+        })
+      )
+
+    const fetchMovieMetadata = (
+      title: string,
+      year?: number
+    ): Effect.Effect<MovieMetadata | null> =>
+      Effect.gen(function* () {
+        const search = new URLSearchParams({ title })
+
+        if (year !== undefined) {
+          search.set('year', year.toString())
+        }
+
+        const { results } = yield* apiGet<{ results: ApiMovie[] }>(
+          `/movies/search?${search.toString()}`
+        )
+
+        const bestMatch = results[0]
+
+        if (!bestMatch) {
+          return null
+        }
+
+        // The search endpoint already returns full movie data including the
+        // trailer URL, so no follow-up details call is needed.
+        return mapMovie(bestMatch)
+      }).pipe(
+        Effect.catchAll(
+          degradeToNull(`movie "${title}" (${year ?? 'no year'})`)
+        )
+      )
+
+    const fetchSeasonMetadata = (
+      externalId: string,
+      seasonNumber: number
+    ): Effect.Effect<SeasonMetadata | null> =>
+      apiGet<ApiSeason>(
+        `/shows/${encodeURIComponent(externalId)}/seasons/${seasonNumber}`
+      ).pipe(
+        Effect.map(mapSeason),
+        Effect.catchTags({
+          MetadataNotFound: () => Effect.succeed(null),
+          MetadataRequestFailed: degradeToNull(
+            `show id=${externalId} season=${seasonNumber}`
+          )
+        })
+      )
+
+    const fetchShowByExternalId = (
+      externalId: string
+    ): Effect.Effect<ShowMetadata | null> =>
+      apiGet<ApiShow>(`/shows/${encodeURIComponent(externalId)}`).pipe(
+        Effect.map(mapShow),
+        Effect.catchTags({
+          MetadataNotFound: () => Effect.succeed(null),
+          MetadataRequestFailed: degradeToNull(`show id=${externalId}`)
+        })
+      )
+
+    const fetchShowMetadata = (
+      title: string,
+      year?: number
+    ): Effect.Effect<ShowMetadata | null> =>
+      Effect.gen(function* () {
+        const search = new URLSearchParams({ title })
+
+        if (year !== undefined) {
+          search.set('year', year.toString())
+        }
+
+        const { results } = yield* apiGet<{ results: ApiShow[] }>(
+          `/shows/search?${search.toString()}`
+        )
+
+        const bestMatch = results[0]
+
+        if (!bestMatch) {
+          return null
+        }
+
+        return mapShow(bestMatch)
+      }).pipe(
+        Effect.catchAll(degradeToNull(`show "${title}" (${year ?? 'no year'})`))
+      )
+
+    return {
+      fetchMovieByExternalId,
+      fetchMovieMetadata,
+      fetchSeasonMetadata,
+      fetchShowByExternalId,
+      fetchShowMetadata
     }
-
-    const { results } = await apiGet<{ results: ApiMovie[] }>(
-      `/movies/search?${search.toString()}`
-    )
-
-    const bestMatch = results[0]
-
-    if (!bestMatch) {
-      return null
-    }
-
-    // The search endpoint already returns full movie data including the
-    // trailer URL, so no follow-up details call is needed.
-    return mapMovie(bestMatch)
-  } catch (caughtError) {
-    const message =
-      caughtError instanceof Error ? caughtError.message : 'Unknown error'
-
-    log.warn(
-      `Metadata lookup for movie "${title}" (${year ?? 'no year'}) failed — continuing without metadata: ${message}`
-    )
-
-    return null
-  }
-}
-
-export async function fetchMovieByExternalId(
-  externalId: string
-): Promise<MovieMetadata | null> {
-  try {
-    const apiMovie = await apiGet<ApiMovie>(
-      `/movies/${encodeURIComponent(externalId)}`
-    )
-
-    return mapMovie(apiMovie)
-  } catch (caughtError) {
-    if (caughtError instanceof NotFoundError) {
-      return null
-    }
-
-    const message =
-      caughtError instanceof Error ? caughtError.message : 'Unknown error'
-
-    log.warn(
-      `Metadata lookup for movie id=${externalId} failed — continuing without metadata: ${message}`
-    )
-
-    return null
-  }
-}
-
-export async function fetchShowByExternalId(
-  externalId: string
-): Promise<ShowMetadata | null> {
-  try {
-    const apiShow = await apiGet<ApiShow>(
-      `/shows/${encodeURIComponent(externalId)}`
-    )
-
-    return mapShow(apiShow)
-  } catch (caughtError) {
-    if (caughtError instanceof NotFoundError) {
-      return null
-    }
-
-    const message =
-      caughtError instanceof Error ? caughtError.message : 'Unknown error'
-
-    log.warn(
-      `Metadata lookup for show id=${externalId} failed — continuing without metadata: ${message}`
-    )
-
-    return null
-  }
-}
-
-export async function fetchShowMetadata(
-  title: string,
-  year?: number
-): Promise<ShowMetadata | null> {
-  try {
-    const search = new URLSearchParams({ title })
-
-    if (year !== undefined) {
-      search.set('year', year.toString())
-    }
-
-    const { results } = await apiGet<{ results: ApiShow[] }>(
-      `/shows/search?${search.toString()}`
-    )
-
-    const bestMatch = results[0]
-
-    if (!bestMatch) {
-      return null
-    }
-
-    return mapShow(bestMatch)
-  } catch (caughtError) {
-    const message =
-      caughtError instanceof Error ? caughtError.message : 'Unknown error'
-
-    log.warn(
-      `Metadata lookup for show "${title}" (${year ?? 'no year'}) failed — continuing without metadata: ${message}`
-    )
-
-    return null
-  }
-}
-
-export async function fetchSeasonMetadata(
-  externalId: string,
-  seasonNumber: number
-): Promise<SeasonMetadata | null> {
-  try {
-    const apiSeason = await apiGet<ApiSeason>(
-      `/shows/${encodeURIComponent(externalId)}/seasons/${seasonNumber}`
-    )
-
-    return mapSeason(apiSeason)
-  } catch (caughtError) {
-    if (caughtError instanceof NotFoundError) {
-      return null
-    }
-
-    const message =
-      caughtError instanceof Error ? caughtError.message : 'Unknown error'
-
-    log.warn(
-      `Metadata lookup for show id=${externalId} season=${seasonNumber} failed — continuing without metadata: ${message}`
-    )
-
-    return null
-  }
-}
+  })
+}) {}

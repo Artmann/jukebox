@@ -1,18 +1,16 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Chunk, Effect, Fiber, Layer, Stream } from 'effect'
+import { beforeEach, describe, expect, it } from 'vitest'
 
+import { databaseTestLayer } from '../database/layer'
 import { createTestDatabase } from '../database/test-database'
+import { parseLibraryResults, ScanManager } from './scan-manager'
+import type { ScanEvent } from './scan-manager'
+import { Scanner } from './scanner'
+import type { ScanProgress } from './scanner'
+import { ShowScanner } from './show-scanner'
 
 const testDb = createTestDatabase()
-
-vi.mock('../database', () => ({
-  db: testDb.db,
-  schema: testDb.schema
-}))
-
-const { createScanManager, parseLibraryResults } = await import(
-  './scan-manager'
-)
 
 interface FakeLibrary {
   id: number
@@ -21,9 +19,37 @@ interface FakeLibrary {
   type: 'movies' | 'shows'
 }
 
-async function reset() {
-  await testDb.db.delete(testDb.schema.scanJobs)
-  await testDb.db.delete(testDb.schema.libraries)
+type FakeScan = (
+  path: string,
+  onProgress?: (progress: ScanProgress) => Effect.Effect<void>
+) => Effect.Effect<ScanProgress, Error>
+
+// Builds a ScanManager backed by stub Scanner/ShowScanner services and the
+// in-memory test database, in place of the baked-in Scanner.Default /
+// ShowScanner.Default via ScanManager.DefaultWithoutDependencies.
+function makeManagerLayer(scanLibrary: FakeScan, scanShowLibrary: FakeScan) {
+  const scannerStub = Layer.succeed(Scanner, {
+    scanLibrary
+  } as unknown as Scanner)
+  const showScannerStub = Layer.succeed(ShowScanner, {
+    scanShowLibrary
+  } as unknown as ShowScanner)
+
+  return ScanManager.DefaultWithoutDependencies.pipe(
+    Layer.provide(scannerStub),
+    Layer.provide(showScannerStub),
+    Layer.provide(databaseTestLayer(testDb.db))
+  )
+}
+
+const succeed =
+  (progress: ScanProgress): FakeScan =>
+  () =>
+    Effect.succeed(progress)
+
+function reset() {
+  testDb.db.delete(testDb.schema.scanJobs).run()
+  testDb.db.delete(testDb.schema.libraries).run()
 }
 
 function insertLibrary(library: FakeLibrary) {
@@ -39,20 +65,26 @@ function insertLibrary(library: FakeLibrary) {
     .run()
 }
 
-beforeEach(async () => {
-  await reset()
+beforeEach(() => {
+  reset()
 })
 
-describe('scanManager.start', () => {
+describe('ScanManager.start', () => {
   it('creates a scan_jobs row with status running and completes it as done', async () => {
     insertLibrary({ id: 1, name: 'Movies', path: '/movies', type: 'movies' })
 
-    const manager = createScanManager({
-      scanLibrary: () => Promise.resolve({ added: 2, total: 5, updated: 1 }),
-      scanShowLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 })
-    })
+    const layer = makeManagerLayer(
+      succeed({ added: 2, total: 5, updated: 1 }),
+      succeed({ added: 0, total: 0, updated: 0 })
+    )
 
-    const result = await manager.start()
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const manager = yield* ScanManager
+
+        return yield* manager.start
+      }).pipe(Effect.provide(layer))
+    )
 
     expect(result).toEqual({
       added: 2,
@@ -72,7 +104,7 @@ describe('scanManager.start', () => {
     expect(jobs[0]?.endedAt).not.toEqual(null)
   })
 
-  it('returns early with alreadyRunning when a scan is in flight', async () => {
+  it('returns already-running when a scan is in flight', async () => {
     insertLibrary({ id: 1, name: 'Movies', path: '/movies', type: 'movies' })
 
     let release: () => void = () => {
@@ -83,44 +115,57 @@ describe('scanManager.start', () => {
       release = resolve
     })
 
-    const manager = createScanManager({
-      scanLibrary: async () => {
-        await gate
+    const layer = makeManagerLayer(
+      () =>
+        Effect.promise(async () => {
+          await gate
 
-        return { added: 0, total: 0, updated: 0 }
-      },
-      scanShowLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 })
-    })
+          return { added: 0, total: 0, updated: 0 }
+        }),
+      succeed({ added: 0, total: 0, updated: 0 })
+    )
 
-    const jobStarted = new Promise<void>((resolve) => {
-      manager.on('job-started', () => resolve())
-    })
+    const secondResult = await Effect.runPromise(
+      Effect.gen(function* () {
+        const manager = yield* ScanManager
+        const events = yield* manager.subscribe
 
-    const firstPromise = manager.start()
+        // Fork the first scan; it inserts the running job, emits scan-started,
+        // then blocks in the gated scanLibrary.
+        const firstFiber = yield* Effect.fork(manager.start)
 
-    // Wait until the first call has inserted its scan_jobs row.
-    await jobStarted
+        // Wait for scan-started so the running job exists before we probe.
+        yield* Stream.runHead(Stream.take(events, 1))
 
-    const secondResult = await manager.start()
+        const second = yield* manager.start
+
+        yield* Effect.sync(() => release())
+        yield* Fiber.join(firstFiber)
+
+        return second
+      }).pipe(Effect.provide(layer), Effect.scoped)
+    )
 
     expect(secondResult).toEqual({ status: 'already-running' })
-
-    release()
-
-    await firstPromise
 
     const jobs = await testDb.db.select().from(testDb.schema.scanJobs)
 
     expect(jobs.length).toEqual(1)
   })
 
-  it('returns early when there are no libraries', async () => {
-    const manager = createScanManager({
-      scanLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 }),
-      scanShowLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 })
-    })
+  it('returns no-libraries when there are none', async () => {
+    const layer = makeManagerLayer(
+      succeed({ added: 0, total: 0, updated: 0 }),
+      succeed({ added: 0, total: 0, updated: 0 })
+    )
 
-    const result = await manager.start()
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const manager = yield* ScanManager
+
+        return yield* manager.start
+      }).pipe(Effect.provide(layer))
+    )
 
     expect(result).toEqual({
       status: 'no-libraries',
@@ -133,15 +178,21 @@ describe('scanManager.start', () => {
     expect(jobs.length).toEqual(0)
   })
 
-  it('marks the job as error when a library scan throws', async () => {
+  it('marks the job as error when a library scan fails', async () => {
     insertLibrary({ id: 1, name: 'Movies', path: '/movies', type: 'movies' })
 
-    const manager = createScanManager({
-      scanLibrary: () => Promise.reject(new Error('disk on fire')),
-      scanShowLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 })
-    })
+    const layer = makeManagerLayer(
+      () => Effect.fail(new Error('disk on fire')),
+      succeed({ added: 0, total: 0, updated: 0 })
+    )
 
-    const result = await manager.start()
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const manager = yield* ScanManager
+
+        return yield* manager.start
+      }).pipe(Effect.provide(layer))
+    )
 
     expect(result.status).toEqual('error')
 
@@ -149,51 +200,49 @@ describe('scanManager.start', () => {
 
     expect(jobs.length).toEqual(1)
     expect(jobs[0]?.status).toEqual('error')
-    expect(jobs[0]?.errorMessage).toEqual(
-      'Movies — disk on fire'
-    )
+    expect(jobs[0]?.errorMessage).toEqual('Movies — disk on fire')
   })
 
-  it('emits job-started, progress, and job-completed events', async () => {
+  it('emits scan-started, library-start, file-scanned, library-complete, scan-complete', async () => {
     insertLibrary({ id: 1, name: 'Movies', path: '/movies', type: 'movies' })
 
-    const manager = createScanManager({
-      scanLibrary: async (_path, onProgress) => {
-        await onProgress?.({ added: 1, total: 1, updated: 0 })
+    const layer = makeManagerLayer(
+      (_path, onProgress) =>
+        Effect.gen(function* () {
+          if (onProgress) {
+            yield* onProgress({ added: 1, total: 1, updated: 0 })
+          }
 
-        return { added: 1, total: 1, updated: 0 }
-      },
-      scanShowLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 })
-    })
+          return { added: 1, total: 1, updated: 0 }
+        }),
+      succeed({ added: 0, total: 0, updated: 0 })
+    )
 
-    const events: Array<{ type: string; payload: unknown }> = []
+    const tags = await Effect.runPromise(
+      Effect.gen(function* () {
+        const manager = yield* ScanManager
+        const events = yield* manager.subscribe
 
-    manager.on('job-started', (payload) => {
-      events.push({ type: 'job-started', payload })
-    })
-    manager.on('library-start', (payload) => {
-      events.push({ type: 'library-start', payload })
-    })
-    manager.on('file-scanned', (payload) => {
-      events.push({ type: 'file-scanned', payload })
-    })
-    manager.on('library-complete', (payload) => {
-      events.push({ type: 'library-complete', payload })
-    })
-    manager.on('job-completed', (payload) => {
-      events.push({ type: 'job-completed', payload })
-    })
+        const collector = yield* Effect.fork(
+          Stream.runCollect(Stream.take(events, 5))
+        )
 
-    await manager.start()
+        yield* manager.start
 
-    const types = events.map((event) => event.type)
+        const chunk = yield* Fiber.join(collector)
 
-    expect(types).toEqual([
-      'job-started',
+        return Chunk.toReadonlyArray(chunk).map(
+          (event: ScanEvent) => event._tag
+        )
+      }).pipe(Effect.provide(layer), Effect.scoped)
+    )
+
+    expect(tags).toEqual([
+      'scan-started',
       'library-start',
       'file-scanned',
       'library-complete',
-      'job-completed'
+      'scan-complete'
     ])
   })
 })
@@ -203,12 +252,18 @@ describe('per-library results persistence', () => {
     insertLibrary({ id: 1, name: 'Movies', path: '/movies', type: 'movies' })
     insertLibrary({ id: 2, name: 'Shows', path: '/shows', type: 'shows' })
 
-    const manager = createScanManager({
-      scanLibrary: () => Promise.resolve({ added: 2, total: 3, updated: 1 }),
-      scanShowLibrary: () => Promise.reject(new Error('folder gone'))
-    })
+    const layer = makeManagerLayer(
+      succeed({ added: 2, total: 3, updated: 1 }),
+      () => Effect.fail(new Error('folder gone'))
+    )
 
-    await manager.start()
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const manager = yield* ScanManager
+
+        return yield* manager.start
+      }).pipe(Effect.provide(layer))
+    )
 
     const jobs = await testDb.db.select().from(testDb.schema.scanJobs)
 
@@ -243,14 +298,20 @@ describe('parseLibraryResults', () => {
   })
 })
 
-describe('scanManager.getStatus', () => {
+describe('ScanManager.getStatus', () => {
   it('reports idle with null lastJob when nothing has run', async () => {
-    const manager = createScanManager({
-      scanLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 }),
-      scanShowLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 })
-    })
+    const layer = makeManagerLayer(
+      succeed({ added: 0, total: 0, updated: 0 }),
+      succeed({ added: 0, total: 0, updated: 0 })
+    )
 
-    const status = await manager.getStatus()
+    const status = await Effect.runPromise(
+      Effect.gen(function* () {
+        const manager = yield* ScanManager
+
+        return yield* manager.getStatus
+      }).pipe(Effect.provide(layer))
+    )
 
     expect(status).toEqual({
       isRunning: false,
@@ -262,14 +323,20 @@ describe('scanManager.getStatus', () => {
   it('reports the last completed job after a scan', async () => {
     insertLibrary({ id: 1, name: 'Movies', path: '/movies', type: 'movies' })
 
-    const manager = createScanManager({
-      scanLibrary: () => Promise.resolve({ added: 3, total: 7, updated: 0 }),
-      scanShowLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 })
-    })
+    const layer = makeManagerLayer(
+      succeed({ added: 3, total: 7, updated: 0 }),
+      succeed({ added: 0, total: 0, updated: 0 })
+    )
 
-    await manager.start()
+    const status = await Effect.runPromise(
+      Effect.gen(function* () {
+        const manager = yield* ScanManager
 
-    const status = await manager.getStatus()
+        yield* manager.start
+
+        return yield* manager.getStatus
+      }).pipe(Effect.provide(layer))
+    )
 
     expect(status.isRunning).toEqual(false)
     expect(status.currentJob).toEqual(null)
@@ -279,8 +346,8 @@ describe('scanManager.getStatus', () => {
   })
 })
 
-describe('scanManager.recoverInterruptedJobs', () => {
-  it('marks jobs left in running state as error', async () => {
+describe('ScanManager crash recovery', () => {
+  it('marks jobs left in running state as error when the service builds', async () => {
     testDb.db
       .insert(testDb.schema.scanJobs)
       .values({
@@ -292,12 +359,17 @@ describe('scanManager.recoverInterruptedJobs', () => {
       })
       .run()
 
-    const manager = createScanManager({
-      scanLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 }),
-      scanShowLibrary: () => Promise.resolve({ added: 0, total: 0, updated: 0 })
-    })
+    const layer = makeManagerLayer(
+      succeed({ added: 0, total: 0, updated: 0 }),
+      succeed({ added: 0, total: 0, updated: 0 })
+    )
 
-    await manager.recoverInterruptedJobs()
+    // Building the service runs recoverInterruptedJobs in its scoped factory.
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* ScanManager
+      }).pipe(Effect.provide(layer))
+    )
 
     const jobs = await testDb.db.select().from(testDb.schema.scanJobs)
 

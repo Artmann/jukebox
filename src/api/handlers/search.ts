@@ -1,7 +1,6 @@
 import { HttpApiBuilder } from '@effect/platform'
 import { sql } from 'drizzle-orm'
 import { Effect } from 'effect'
-import { log } from 'tiny-typescript-logger'
 
 import { Database, type DrizzleDatabase } from '../../database/layer'
 import { buildFtsMatchQuery } from '../../services/fts-query-parser'
@@ -239,7 +238,7 @@ export const searchHandlersLive = HttpApiBuilder.group(
 
           return yield* Effect.try({
             catch: (error) => {
-              log.error('Search query failed.', error)
+              console.error('Search query failed.', error)
 
               return new BadRequest({
                 message:

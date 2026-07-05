@@ -1,14 +1,14 @@
-import { EventEmitter } from 'node:events'
-
 import { desc, eq } from 'drizzle-orm'
+import { Effect, PubSub, Ref, Stream } from 'effect'
+import type { Scope } from 'effect'
 import invariant from 'tiny-invariant'
-import { log } from 'tiny-typescript-logger'
 
-import { db, schema } from '../database'
+import { Database } from '../database/layer'
+import * as schema from '../database/schema'
 import type { ScanJob } from '../database/schema'
 
-import { scanLibrary as defaultScanLibrary } from './scanner'
-import { scanShowLibrary as defaultScanShowLibrary } from './show-scanner'
+import { Scanner } from './scanner'
+import { ShowScanner } from './show-scanner'
 
 export interface ScanProgressPayload {
   added: number
@@ -44,6 +44,17 @@ export interface ScanCompleteEvent extends ScanProgressPayload {
   status: 'done' | 'error'
   errorMessage: string | null
 }
+
+// The tagged union carried by the ScanManager's PubSub. Tags match the SSE
+// event names on /api/scan/stream (the old EventEmitter's 'job-started' and
+// 'job-completed' are 'scan-started' and 'scan-complete' on the wire).
+export type ScanEvent =
+  | { _tag: 'scan-started'; jobId: number; startedAt: Date }
+  | ({ _tag: 'library-start' } & LibraryStartEvent)
+  | ({ _tag: 'file-scanned' } & FileScannedEvent)
+  | ({ _tag: 'library-complete' } & LibraryCompleteEvent)
+  | ({ _tag: 'library-error' } & LibraryErrorEvent)
+  | ({ _tag: 'scan-complete' } & ScanCompleteEvent)
 
 export interface LibraryScanResult {
   added: number
@@ -88,317 +99,374 @@ export type StartResult =
       errorMessage?: string
     }
 
-type ScanLibraryFunction = (
-  libraryPath: string,
-  onProgress?: (progress: ScanProgressPayload) => void | Promise<void>
-) => Promise<ScanProgressPayload>
-
-interface ScanManagerDependencies {
-  database?: typeof db
-  scanLibrary?: ScanLibraryFunction
-  scanShowLibrary?: ScanLibraryFunction
-}
-
-export interface ScanManager {
-  getStatus(): Promise<ScanManagerStatus>
-  isRunning(): boolean
-  off(event: string, listener: (...args: unknown[]) => void): void
-  on(event: string, listener: (...args: unknown[]) => void): void
-  recoverInterruptedJobs(): Promise<void>
-  start(): Promise<StartResult>
-}
-
 const interruptedMessage =
   'Server restarted mid-scan. Run a manual scan to resume.'
 
-export function createScanManager(
-  dependencies: ScanManagerDependencies = {}
-): ScanManager {
-  const database = dependencies.database ?? db
-  const scanLibrary = dependencies.scanLibrary ?? defaultScanLibrary
-  const scanShowLibrary = dependencies.scanShowLibrary ?? defaultScanShowLibrary
-
-  const emitter = new EventEmitter()
-  emitter.setMaxListeners(0)
-
-  let currentJob: ScanJob | null = null
-
-  async function getStatus(): Promise<ScanManagerStatus> {
-    if (currentJob) {
-      const [latest] = await database
-        .select()
-        .from(schema.scanJobs)
-        .where(eq(schema.scanJobs.id, currentJob.id))
-        .limit(1)
-
-      return {
-        currentJob: latest ?? currentJob,
-        isRunning: true,
-        lastJob: latest ?? currentJob
-      }
-    }
-
-    const [last] = await database
-      .select()
-      .from(schema.scanJobs)
-      .orderBy(desc(schema.scanJobs.startedAt))
-      .limit(1)
-
-    return {
-      currentJob: null,
-      isRunning: false,
-      lastJob: last ?? null
-    }
-  }
-
-  function isRunning(): boolean {
-    return currentJob !== null
-  }
-
-  async function recoverInterruptedJobs(): Promise<void> {
-    const now = new Date()
-
-    const running = await database
-      .select()
-      .from(schema.scanJobs)
-      .where(eq(schema.scanJobs.status, 'running'))
-
-    if (running.length === 0) {
-      return
-    }
-
-    await database
-      .update(schema.scanJobs)
-      .set({
-        endedAt: now,
-        errorMessage: interruptedMessage,
-        status: 'error'
-      })
-      .where(eq(schema.scanJobs.status, 'running'))
-
-    log.info(
-      `Marked ${running.length} interrupted scan job(s) as failed after a restart.`
-    )
-  }
-
-  async function start(): Promise<StartResult> {
-    if (currentJob) {
-      return { status: 'already-running' }
-    }
-
-    const libraries = await database.select().from(schema.libraries)
-
-    if (libraries.length === 0) {
-      return {
-        status: 'no-libraries',
-        message:
-          'No libraries configured. Add a library in Settings before scanning.'
-      }
-    }
-
-    const startedAt = new Date()
-
-    const [inserted] = await database
-      .insert(schema.scanJobs)
-      .values({
-        startedAt,
-        status: 'running',
-        added: 0,
-        updated: 0,
-        total: 0
-      })
-      .returning()
-
-    invariant(inserted, 'Failed to create scan_jobs row.')
-
-    currentJob = inserted
-
-    emitter.emit('job-started', {
-      jobId: inserted.id,
-      startedAt: inserted.startedAt
-    })
-
-    let totalAdded = 0
-    let totalUpdated = 0
-    let totalFound = 0
-    const libraryErrors: string[] = []
-    const libraryResults: LibraryScanResult[] = []
-
-    // Persist per-library results as they land so a page opened mid-scan (or
-    // after the scan finished) can reconstruct each library's outcome.
-    const persistLibraryResult = async (result: LibraryScanResult) => {
-      libraryResults.push(result)
-
-      await database
-        .update(schema.scanJobs)
-        .set({ libraryResults: JSON.stringify(libraryResults) })
-        .where(eq(schema.scanJobs.id, inserted.id))
-    }
-
-    try {
-      for (let index = 0; index < libraries.length; index++) {
-        const library = libraries[index]
-
-        if (!library) {
-          continue
-        }
-
-        const libraryType = library.type === 'shows' ? 'shows' : 'movies'
-
-        emitter.emit('library-start', {
-          index,
-          libraryId: library.id,
-          name: library.name,
-          type: libraryType
-        } satisfies LibraryStartEvent)
-
-        const onProgress = async (progress: ScanProgressPayload) => {
-          const aggregate = {
-            added: totalAdded + progress.added,
-            total: totalFound + progress.total,
-            updated: totalUpdated + progress.updated
-          }
-
-          await database
-            .update(schema.scanJobs)
-            .set(aggregate)
-            .where(eq(schema.scanJobs.id, inserted.id))
-
-          emitter.emit('file-scanned', {
-            ...progress,
-            index,
-            libraryId: library.id
-          } satisfies FileScannedEvent)
-        }
-
-        try {
-          const result =
-            libraryType === 'shows'
-              ? await scanShowLibrary(library.path, onProgress)
-              : await scanLibrary(library.path, onProgress)
-
-          totalAdded += result.added
-          totalUpdated += result.updated
-          totalFound += result.total
-
-          await persistLibraryResult({
-            added: result.added,
-            error: null,
-            libraryId: library.id,
-            name: library.name,
-            status: 'complete',
-            total: result.total,
-            updated: result.updated
-          })
-
-          emitter.emit('library-complete', {
-            ...result,
-            index,
-            libraryId: library.id
-          } satisfies LibraryCompleteEvent)
-        } catch (caughtError) {
-          const message =
-            caughtError instanceof Error
-              ? caughtError.message
-              : 'Unknown error'
-
-          libraryErrors.push(`${library.name} — ${message}`)
-
-          await persistLibraryResult({
-            added: 0,
-            error: message,
-            libraryId: library.id,
-            name: library.name,
-            status: 'error',
-            total: 0,
-            updated: 0
-          })
-
-          emitter.emit('library-error', {
-            error: message,
-            index,
-            libraryId: library.id
-          } satisfies LibraryErrorEvent)
-        }
-      }
-
-      const endedAt = new Date()
-      const status = libraryErrors.length > 0 ? 'error' : 'done'
-      const errorMessage =
-        libraryErrors.length > 0 ? libraryErrors.join('; ') : null
-
-      await database
-        .update(schema.scanJobs)
-        .set({
-          added: totalAdded,
-          endedAt,
-          errorMessage,
-          status,
-          total: totalFound,
-          updated: totalUpdated
-        })
-        .where(eq(schema.scanJobs.id, inserted.id))
-
-      const payload: ScanCompleteEvent = {
-        added: totalAdded,
-        errorMessage,
-        jobId: inserted.id,
-        status,
-        total: totalFound,
-        updated: totalUpdated
-      }
-
-      emitter.emit('job-completed', payload)
-
-      return {
-        added: totalAdded,
-        errorMessage: errorMessage ?? undefined,
-        status,
-        total: totalFound,
-        updated: totalUpdated
-      }
-    } catch (caughtError) {
-      const endedAt = new Date()
-      const message =
-        caughtError instanceof Error ? caughtError.message : 'Unknown error'
-
-      await database
-        .update(schema.scanJobs)
-        .set({
-          added: totalAdded,
-          endedAt,
-          errorMessage: message,
-          status: 'error',
-          total: totalFound,
-          updated: totalUpdated
-        })
-        .where(eq(schema.scanJobs.id, inserted.id))
-
-      emitter.emit('job-failed', {
-        error: message,
-        jobId: inserted.id
-      })
-
-      return {
-        added: totalAdded,
-        errorMessage: message,
-        status: 'error',
-        total: totalFound,
-        updated: totalUpdated
-      }
-    } finally {
-      currentJob = null
-    }
-  }
-
-  return {
-    getStatus,
-    isRunning,
-    off: (event, listener) => emitter.off(event, listener),
-    on: (event, listener) => emitter.on(event, listener),
-    recoverInterruptedJobs,
-    start
-  }
+function toError(caught: unknown): Error {
+  return caught instanceof Error ? caught : new Error(String(caught))
 }
 
-export const scanManager = createScanManager()
+const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, Error> =>
+  Effect.tryPromise({ catch: toError, try: run })
+
+// Runs full-library scans sequentially, persists progress to the scan_jobs
+// table, and broadcasts progress events on a PubSub. The scoped factory runs
+// crash recovery (marking jobs orphaned by a restart) before the service is
+// available, which is what lets the Scheduler layer depend on recovery having
+// finished.
+export class ScanManager extends Effect.Service<ScanManager>()(
+  'jukebox/ScanManager',
+  {
+    dependencies: [Scanner.Default, ShowScanner.Default],
+    scoped: Effect.gen(function* () {
+      const database = yield* Database
+      const scanner = yield* Scanner
+      const showScanner = yield* ShowScanner
+
+      const currentJobRef = yield* Ref.make<ScanJob | null>(null)
+
+      const pubsub = yield* Effect.acquireRelease(
+        PubSub.unbounded<ScanEvent>(),
+        (queue) => PubSub.shutdown(queue)
+      )
+
+      const publish = (event: ScanEvent): Effect.Effect<void> =>
+        PubSub.publish(pubsub, event).pipe(Effect.asVoid)
+
+      const getStatus: Effect.Effect<ScanManagerStatus, Error> = Effect.gen(
+        function* () {
+          const currentJob = yield* Ref.get(currentJobRef)
+
+          if (currentJob) {
+            const [latest] = yield* tryPromise(() =>
+              database
+                .select()
+                .from(schema.scanJobs)
+                .where(eq(schema.scanJobs.id, currentJob.id))
+                .limit(1)
+            )
+
+            return {
+              currentJob: latest ?? currentJob,
+              isRunning: true,
+              lastJob: latest ?? currentJob
+            }
+          }
+
+          const [last] = yield* tryPromise(() =>
+            database
+              .select()
+              .from(schema.scanJobs)
+              .orderBy(desc(schema.scanJobs.startedAt))
+              .limit(1)
+          )
+
+          return {
+            currentJob: null,
+            isRunning: false,
+            lastJob: last ?? null
+          }
+        }
+      )
+
+      const isRunning: Effect.Effect<boolean> = Ref.get(currentJobRef).pipe(
+        Effect.map((job) => job !== null)
+      )
+
+      const recoverInterruptedJobs: Effect.Effect<void, Error> = Effect.gen(
+        function* () {
+          const now = new Date()
+
+          const running = yield* tryPromise(() =>
+            database
+              .select()
+              .from(schema.scanJobs)
+              .where(eq(schema.scanJobs.status, 'running'))
+          )
+
+          if (running.length === 0) {
+            return
+          }
+
+          yield* tryPromise(() =>
+            database
+              .update(schema.scanJobs)
+              .set({
+                endedAt: now,
+                errorMessage: interruptedMessage,
+                status: 'error'
+              })
+              .where(eq(schema.scanJobs.status, 'running'))
+          )
+
+          yield* Effect.logInfo(
+            `Marked ${running.length} interrupted scan job(s) as failed after a restart.`
+          )
+        }
+      )
+
+      const start: Effect.Effect<StartResult, Error> = Effect.gen(function* () {
+        const runningJob = yield* Ref.get(currentJobRef)
+
+        if (runningJob) {
+          return { status: 'already-running' as const }
+        }
+
+        const libraries = yield* tryPromise(() =>
+          database.select().from(schema.libraries)
+        )
+
+        if (libraries.length === 0) {
+          return {
+            status: 'no-libraries' as const,
+            message:
+              'No libraries configured. Add a library in Settings before scanning.'
+          }
+        }
+
+        const startedAt = new Date()
+
+        const [inserted] = yield* tryPromise(() =>
+          database
+            .insert(schema.scanJobs)
+            .values({
+              startedAt,
+              status: 'running',
+              added: 0,
+              updated: 0,
+              total: 0
+            })
+            .returning()
+        )
+
+        invariant(inserted, 'Failed to create scan_jobs row.')
+
+        yield* Ref.set(currentJobRef, inserted)
+
+        yield* publish({
+          _tag: 'scan-started',
+          jobId: inserted.id,
+          startedAt: inserted.startedAt
+        })
+
+        let totalAdded = 0
+        let totalUpdated = 0
+        let totalFound = 0
+        const libraryErrors: string[] = []
+        const libraryResults: LibraryScanResult[] = []
+
+        // Persist per-library results as they land so a page opened mid-scan
+        // (or after the scan finished) can reconstruct each library's outcome.
+        const persistLibraryResult = (result: LibraryScanResult) =>
+          Effect.gen(function* () {
+            libraryResults.push(result)
+
+            yield* tryPromise(() =>
+              database
+                .update(schema.scanJobs)
+                .set({ libraryResults: JSON.stringify(libraryResults) })
+                .where(eq(schema.scanJobs.id, inserted.id))
+            )
+          })
+
+        const runLibraries: Effect.Effect<StartResult, Error> = Effect.gen(
+          function* () {
+            for (let index = 0; index < libraries.length; index++) {
+              const library = libraries[index]
+
+              if (!library) {
+                continue
+              }
+
+              const libraryType = library.type === 'shows' ? 'shows' : 'movies'
+
+              yield* publish({
+                _tag: 'library-start',
+                index,
+                libraryId: library.id,
+                name: library.name,
+                type: libraryType
+              })
+
+              const onProgress = (progress: ScanProgressPayload) =>
+                Effect.gen(function* () {
+                  const aggregate = {
+                    added: totalAdded + progress.added,
+                    total: totalFound + progress.total,
+                    updated: totalUpdated + progress.updated
+                  }
+
+                  yield* tryPromise(() =>
+                    database
+                      .update(schema.scanJobs)
+                      .set(aggregate)
+                      .where(eq(schema.scanJobs.id, inserted.id))
+                  )
+
+                  yield* publish({
+                    _tag: 'file-scanned',
+                    ...progress,
+                    index,
+                    libraryId: library.id
+                  })
+                }).pipe(Effect.orDie)
+
+              const outcome = yield* (
+                libraryType === 'shows'
+                  ? showScanner.scanShowLibrary(library.path, onProgress)
+                  : scanner.scanLibrary(library.path, onProgress)
+              ).pipe(Effect.either)
+
+              if (outcome._tag === 'Right') {
+                const result = outcome.right
+
+                totalAdded += result.added
+                totalUpdated += result.updated
+                totalFound += result.total
+
+                yield* persistLibraryResult({
+                  added: result.added,
+                  error: null,
+                  libraryId: library.id,
+                  name: library.name,
+                  status: 'complete',
+                  total: result.total,
+                  updated: result.updated
+                })
+
+                yield* publish({
+                  _tag: 'library-complete',
+                  added: result.added,
+                  updated: result.updated,
+                  total: result.total,
+                  index,
+                  libraryId: library.id
+                })
+              } else {
+                const message =
+                  outcome.left instanceof Error
+                    ? outcome.left.message
+                    : 'Unknown error'
+
+                libraryErrors.push(`${library.name} — ${message}`)
+
+                yield* persistLibraryResult({
+                  added: 0,
+                  error: message,
+                  libraryId: library.id,
+                  name: library.name,
+                  status: 'error',
+                  total: 0,
+                  updated: 0
+                })
+
+                yield* publish({
+                  _tag: 'library-error',
+                  error: message,
+                  index,
+                  libraryId: library.id
+                })
+              }
+            }
+
+            const endedAt = new Date()
+            const status = libraryErrors.length > 0 ? 'error' : 'done'
+            const errorMessage =
+              libraryErrors.length > 0 ? libraryErrors.join('; ') : null
+
+            yield* tryPromise(() =>
+              database
+                .update(schema.scanJobs)
+                .set({
+                  added: totalAdded,
+                  endedAt,
+                  errorMessage,
+                  status,
+                  total: totalFound,
+                  updated: totalUpdated
+                })
+                .where(eq(schema.scanJobs.id, inserted.id))
+            )
+
+            yield* publish({
+              _tag: 'scan-complete',
+              added: totalAdded,
+              errorMessage,
+              jobId: inserted.id,
+              status,
+              total: totalFound,
+              updated: totalUpdated
+            })
+
+            return {
+              added: totalAdded,
+              errorMessage: errorMessage ?? undefined,
+              status,
+              total: totalFound,
+              updated: totalUpdated
+            }
+          }
+        )
+
+        // A failure that escapes the per-library handling (e.g. a scan_jobs
+        // write failing) still marks the job row as errored and answers with
+        // an error result, like the old try/catch did.
+        return yield* runLibraries.pipe(
+          Effect.catchAll((caughtError) =>
+            Effect.gen(function* () {
+              const endedAt = new Date()
+              const message =
+                caughtError instanceof Error
+                  ? caughtError.message
+                  : 'Unknown error'
+
+              yield* tryPromise(() =>
+                database
+                  .update(schema.scanJobs)
+                  .set({
+                    added: totalAdded,
+                    endedAt,
+                    errorMessage: message,
+                    status: 'error',
+                    total: totalFound,
+                    updated: totalUpdated
+                  })
+                  .where(eq(schema.scanJobs.id, inserted.id))
+              )
+
+              return {
+                added: totalAdded,
+                errorMessage: message,
+                status: 'error' as const,
+                total: totalFound,
+                updated: totalUpdated
+              }
+            })
+          ),
+          Effect.ensuring(Ref.set(currentJobRef, null))
+        )
+      })
+
+      // Crash recovery runs as part of building the layer, before anything
+      // can depend on the service (the Scheduler layer in particular).
+      yield* recoverInterruptedJobs
+
+      const events: Stream.Stream<ScanEvent> = Stream.fromPubSub(pubsub)
+
+      const subscribe: Effect.Effect<
+        Stream.Stream<ScanEvent>,
+        never,
+        Scope.Scope
+      > = Stream.fromPubSub(pubsub, { scoped: true })
+
+      return {
+        events,
+        getStatus,
+        isRunning,
+        recoverInterruptedJobs,
+        start,
+        subscribe
+      }
+    })
+  }
+) {}

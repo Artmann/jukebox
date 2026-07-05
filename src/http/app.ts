@@ -28,6 +28,8 @@ import { scanStreamRouteLive } from '../api/streaming/scan-stream'
 import { subtitleStreamRouteLive } from '../api/streaming/subtitle-stream'
 import { transcodeStreamRoutesLive } from '../api/streaming/transcode-stream'
 import { videoStreamRoutesLive } from '../api/streaming/video-stream'
+import { ScanManager } from '../services/scan-manager'
+import { Scheduler } from '../services/scheduler'
 
 // A schema decode failure carries per-issue details (field path + issue
 // kind). Turn each into a plain-words sentence naming the offending
@@ -159,13 +161,29 @@ export const rawRoutesLive = Layer.mergeAll(
   videoStreamRoutesLive
 )
 
+// The stateful scan services, built once and shared. Scheduler.Default pulls
+// in ScanManager.Default as its dependency, and the standalone ScanManager
+// entry is the same layer reference, so Effect memoizes them into ONE
+// ScanManager instance — the scan handler, the SSE stream, and the scheduler
+// all see the same PubSub and running-job state. The scoped factories run
+// crash recovery (ScanManager) and arm the scheduler timer, replacing the old
+// scanBootLayer boot work; their finalizers stop the scheduler fiber and shut
+// the PubSub down. Requires Database, provided by the caller.
+export const scanServicesLive = Layer.mergeAll(
+  ScanManager.Default,
+  Scheduler.Default
+)
+
 // The served app: HttpMiddleware.logger replaces hono/logger. The frontend
 // layer is either static file serving (production) or the Vite dev proxy —
-// src/index.ts decides from NODE_ENV, keeping vite out of this module.
+// src/index.ts decides from NODE_ENV, keeping vite out of this module. The
+// scan services are provided once at this root so both the api groups and the
+// raw routes share the single ScanManager instance.
 export const makeHttpAppLive = <E, R>(frontend: Layer.Layer<never, E, R>) =>
   HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
     Layer.provide(frontend),
     Layer.provide(decodeErrorRemapLive),
     Layer.provide(rawRoutesLive),
-    Layer.provide(apiLive)
+    Layer.provide(apiLive),
+    Layer.provide(scanServicesLive)
   )

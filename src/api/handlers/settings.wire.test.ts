@@ -30,29 +30,28 @@ vi.mock('../../database', () => ({
   schema: testDatabase.schema
 }))
 
-vi.mock('../../services/scheduler', () => ({
-  scheduler: {
-    getInfo: vi.fn(() => ({ nextRunAt: null, schedule: 'off' })),
-    start: vi.fn().mockResolvedValue(undefined),
-    stop: vi.fn(),
-    updateSchedule: vi.fn()
-  }
-}))
-
 const { databaseTestLayer } = await import('../../database/layer')
-const { apiLive, decodeErrorRemapLive, rawRoutesLive } = await import(
-  '../../http/app'
-)
+const { apiLive, decodeErrorRemapLive, rawRoutesLive, scanServicesLive } =
+  await import('../../http/app')
 const { getSetting, scanScheduleSettingKey } = await import(
   '../../services/settings'
 )
 
+// The real Scheduler service (via scanServicesLive) reads and writes the test
+// database, so the scan-schedule routes exercise the actual scheduler side
+// effects. Assertions check the persisted schedule value, not the timer's
+// future nextRunAt.
 const { dispose, handler } = HttpApiBuilder.toWebHandler(
   Layer.mergeAll(
-    apiLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
-    rawRoutesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    apiLive,
+    rawRoutesLive,
     decodeErrorRemapLive,
     NodeHttpServer.layerContext
+  ).pipe(
+    Layer.provide(
+      scanServicesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db)))
+    ),
+    Layer.provide(databaseTestLayer(testDatabase.db))
   )
 )
 

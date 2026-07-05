@@ -3,25 +3,41 @@ import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Effect, Layer } from 'effect'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { databaseTestLayer } from '../database/layer'
 import { createTestDatabase } from '../database/test-database'
+import { libraryUnreadableMessage } from './library-validation'
+import { Metadata } from './metadata'
+import { discoverShows, ShowScanner } from './show-scanner'
 
 const testDb = createTestDatabase()
 
-vi.mock('../database', () => ({
-  db: testDb.db,
-  schema: testDb.schema
-}))
+// Metadata is stubbed to always miss so scans use the parsed filename data and
+// never make a real HTTP request. Provided in place of the baked-in
+// Metadata.Default via ShowScanner.DefaultWithoutDependencies.
+const metadataStub = Layer.succeed(Metadata, {
+  fetchMovieByExternalId: () => Effect.succeed(null),
+  fetchMovieMetadata: () => Effect.succeed(null),
+  fetchSeasonMetadata: () => Effect.succeed(null),
+  fetchShowByExternalId: () => Effect.succeed(null),
+  fetchShowMetadata: () => Effect.succeed(null)
+} as unknown as Metadata)
 
-vi.mock('./metadata', () => ({
-  fetchSeasonMetadata: vi.fn().mockResolvedValue(null),
-  fetchShowByExternalId: vi.fn().mockResolvedValue(null),
-  fetchShowMetadata: vi.fn().mockResolvedValue(null)
-}))
+const showScannerLayer = ShowScanner.DefaultWithoutDependencies.pipe(
+  Layer.provide(metadataStub),
+  Layer.provide(databaseTestLayer(testDb.db))
+)
 
-const { discoverShows, scanShowLibrary } = await import('./show-scanner')
-const { libraryUnreadableMessage } = await import('./library-validation')
+const scanShowLibrary = (path: string) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const showScanner = yield* ShowScanner
+
+      return yield* showScanner.scanShowLibrary(path)
+    }).pipe(Effect.provide(showScannerLayer))
+  )
 
 let temporaryDirectory: string
 

@@ -2,14 +2,8 @@ import { HttpApiBuilder, HttpServerResponse } from '@effect/platform'
 import { Effect, Ref, Schedule, Stream } from 'effect'
 
 import { Database } from '../../database/layer'
-import { scanManager } from '../../services/scan-manager'
-import type {
-  FileScannedEvent,
-  LibraryCompleteEvent,
-  LibraryErrorEvent,
-  LibraryStartEvent,
-  ScanCompleteEvent
-} from '../../services/scan-manager'
+import { ScanManager } from '../../services/scan-manager'
+import type { ScanEvent } from '../../services/scan-manager'
 import { makeSessionCheck } from '../middleware/session'
 
 const encoder = new TextEncoder()
@@ -18,105 +12,102 @@ function sseFrame(event: string, data: string): Uint8Array {
   return encoder.encode(`event: ${event}\ndata: ${data}\n\n`)
 }
 
-// Every scanManager event forwarded as an SSE frame, byte-compatible with
-// the Hono streamSSE route: same event names, same payloads, including the
-// `found`-for-`total` rename on scan-complete. Listener registration lives
-// in Stream.async so a client disconnect (stream interruption) always
-// unsubscribes.
-const scanEvents = Stream.async<Uint8Array>((emit) => {
-  const push = (event: string, data: unknown) => {
-    void emit.single(sseFrame(event, JSON.stringify(data)))
+// Map a ScanManager event onto its SSE frame. The wire names and payloads
+// stay byte-compatible with the old Hono streamSSE route: the PubSub tags
+// 'scan-started'/'scan-complete' already match the wire event names, and
+// scan-complete renames `total` to `found`.
+function scanEventFrame(event: ScanEvent): Uint8Array {
+  switch (event._tag) {
+    case 'scan-started': {
+      return sseFrame(
+        'scan-started',
+        JSON.stringify({
+          jobId: event.jobId,
+          startedAt: event.startedAt.toISOString()
+        })
+      )
+    }
+
+    case 'library-start': {
+      return sseFrame(
+        'library-start',
+        JSON.stringify({
+          index: event.index,
+          libraryId: event.libraryId,
+          name: event.name,
+          type: event.type
+        })
+      )
+    }
+
+    case 'file-scanned': {
+      return sseFrame(
+        'file-scanned',
+        JSON.stringify({
+          added: event.added,
+          index: event.index,
+          libraryId: event.libraryId,
+          total: event.total,
+          updated: event.updated
+        })
+      )
+    }
+
+    case 'library-complete': {
+      return sseFrame(
+        'library-complete',
+        JSON.stringify({
+          added: event.added,
+          index: event.index,
+          libraryId: event.libraryId,
+          total: event.total,
+          updated: event.updated
+        })
+      )
+    }
+
+    case 'library-error': {
+      return sseFrame(
+        'library-error',
+        JSON.stringify({
+          error: event.error,
+          index: event.index,
+          libraryId: event.libraryId
+        })
+      )
+    }
+
+    case 'scan-complete': {
+      return sseFrame(
+        'scan-complete',
+        JSON.stringify({
+          added: event.added,
+          errorMessage: event.errorMessage,
+          found: event.total,
+          status: event.status,
+          updated: event.updated
+        })
+      )
+    }
   }
-
-  const onJobStarted = (event: { jobId: number; startedAt: Date }) => {
-    push('scan-started', {
-      jobId: event.jobId,
-      startedAt: event.startedAt.toISOString()
-    })
-  }
-
-  const onLibraryStart = (event: LibraryStartEvent) => {
-    push('library-start', event)
-  }
-
-  const onFileScanned = (event: FileScannedEvent) => {
-    push('file-scanned', event)
-  }
-
-  const onLibraryComplete = (event: LibraryCompleteEvent) => {
-    push('library-complete', event)
-  }
-
-  const onLibraryError = (event: LibraryErrorEvent) => {
-    push('library-error', event)
-  }
-
-  const onScanComplete = (event: ScanCompleteEvent) => {
-    push('scan-complete', {
-      added: event.added,
-      errorMessage: event.errorMessage,
-      found: event.total,
-      status: event.status,
-      updated: event.updated
-    })
-  }
-
-  scanManager.on('job-started', onJobStarted as (...args: unknown[]) => void)
-  scanManager.on(
-    'library-start',
-    onLibraryStart as (...args: unknown[]) => void
-  )
-  scanManager.on('file-scanned', onFileScanned as (...args: unknown[]) => void)
-  scanManager.on(
-    'library-complete',
-    onLibraryComplete as (...args: unknown[]) => void
-  )
-  scanManager.on(
-    'library-error',
-    onLibraryError as (...args: unknown[]) => void
-  )
-  scanManager.on(
-    'job-completed',
-    onScanComplete as (...args: unknown[]) => void
-  )
-
-  return Effect.sync(() => {
-    scanManager.off('job-started', onJobStarted as (...args: unknown[]) => void)
-    scanManager.off(
-      'library-start',
-      onLibraryStart as (...args: unknown[]) => void
-    )
-    scanManager.off(
-      'file-scanned',
-      onFileScanned as (...args: unknown[]) => void
-    )
-    scanManager.off(
-      'library-complete',
-      onLibraryComplete as (...args: unknown[]) => void
-    )
-    scanManager.off(
-      'library-error',
-      onLibraryError as (...args: unknown[]) => void
-    )
-    scanManager.off(
-      'job-completed',
-      onScanComplete as (...args: unknown[]) => void
-    )
-  })
-})
+}
 
 // GET /api/scan/stream sits outside the HttpApi (SSE has no schema), so it
 // registers directly on the api's router and applies the session check
-// itself.
+// itself. The per-connection PubSub subscription is scoped to the request, so
+// a client disconnect (stream interruption) unsubscribes automatically.
 export const scanStreamRouteLive = HttpApiBuilder.Router.use((router) =>
   Effect.gen(function* () {
     const db = yield* Database
+    const scanManager = yield* ScanManager
     const lastSweepAtRef = yield* Ref.make(0)
 
     yield* router.get(
       '/api/scan/stream',
       Effect.gen(function* () {
         yield* makeSessionCheck(db, lastSweepAtRef)
+
+        const scanEvents = scanManager.events.pipe(Stream.map(scanEventFrame))
 
         // The initial `ready` heartbeat transitions EventSource to OPEN even
         // when no scan is running; pings keep proxies from timing out the

@@ -1,9 +1,10 @@
-import { log } from 'tiny-typescript-logger'
+import { Clock, Duration, Effect, Exit, Fiber, Ref } from 'effect'
+import type { Cause } from 'effect'
 
-import {
-  scanManager as defaultScanManager,
-  type StartResult
-} from './scan-manager'
+import { Database } from '../database/layer'
+
+import { ScanManager } from './scan-manager'
+import type { StartResult } from './scan-manager'
 import {
   defaultScanSchedule,
   getSetting,
@@ -15,23 +16,6 @@ import {
 export interface SchedulerInfo {
   nextRunAt: Date | null
   schedule: ScanScheduleValue
-}
-
-interface SchedulerScanManager {
-  isRunning: () => boolean
-  start: () => Promise<StartResult>
-}
-
-export interface SchedulerDependencies {
-  getSchedule?: () => Promise<ScanScheduleValue>
-  scanManager?: SchedulerScanManager
-}
-
-export interface Scheduler {
-  getInfo(): SchedulerInfo
-  start(): Promise<void>
-  stop(): void
-  updateSchedule(value: ScanScheduleValue): void
 }
 
 const millisecondsPerHour = 60 * 60 * 1000
@@ -51,60 +35,68 @@ export function scheduleIntervalMilliseconds(
   }
 }
 
-async function defaultGetSchedule(): Promise<ScanScheduleValue> {
-  const stored = await getSetting(scanScheduleSettingKey)
-
-  if (stored === null) {
-    return defaultScanSchedule
+function failureMessage(cause: Cause.Cause<Error>): string {
+  if (cause._tag === 'Fail') {
+    return cause.error.message
   }
 
-  if (isScanScheduleValue(stored)) {
-    return stored
-  }
-
-  log.warn(
-    `Unknown scanSchedule value "${stored}" in settings. Falling back to "off".`
-  )
-
-  return 'off'
+  return 'Unknown error'
 }
 
-export function createScheduler(
-  dependencies: SchedulerDependencies = {}
-): Scheduler {
-  const getSchedule = dependencies.getSchedule ?? defaultGetSchedule
-  const scanManager = dependencies.scanManager ?? {
-    isRunning: () => defaultScanManager.isRunning(),
-    start: () => defaultScanManager.start()
-  }
+// Kicks off scheduled scans on a timer read from the settings table. The
+// timer is a fiber forked into the service scope, so it dies with the layer
+// on shutdown (this replaces the old scheduler.stop()). The layer depends on
+// ScanManager, whose factory runs crash recovery — so recovery always
+// completes before the scheduler arms.
+export class Scheduler extends Effect.Service<Scheduler>()(
+  'jukebox/Scheduler',
+  {
+    dependencies: [ScanManager.Default],
+    scoped: Effect.gen(function* () {
+      const database = yield* Database
+      const scanManager = yield* ScanManager
+      const scope = yield* Effect.scope
 
-  let currentSchedule: ScanScheduleValue = 'off'
-  let nextRunAt: Date | null = null
-  let timer: ReturnType<typeof setTimeout> | null = null
+      const currentScheduleRef = yield* Ref.make<ScanScheduleValue>('off')
+      const nextRunAtRef = yield* Ref.make<Date | null>(null)
+      const timerRef = yield* Ref.make<Fiber.RuntimeFiber<void> | null>(null)
 
-  function clearTimer() {
-    if (timer !== null) {
-      clearTimeout(timer)
-      timer = null
-    }
-  }
+      const clearTimer: Effect.Effect<void> = Effect.gen(function* () {
+        const timer = yield* Ref.get(timerRef)
 
-  function scheduleNext(intervalMs: number) {
-    clearTimer()
+        if (timer !== null) {
+          yield* Fiber.interrupt(timer)
+          yield* Ref.set(timerRef, null)
+        }
+      })
 
-    nextRunAt = new Date(Date.now() + intervalMs)
+      const tick: Effect.Effect<void> = Effect.gen(function* () {
+        const running = yield* scanManager.isRunning
 
-    timer = setTimeout(() => {
-      void tick()
-    }, intervalMs)
-  }
+        if (running) {
+          yield* Effect.logDebug(
+            'Scheduler tick skipped — a scan is already running.'
+          )
 
-  async function tick() {
-    if (scanManager.isRunning()) {
-      log.debug('Scheduler tick skipped — a scan is already running.')
-    } else {
-      try {
-        const result = await scanManager.start()
+          return
+        }
+
+        // The scan runs on a daemon fiber so that a schedule change (which
+        // interrupts the timer fiber) never interrupts a scan in flight —
+        // matching the old setTimeout scheduler, where a started scan always
+        // ran to completion.
+        const scanFiber = yield* Effect.forkDaemon(scanManager.start)
+        const exit = yield* Fiber.await(scanFiber)
+
+        if (Exit.isFailure(exit)) {
+          yield* Effect.logWarning(
+            `Scheduled scan failed to start: ${failureMessage(exit.cause)}. Check the scan page.`
+          )
+
+          return
+        }
+
+        const result: StartResult = exit.value
 
         if (result.status === 'error') {
           const message =
@@ -112,73 +104,111 @@ export function createScheduler(
               ? `: ${result.errorMessage}`
               : '.'
 
-          log.warn(`Scheduled scan finished with errors${message}`)
+          yield* Effect.logWarning(
+            `Scheduled scan finished with errors${message}`
+          )
         } else if (result.status === 'no-libraries') {
-          log.debug('Scheduled scan skipped — no libraries configured.')
+          yield* Effect.logDebug(
+            'Scheduled scan skipped — no libraries configured.'
+          )
         }
-      } catch (caughtError) {
-        const message =
-          caughtError instanceof Error
-            ? caughtError.message
-            : 'Unknown error'
+      })
 
-        log.warn(
-          `Scheduled scan failed to start: ${message}. Check the scan page.`
-        )
+      // Sleep-tick loop on its own fiber. After each tick the schedule is
+      // re-read so an updateSchedule that landed while a scan was running is
+      // still honored.
+      const loop = (initialIntervalMs: number): Effect.Effect<void> =>
+        Effect.gen(function* () {
+          let intervalMs = initialIntervalMs
+
+          while (true) {
+            yield* Effect.sleep(Duration.millis(intervalMs))
+            yield* tick
+
+            const active = yield* Ref.get(currentScheduleRef)
+            const activeInterval = scheduleIntervalMilliseconds(active)
+
+            if (activeInterval === null) {
+              yield* Ref.set(nextRunAtRef, null)
+
+              return
+            }
+
+            intervalMs = activeInterval
+
+            const now = yield* Clock.currentTimeMillis
+
+            yield* Ref.set(nextRunAtRef, new Date(now + intervalMs))
+          }
+        })
+
+      const applySchedule = (value: ScanScheduleValue): Effect.Effect<void> =>
+        Effect.gen(function* () {
+          yield* Ref.set(currentScheduleRef, value)
+          yield* clearTimer
+
+          const intervalMs = scheduleIntervalMilliseconds(value)
+
+          if (intervalMs === null) {
+            yield* Ref.set(nextRunAtRef, null)
+            yield* Effect.logInfo('Scan scheduler is off.')
+
+            return
+          }
+
+          const now = yield* Clock.currentTimeMillis
+          const nextRunAt = new Date(now + intervalMs)
+
+          yield* Ref.set(nextRunAtRef, nextRunAt)
+
+          const fiber = yield* loop(intervalMs).pipe(Effect.forkIn(scope))
+
+          yield* Ref.set(timerRef, fiber)
+
+          yield* Effect.logInfo(
+            `Next scheduled scan at ${nextRunAt.toISOString()} (${value}).`
+          )
+        })
+
+      const getInfo: Effect.Effect<SchedulerInfo> = Effect.gen(function* () {
+        const nextRunAt = yield* Ref.get(nextRunAtRef)
+        const schedule = yield* Ref.get(currentScheduleRef)
+
+        return { nextRunAt, schedule }
+      })
+
+      const updateSchedule = (value: ScanScheduleValue): Effect.Effect<void> =>
+        applySchedule(value)
+
+      // Boot: read the stored schedule and arm the timer, like the old
+      // scheduler.start() call in scanBootLayer did.
+      const resolveStoredSchedule: Effect.Effect<ScanScheduleValue> =
+        Effect.gen(function* () {
+          const stored = yield* Effect.promise(() =>
+            getSetting(scanScheduleSettingKey, database)
+          )
+
+          if (stored === null) {
+            return defaultScanSchedule
+          }
+
+          if (isScanScheduleValue(stored)) {
+            return stored
+          }
+
+          yield* Effect.logWarning(
+            `Unknown scanSchedule value "${stored}" in settings. Falling back to "off".`
+          )
+
+          return 'off' as const
+        })
+
+      yield* applySchedule(yield* resolveStoredSchedule)
+
+      return {
+        getInfo,
+        updateSchedule
       }
-    }
-
-    // Re-check schedule after each tick so updateSchedule is honored even
-    // if it happened while the scan was running.
-    const activeInterval = scheduleIntervalMilliseconds(currentSchedule)
-
-    if (activeInterval === null) {
-      nextRunAt = null
-
-      return
-    }
-
-    scheduleNext(activeInterval)
+    })
   }
-
-  function applySchedule(value: ScanScheduleValue) {
-    currentSchedule = value
-
-    const intervalMs = scheduleIntervalMilliseconds(value)
-
-    if (intervalMs === null) {
-      clearTimer()
-      nextRunAt = null
-      log.info('Scan scheduler is off.')
-
-      return
-    }
-
-    scheduleNext(intervalMs)
-
-    log.info(
-      `Next scheduled scan at ${nextRunAt?.toISOString() ?? 'unknown'} (${value}).`
-    )
-  }
-
-  return {
-    getInfo: () => ({ nextRunAt, schedule: currentSchedule }),
-
-    start: async () => {
-      const resolved = await getSchedule()
-      applySchedule(resolved)
-    },
-
-    stop: () => {
-      clearTimer()
-      currentSchedule = 'off'
-      nextRunAt = null
-    },
-
-    updateSchedule: (value: ScanScheduleValue) => {
-      applySchedule(value)
-    }
-  }
-}
-
-export const scheduler = createScheduler()
+) {}

@@ -11,7 +11,7 @@ import {
   pathIsReadable,
   validateLibraryInput
 } from '../../services/library-validation'
-import { scheduler } from '../../services/scheduler'
+import { Scheduler } from '../../services/scheduler'
 import {
   defaultScanSchedule,
   getSetting,
@@ -309,6 +309,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
         withInternalFallback(
           Effect.gen(function* () {
             const db = yield* Database
+            const scheduler = yield* Scheduler
             const stored = yield* internalTryPromise(() =>
               getSetting(scanScheduleSettingKey, db)
             )
@@ -317,7 +318,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
                 ? stored
                 : defaultScanSchedule
 
-            const info = scheduler.getInfo()
+            const info = yield* scheduler.getInfo
 
             return {
               nextRunAt: info.nextRunAt?.toISOString() ?? null,
@@ -330,6 +331,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
         withInternalFallback(
           Effect.gen(function* () {
             const db = yield* Database
+            const scheduler = yield* Scheduler
             const schedule =
               typeof payload.schedule === 'string' ? payload.schedule.trim() : ''
 
@@ -345,9 +347,9 @@ export const settingsHandlersLive = HttpApiBuilder.group(
               setSetting(scanScheduleSettingKey, schedule, db)
             )
 
-            scheduler.updateSchedule(schedule)
+            yield* scheduler.updateSchedule(schedule)
 
-            const info = scheduler.getInfo()
+            const info = yield* scheduler.getInfo
 
             return {
               nextRunAt: info.nextRunAt?.toISOString() ?? null,

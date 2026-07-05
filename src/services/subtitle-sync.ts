@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 
-import { db, schema } from '../database'
+import type { DrizzleDatabase } from '../database/layer'
+import * as schema from '../database/schema'
 import type { NewSubtitle } from '../database/schema'
 import type { DiscoveredSubtitle } from './subtitles'
 
@@ -10,11 +11,12 @@ import type { DiscoveredSubtitle } from './subtitles'
  * removed sidecar disappears on the next scan without bookkeeping.
  */
 export async function syncSubtitlesForMovie(
+  database: DrizzleDatabase,
   movieId: number,
   discovered: DiscoveredSubtitle[]
 ): Promise<void> {
   if (discovered.length === 0) {
-    await db
+    await database
       .delete(schema.subtitles)
       .where(eq(schema.subtitles.movieId, movieId))
 
@@ -29,22 +31,23 @@ export async function syncSubtitlesForMovie(
     language: subtitle.language
   }))
 
-  await db
+  await database
     .delete(schema.subtitles)
     .where(eq(schema.subtitles.movieId, movieId))
 
-  await db.insert(schema.subtitles).values(rows)
+  await database.insert(schema.subtitles).values(rows)
 }
 
 /**
  * Same as syncSubtitlesForMovie but for episodes. See note above.
  */
 export async function syncSubtitlesForEpisode(
+  database: DrizzleDatabase,
   episodeId: number,
   discovered: DiscoveredSubtitle[]
 ): Promise<void> {
   if (discovered.length === 0) {
-    await db
+    await database
       .delete(schema.subtitles)
       .where(eq(schema.subtitles.episodeId, episodeId))
 
@@ -59,9 +62,9 @@ export async function syncSubtitlesForEpisode(
     language: subtitle.language
   }))
 
-  await db
+  await database
     .delete(schema.subtitles)
     .where(eq(schema.subtitles.episodeId, episodeId))
 
-  await db.insert(schema.subtitles).values(rows)
+  await database.insert(schema.subtitles).values(rows)
 }

@@ -33,18 +33,25 @@ vi.mock('../../database', () => ({
 }))
 
 const { databaseTestLayer } = await import('../../database/layer')
-const { apiLive, decodeErrorRemapLive, rawRoutesLive } = await import(
-  '../../http/app'
-)
+const { apiLive, decodeErrorRemapLive, rawRoutesLive, scanServicesLive } =
+  await import('../../http/app')
 
-// NodeHttpServer.layerContext (not HttpServer.layerContext) so the raw
-// streaming routes get a real FileSystem instead of the noop one.
+// The scan services (ScanManager + Scheduler) are built once against the test
+// database and provided at the root so the api groups and the raw SSE route
+// share the single ScanManager instance. NodeHttpServer.layerContext (not
+// HttpServer.layerContext) gives the raw streaming routes a real FileSystem
+// instead of the noop one.
 const { dispose, handler } = HttpApiBuilder.toWebHandler(
   Layer.mergeAll(
-    apiLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
-    rawRoutesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db))),
+    apiLive,
+    rawRoutesLive,
     decodeErrorRemapLive,
     NodeHttpServer.layerContext
+  ).pipe(
+    Layer.provide(
+      scanServicesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db)))
+    ),
+    Layer.provide(databaseTestLayer(testDatabase.db))
   )
 )
 
