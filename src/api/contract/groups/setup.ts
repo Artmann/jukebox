@@ -27,9 +27,14 @@ export const setupGroup = HttpApiGroup.make('setup')
   .middleware(ProfileMiddleware)
   .add(HttpApiEndpoint.get('getStatus', '/setup').addSuccess(SetupStatus))
   .add(
+    // SetupValidationErrorWire must be added before BadRequestWire: both are
+    // status 400, and the client decodes the 400 union in declaration order.
+    // Struct decoding ignores excess properties, so a body carrying
+    // fieldErrors would otherwise match the plain BadRequest wire first and
+    // silently drop the per-row errors.
     HttpApiEndpoint.post('completeSetup', '/setup/complete')
       .setPayload(SetupCompleteRequest)
       .addSuccess(SuccessResponse)
-      .addError(BadRequestWire)
       .addError(SetupValidationErrorWire)
+      .addError(BadRequestWire)
   )
