@@ -15,7 +15,7 @@ import type {
   TelemetryStats
 } from '../contract/groups/telemetry'
 
-import { internalTry, internalTryPromise } from './support'
+import { internalTry } from './support'
 
 // Frontend clocks can drift; drop spans/errors whose timestamps are more than an
 // hour from the server clock rather than storing nonsense durations.

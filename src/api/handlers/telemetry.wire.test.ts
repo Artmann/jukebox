@@ -39,7 +39,7 @@ afterAll(async () => {
 
 const traceId = 'a'.repeat(32)
 
-async function post(path: string, body: unknown) {
+async function post<T = unknown>(path: string, body: unknown) {
   const response = await handler(
     new Request(`http://localhost${path}`, {
       body: JSON.stringify(body),
@@ -48,13 +48,13 @@ async function post(path: string, body: unknown) {
     })
   )
 
-  return { body: await response.json(), status: response.status }
+  return { body: (await response.json()) as T, status: response.status }
 }
 
-async function get(path: string) {
+async function get<T = unknown>(path: string) {
   const response = await handler(new Request(`http://localhost${path}`))
 
-  return { body: await response.json(), status: response.status }
+  return { body: (await response.json()) as T, status: response.status }
 }
 
 // The writer flushes its buffer to SQLite once a second; wait past that before
@@ -117,13 +117,13 @@ describe('telemetry endpoints', () => {
 
     expect(traces).toEqual([
       {
-        durationMs: expect.any(Number),
+        durationMs: expect.any(Number) as number,
         errorCount: 1,
         rootKind: 'client',
         rootName: 'GET /api/search',
         source: 'frontend',
         spanCount: 2,
-        startTime: expect.any(Number),
+        startTime: expect.any(Number) as number,
         statusCode: 'ok',
         traceId
       }
@@ -173,8 +173,8 @@ describe('telemetry endpoints', () => {
 
     expect(response.status).toEqual(200)
 
-    const traces = (await get('/api/telemetry/traces')).body
+    const traces = await get<unknown[]>('/api/telemetry/traces')
 
-    expect(traces).toEqual([])
+    expect(traces.body).toEqual([])
   })
 })

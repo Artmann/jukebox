@@ -8,6 +8,7 @@ import {
 import { useMemo, useState, type ReactElement } from 'react'
 import { Link, Navigate, NavLink, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import invariant from 'tiny-invariant'
 
 import { cn } from '@/lib/utils'
 
@@ -131,7 +132,7 @@ function StatusDot({ statusCode }: { statusCode: string }): ReactElement {
   )
 }
 
-function FilterLinks<T extends string>({
+function FilterLinks<T extends string | number>({
   onChange,
   options,
   value
@@ -469,11 +470,14 @@ function groupErrors(errors: TelemetryError[]): GroupedTelemetryError[] {
       const sorted = [...bucket].sort(
         (first, second) => second.timestamp - first.timestamp
       )
+      const latest = sorted[0]
+
+      invariant(latest, 'Error group bucket is empty')
 
       return {
         count: sorted.length,
         fingerprint,
-        latest: sorted[0]
+        latest
       }
     })
     .sort((first, second) => {
@@ -619,7 +623,7 @@ function ErrorRow({
 function ErrorsTab(): ReactElement {
   const errors = useTelemetryErrors()
   const groupedErrors = useMemo(
-    () => groupErrors(errors.data ?? []),
+    () => groupErrors([...(errors.data ?? [])]),
     [errors.data]
   )
 

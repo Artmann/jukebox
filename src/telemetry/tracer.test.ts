@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { databaseTestLayer } from '../database/layer'
 import { createTestDatabase } from '../database/test-database'
 
-import { TelemetryDatabase, telemetryDatabaseTestLayer } from './layer'
+import { telemetryDatabaseTestLayer } from './layer'
 import { errors, spans } from './schema'
 import { TelemetrySettings } from './settings'
 import { makeSqliteTracer } from './tracer'
