@@ -688,7 +688,9 @@ function StatsTab(): ReactElement {
   return (
     <div>
       <p className={type.sectionHint}>
-        API response times and failure counts by route.
+        API response times and failure counts by route. Streaming routes are
+        excluded — their duration reflects connection lifetime, not response
+        time.
       </p>
 
       <div className="mt-4">

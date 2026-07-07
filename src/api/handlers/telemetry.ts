@@ -203,6 +203,16 @@ function percentile(sortedAscending: number[], fraction: number): number {
   return sortedAscending[clamped] ?? 0
 }
 
+const streamingRoutePatterns = ['/scan/stream', '/stream/']
+
+function isStreamingRoute(route: string | null): boolean {
+  if (route === null) {
+    return false
+  }
+
+  return streamingRoutePatterns.some((pattern) => route.includes(pattern))
+}
+
 function computeStats(
   database: TelemetryDrizzleDatabase,
   windowMinutes: number
@@ -225,8 +235,15 @@ function computeStats(
   >()
 
   let errorCount = 0
+  let totalRequests = 0
 
   for (const span of serverSpans) {
+    if (isStreamingRoute(span.route)) {
+      continue
+    }
+
+    totalRequests += 1
+
     if (span.statusCode === 'error') {
       errorCount += 1
     }
@@ -258,8 +275,6 @@ function computeStats(
       }
     })
     .sort((first, second) => second.count - first.count)
-
-  const totalRequests = serverSpans.length
 
   return {
     errorCount,

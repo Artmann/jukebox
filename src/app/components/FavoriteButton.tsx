@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 
 import { cn } from '@/lib/utils'
 import {
-  useFavoriteStatus,
+  useIsFavorite,
   useToggleFavorite,
   type FavoriteTarget
 } from '../hooks/useFavorites'
@@ -18,7 +18,7 @@ export function FavoriteButton({
   className,
   target
 }: FavoriteButtonProps): ReactElement {
-  const { data: isFavorite } = useFavoriteStatus(target)
+  const isFavorite = useIsFavorite(target)
   const toggle = useToggleFavorite()
 
   function handleClick(event: MouseEvent<HTMLButtonElement>) {

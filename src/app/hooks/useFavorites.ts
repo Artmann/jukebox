@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 
 import { api } from '../lib/api-client'
 
@@ -19,34 +20,32 @@ export type FavoriteTarget =
   | { kind: 'movie'; movieId: number }
   | { kind: 'show'; showId: number }
 
-function statusKey(target: FavoriteTarget): readonly unknown[] {
-  return target.kind === 'movie'
-    ? ['favorite-status', 'movie', target.movieId]
-    : ['favorite-status', 'show', target.showId]
-}
-
 function targetPayload(target: FavoriteTarget) {
   return target.kind === 'movie'
     ? { movieId: target.movieId }
     : { showId: target.showId }
 }
 
-export function useFavoriteStatus(target: FavoriteTarget) {
-  return useQuery({
-    queryKey: statusKey(target),
-    queryFn: async () => {
-      const urlParams =
-        target.kind === 'movie'
-          ? { movieId: String(target.movieId) }
-          : { showId: String(target.showId) }
+export function useIsFavorite(target: FavoriteTarget): boolean | undefined {
+  const { data: favorites } = useFavorites()
 
-      const body = await api((client) =>
-        client.favorites.getFavoriteStatus({ urlParams })
-      )
-
-      return body.favorite
+  return useMemo(() => {
+    if (favorites === undefined) {
+      return undefined
     }
-  })
+
+    if (target.kind === 'movie') {
+      return favorites.some(
+        (favorite) =>
+          favorite.type === 'movie' && favorite.movie.id === target.movieId
+      )
+    }
+
+    return favorites.some(
+      (favorite) =>
+        favorite.type === 'show' && favorite.show.id === target.showId
+    )
+  }, [favorites, target])
 }
 
 export function useToggleFavorite() {
@@ -65,10 +64,7 @@ export function useToggleFavorite() {
           : client.favorites.removeFavorite({ payload })
       )
     },
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({
-        queryKey: statusKey(variables.target)
-      })
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['favorites'] })
     }
   })
