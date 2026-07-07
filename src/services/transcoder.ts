@@ -225,7 +225,7 @@ function stopSession(key: string): void {
   sessions.delete(key)
 }
 
-export function reapIdleSessions(now: number = Date.now()): void {
+function reapIdleSessions(now: number = Date.now()): void {
   for (const [key, session] of sessions.entries()) {
     if (now - session.lastAccessedAt > reapIdleMs) {
       logger.info(`Reaping idle transcode session ${key}`)

@@ -7,7 +7,7 @@ import * as schema from '../../database/schema'
 import { ProfileMiddleware } from '../contract/middleware'
 import { internalTryPromise } from '../handlers/support'
 
-export const profileCookieName = 'jukebox_profile_id'
+const profileCookieName = 'jukebox_profile_id'
 
 const oneYearSeconds = 60 * 60 * 24 * 365
 

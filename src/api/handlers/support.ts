@@ -41,7 +41,7 @@ export const internalTry = <A>(run: () => A): Effect.Effect<A, InternalError> =>
 // Parity with Hono's `app.onError`: any defect (thrown exception that no
 // handler mapped) becomes a 500 `{ error: { message } }` instead of an
 // unhandled cause. Wrapped around every handler.
-export const withInternalFallback = <A, E, R>(
+const withInternalFallback = <A, E, R>(
   effect: Effect.Effect<A, E, R>
 ): Effect.Effect<A, E | InternalError, R> =>
   Effect.catchAllDefect(effect, (defect) =>

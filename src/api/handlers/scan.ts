@@ -7,9 +7,9 @@ import { ScanManager } from '../../services/scan-manager'
 import { jukeboxApi } from '../contract'
 import { BadRequest, InternalError } from '../contract/errors'
 
+import { listLibrariesEffect } from './library-list'
 import {
   internalTryPromise,
-  serializeLibrary,
   serializeScanJob,
   withHandlerSpan
 } from './support'
@@ -22,17 +22,7 @@ export const scanHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('listLibraries', () =>
-        withHandlerSpan('listLibraries',
-          Effect.gen(function* () {
-            const db = yield* Database
-
-            const libraries = yield* internalTryPromise(() =>
-              db.select().from(schema.libraries)
-            )
-
-            return libraries.map(serializeLibrary)
-          })
-        )
+        withHandlerSpan('listLibraries', listLibrariesEffect)
       )
       .handle('getStatus', () =>
         withHandlerSpan('getStatus',

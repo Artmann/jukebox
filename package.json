@@ -60,13 +60,14 @@
     "start": "NODE_ENV=production node dist/server/index.js",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
-    "doctor": "npx react-doctor@latest"
+    "doctor": "npx react-doctor@latest",
+    "fallow": "fallow audit",
+    "fallow:fix": "fallow fix --dry-run"
   },
   "dependencies": {
     "better-sqlite3": "^12.5.0",
     "cmdk": "^1.1.1",
-    "dayjs": "^1.11.20",
-    "dotenv": "^17.2.3"
+    "dayjs": "^1.11.20"
   },
   "optionalDependencies": {
     "@rollup/rollup-darwin-arm64": "4.54.0",
@@ -124,6 +125,7 @@
     "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "fallow": "^3.2.0",
     "jsdom": "^27.4.0",
     "lucide-react": "^0.545.0",
     "prettier": "^3.7.4",

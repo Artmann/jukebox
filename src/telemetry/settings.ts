@@ -3,15 +3,15 @@ import { Effect, Ref } from 'effect'
 import { Database } from '../database/layer'
 import { getSetting, setSetting } from '../services/settings'
 
-export const telemetryMaxTracesKey = 'telemetry.maxTraces'
-export const telemetryRetentionDaysKey = 'telemetry.retentionDays'
+const telemetryMaxTracesKey = 'telemetry.maxTraces'
+const telemetryRetentionDaysKey = 'telemetry.retentionDays'
 
-export interface TelemetryConfig {
+interface TelemetryConfig {
   maxTraces: number
   retentionDays: number
 }
 
-export const defaultTelemetryConfig: TelemetryConfig = {
+const defaultTelemetryConfig: TelemetryConfig = {
   maxTraces: 5000,
   retentionDays: 7
 }

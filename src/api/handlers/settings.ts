@@ -22,6 +22,7 @@ import {
 import { jukeboxApi } from '../contract'
 import { BadRequest, InternalError, LibraryInUse, NotFound } from '../contract/errors'
 
+import { listLibrariesEffect } from './library-list'
 import {
   internalTry,
   internalTryPromise,
@@ -89,16 +90,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('listLibraries', () =>
-        withHandlerSpan('listLibraries',
-          Effect.gen(function* () {
-            const db = yield* Database
-            const libraries = yield* internalTryPromise(() =>
-              db.select().from(schema.libraries)
-            )
-
-            return libraries.map(serializeLibrary)
-          })
-        )
+        withHandlerSpan('listLibraries', listLibrariesEffect)
       )
       .handle('createLibrary', ({ payload }) =>
         withHandlerSpan('createLibrary',

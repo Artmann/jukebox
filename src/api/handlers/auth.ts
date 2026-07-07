@@ -25,11 +25,11 @@ const scryptAsync = promisify(scrypt) as (
   keylen: number
 ) => Promise<Buffer>
 
-export const minimumPasswordLength = 8
-export const rateLimitAttempts = 5
-export const rateLimitWindowMinutes = 15
+const minimumPasswordLength = 8
+const rateLimitAttempts = 5
+const rateLimitWindowMinutes = 15
 export const sessionCookieName = 'jukebox_session'
-export const sessionLifetimeDays = 30
+const sessionLifetimeDays = 30
 
 const rateLimitWindowMs = rateLimitWindowMinutes * 60 * 1000
 const scryptKeyLength = 64
@@ -86,7 +86,7 @@ function createSessionToken(): string {
   return randomBytes(32).toString('base64url')
 }
 
-export const loadAuthConfig = (db: DrizzleDatabase) =>
+const loadAuthConfig = (db: DrizzleDatabase) =>
   internalTryPromise(async () => {
     const [existing] = await db
       .select()
