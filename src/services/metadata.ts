@@ -96,11 +96,11 @@ export interface SeasonMetadata {
   episodes: EpisodeMetadata[]
 }
 
-export class MetadataNotFound extends Data.TaggedError('MetadataNotFound')<{
+class MetadataNotFound extends Data.TaggedError('MetadataNotFound')<{
   message: string
 }> {}
 
-export class MetadataRequestFailed extends Data.TaggedError(
+class MetadataRequestFailed extends Data.TaggedError(
   'MetadataRequestFailed'
 )<{
   message: string

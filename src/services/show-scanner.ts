@@ -17,7 +17,6 @@ import { syncSubtitlesForEpisode } from './subtitle-sync'
 import { discoverSubtitlesForVideo } from './subtitles'
 
 export type { NormalizedShow } from './show-parser'
-export { normalizeShowName } from './show-parser'
 
 export interface ScannedEpisode {
   filePath: string

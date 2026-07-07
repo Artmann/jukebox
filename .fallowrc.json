@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "bin/jukebox-media-server.js",
+    "drizzle.config.ts",
+    "drizzle.telemetry.config.ts",
+    "src/app/frontend.tsx",
+    "src/index.ts"
+  ],
+  "duplicates": {
+    "minOccurrences": 3
+  },
+  "ignoreDependencies": [
+    "@rollup/rollup-*",
+    "@tailwindcss/oxide-*",
+    "lightningcss-*"
+  ],
+  "ignoreExports": [
+    {
+      "file": "src/api/contract/**",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/components/ui/**",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/services/scan-manager.ts",
+      "exports": ["*"]
+    }
+  ],
+  "rules": {
+    "unused-dependencies": "warn"
+  }
+}

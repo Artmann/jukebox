@@ -1,25 +1,13 @@
 import { Cause, Context, Exit, Option, Tracer } from 'effect'
 
+import { randomHex } from '../lib/random-hex'
+
 import type { NewSpanRow } from './schema'
 
 declare const Bun: unknown
 declare const JUKEBOX_BUILD_VERSION: string | undefined
 
 const nanosecondsPerMillisecond = 1_000_000n
-
-function randomHex(byteLength: number): string {
-  const bytes = new Uint8Array(byteLength)
-
-  crypto.getRandomValues(bytes)
-
-  let result = ''
-
-  for (const byte of bytes) {
-    result += byte.toString(16).padStart(2, '0')
-  }
-
-  return result
-}
 
 function toMillis(nanoseconds: bigint): number {
   return Number(nanoseconds / nanosecondsPerMillisecond)

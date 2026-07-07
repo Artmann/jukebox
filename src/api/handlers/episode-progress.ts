@@ -9,6 +9,10 @@ import type { EpisodeProgressEntry } from '../contract/groups/episode-progress'
 import { CurrentProfile } from '../contract/middleware'
 
 import { internalTryPromise, withHandlerSpan } from './support'
+import {
+  getWatchProgressEffect,
+  saveWatchProgressEffect
+} from './progress-support'
 
 // Ports src/api/routes/episode-progress.ts.
 export const episodeProgressHandlersLive = HttpApiBuilder.group(
@@ -72,82 +76,25 @@ export const episodeProgressHandlersLive = HttpApiBuilder.group(
       .handle('getEpisodeProgress', ({ path }) =>
         withHandlerSpan('getEpisodeProgress',
           Effect.gen(function* () {
-            const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
 
-            const [progress] = yield* internalTryPromise(() =>
-              db
-                .select()
-                .from(schema.watchProgress)
-                .where(
-                  and(
-                    eq(schema.watchProgress.profileId, profileId),
-                    eq(schema.watchProgress.episodeId, path.episodeId)
-                  )
-                )
-                .limit(1)
-            )
-
-            if (!progress) {
-              return { currentTime: 0, duration: null }
-            }
-
-            return {
-              currentTime: progress.currentTime,
-              duration: progress.duration
-            }
+            return yield* getWatchProgressEffect(profileId, {
+              column: 'episodeId',
+              mediaId: path.episodeId
+            })
           })
         )
       )
       .handle('saveEpisodeProgress', ({ path, payload }) =>
         withHandlerSpan('saveEpisodeProgress',
           Effect.gen(function* () {
-            const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
 
-            const [existing] = yield* internalTryPromise(() =>
-              db
-                .select()
-                .from(schema.watchProgress)
-                .where(
-                  and(
-                    eq(schema.watchProgress.profileId, profileId),
-                    eq(schema.watchProgress.episodeId, path.episodeId)
-                  )
-                )
-                .limit(1)
+            return yield* saveWatchProgressEffect(
+              profileId,
+              { column: 'episodeId', mediaId: path.episodeId },
+              payload
             )
-
-            const now = new Date()
-
-            if (existing) {
-              yield* internalTryPromise(() =>
-                db
-                  .update(schema.watchProgress)
-                  .set({
-                    currentTime: Math.floor(payload.currentTime),
-                    duration: payload.duration
-                      ? Math.floor(payload.duration)
-                      : existing.duration,
-                    updatedAt: now
-                  })
-                  .where(eq(schema.watchProgress.id, existing.id))
-              )
-            } else {
-              yield* internalTryPromise(() =>
-                db.insert(schema.watchProgress).values({
-                  profileId,
-                  episodeId: path.episodeId,
-                  currentTime: Math.floor(payload.currentTime),
-                  duration: payload.duration
-                    ? Math.floor(payload.duration)
-                    : null,
-                  updatedAt: now
-                })
-              )
-            }
-
-            return { success: true }
           })
         )
       )

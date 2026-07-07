@@ -50,5 +50,3 @@ export async function createTelemetryDatabase(): Promise<TelemetryDrizzleDatabas
 
   return db as unknown as TelemetryDrizzleDatabase
 }
-
-export { schema }

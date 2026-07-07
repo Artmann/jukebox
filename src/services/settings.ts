@@ -6,7 +6,7 @@ export const scanScheduleSettingKey = 'scanSchedule'
 
 export type ScanScheduleValue = 'off' | '6h' | '12h' | '24h'
 
-export const scanScheduleValues: readonly ScanScheduleValue[] = [
+const scanScheduleValues: readonly ScanScheduleValue[] = [
   'off',
   '6h',
   '12h',
