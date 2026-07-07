@@ -5,10 +5,15 @@ import { Effect, Layer } from 'effect'
 
 import { DatabaseLive } from './database/layer'
 import { makeHttpAppLive } from './http/app'
-import { HttpServerLive } from './http/server'
+import { getHttpPort, HttpServerLive } from './http/server'
 import { staticFilesLive } from './http/static'
 import { viteDevLive } from './http/vite-proxy'
 import { getPackageJsonPath, isCompiledExecutable } from './runtime-paths'
+import { TelemetryDatabaseLive } from './telemetry/layer'
+import { TelemetryRetention } from './telemetry/retention'
+import { TelemetrySettings } from './telemetry/settings'
+import { makeSqliteTracer } from './telemetry/tracer'
+import { TelemetryWriter } from './telemetry/writer'
 
 // Declared like `src/database/index.ts` so the Node build (vitest, tsc) never
 // depends on Bun's ambient global types.
@@ -22,15 +27,7 @@ if (isCompiledExecutable()) {
   process.env.NODE_ENV = process.env.NODE_ENV ?? 'production'
 }
 
-// Dev defaults to 1991 so `bun dev` doesn't collide with an installed server:
-// the JukeboxLauncher runs the compiled executable on 1990, and the compiled
-// binary forces NODE_ENV=production above. Production and the packaged binary
-// keep 1990; PORT overrides either.
-const port = process.env.PORT
-  ? Number(process.env.PORT)
-  : process.env.NODE_ENV === 'production'
-    ? 1990
-    : 1991
+const port = getHttpPort()
 
 // `JUKEBOX_BUILD_VERSION` is replaced at build time by
 // `scripts/build-executable.ts` via `bun build --define` so compiled binaries
@@ -96,12 +93,34 @@ const isDevelopment = process.env.NODE_ENV !== 'production'
 
 const frontendLayer = isDevelopment ? viteDevLive : staticFilesLive
 
+// Installs the local SQLite tracer for the whole runtime. Built from the shared
+// TelemetryWriter so every span this app records — and every frontend span the
+// ingest endpoint receives — lands in the same batched buffer.
+const telemetryTracerLive = Layer.unwrapEffect(
+  Effect.map(TelemetryWriter, (writer) =>
+    Layer.setTracer(makeSqliteTracer(writer.enqueue))
+  )
+)
+
 // The assembled HttpApi (all 14 groups), the raw streaming routes, and the
 // frontend served on the dual-runtime server layer. The scan services inside
 // makeHttpAppLive run crash recovery and arm the scheduler as part of their
 // scoped build, and stop cleanly on shutdown — this is the boot work the old
 // Hono server did explicitly.
-const mainLayer = Layer.mergeAll(makeHttpAppLive(frontendLayer), welcomeLayer).pipe(
+//
+// The telemetry layers are provided below the app so the tracer is installed for
+// every request, the writer's flush fiber and retention purge run for the app's
+// lifetime, and TelemetryWriter.Default is memoized into the single instance the
+// tracer and the ingest endpoint both share.
+const mainLayer = Layer.mergeAll(
+  makeHttpAppLive(frontendLayer),
+  welcomeLayer,
+  TelemetryRetention.Default
+).pipe(
+  Layer.provide(telemetryTracerLive),
+  Layer.provide(TelemetryWriter.Default),
+  Layer.provide(TelemetrySettings.Default),
+  Layer.provide(TelemetryDatabaseLive),
   Layer.provide(DatabaseLive),
   Layer.provide(HttpServerLive)
 )

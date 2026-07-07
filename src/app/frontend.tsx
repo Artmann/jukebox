@@ -15,9 +15,11 @@ import { registerSW } from 'virtual:pwa-register'
 
 import { AuthGuard } from './components/AuthGuard'
 import { SetupGuard } from './components/SetupGuard'
+import { installTelemetry } from './lib/telemetry'
 import { HomePage } from './pages/Home'
 import { LoginPage } from './pages/Login'
 import { MoviesPage } from './pages/Movies'
+import { ObsPage } from './pages/Obs'
 import { ScanPage } from './pages/Scan'
 import { SettingsAuthPage } from './pages/SettingsAuth'
 import { SettingsLibrariesPage } from './pages/SettingsLibraries'
@@ -28,6 +30,10 @@ import { ShowDetailPage } from './pages/ShowDetail'
 import { ShowsPage } from './pages/Shows'
 import { WatchPage } from './pages/WatchLazy'
 import './index.css'
+
+// Install trace propagation + error capture before anything makes a request, so
+// every /api call is instrumented and uncaught errors are recorded from boot.
+installTelemetry()
 
 const queryClient = new QueryClient()
 
@@ -56,6 +62,21 @@ const app = (
             <Route
               path="/setup"
               element={<SetupPage />}
+            />
+            {/* Diagnostic dashboard: reachable even before setup completes so
+                setup problems are debuggable. */}
+            <Route
+              path="/obs"
+              element={
+                <Navigate
+                  replace
+                  to="/obs/traces"
+                />
+              }
+            />
+            <Route
+              path="/obs/:tab"
+              element={<ObsPage />}
             />
 
             <Route element={<SetupGuard />}>

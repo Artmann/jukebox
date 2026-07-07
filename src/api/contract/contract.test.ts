@@ -118,7 +118,7 @@ describe('contract spike', () => {
 })
 
 describe('jukebox api contract', () => {
-  it('constructs the full HttpApi with all 14 groups', () => {
+  it('constructs the full HttpApi with all groups', () => {
     const groupNames = Object.keys(jukeboxApi.groups).sort()
 
     expect(groupNames).toEqual([
@@ -135,6 +135,7 @@ describe('jukebox api contract', () => {
       'settings',
       'setup',
       'shows',
+      'telemetry',
       'upNext'
     ])
   })

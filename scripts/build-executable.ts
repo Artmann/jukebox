@@ -155,6 +155,13 @@ function copySupportingAssets(): void {
   cpSync(join(projectRoot, 'drizzle'), join(stagingDirectory, 'drizzle'), {
     recursive: true
   })
+  cpSync(
+    join(projectRoot, 'drizzle-telemetry'),
+    join(stagingDirectory, 'drizzle-telemetry'),
+    {
+      recursive: true
+    }
+  )
 
   // Skipping package.json on purpose — shipping the full file (with vite and
   // other dev dependencies listed) makes the compiled binary's external module

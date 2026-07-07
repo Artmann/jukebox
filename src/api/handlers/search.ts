@@ -13,7 +13,7 @@ import type {
   SearchShowResult
 } from '../contract/schemas'
 
-import { withInternalFallback } from './support'
+import { withHandlerSpan } from './support'
 
 const defaultLimit = 20
 const maxLimit = 50
@@ -196,7 +196,7 @@ export const searchHandlersLive = HttpApiBuilder.group(
   'search',
   (handlers) =>
     handlers.handle('search', ({ urlParams }) =>
-      withInternalFallback(
+      withHandlerSpan('search',
         Effect.gen(function* () {
           const query = urlParams.q
 

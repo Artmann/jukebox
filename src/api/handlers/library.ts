@@ -11,7 +11,7 @@ import {
   internalTryPromise,
   serializeMovie,
   serializeSubtitleTrack,
-  withInternalFallback
+  withHandlerSpan
 } from './support'
 
 // Ports src/api/routes/library.ts. The `id` path param is decoded by the
@@ -22,7 +22,7 @@ export const libraryHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('listMovies', () =>
-        withInternalFallback(
+        withHandlerSpan('listMovies',
           Effect.gen(function* () {
             const db = yield* Database
 
@@ -35,7 +35,7 @@ export const libraryHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getMovie', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('getMovie',
           Effect.gen(function* () {
             const db = yield* Database
 

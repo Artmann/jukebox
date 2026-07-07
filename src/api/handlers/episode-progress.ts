@@ -8,7 +8,7 @@ import { jukeboxApi } from '../contract'
 import type { EpisodeProgressEntry } from '../contract/groups/episode-progress'
 import { CurrentProfile } from '../contract/middleware'
 
-import { internalTryPromise, withInternalFallback } from './support'
+import { internalTryPromise, withHandlerSpan } from './support'
 
 // Ports src/api/routes/episode-progress.ts.
 export const episodeProgressHandlersLive = HttpApiBuilder.group(
@@ -17,7 +17,7 @@ export const episodeProgressHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('getShowProgress', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('getShowProgress',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
@@ -70,7 +70,7 @@ export const episodeProgressHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getEpisodeProgress', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('getEpisodeProgress',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
@@ -100,7 +100,7 @@ export const episodeProgressHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('saveEpisodeProgress', ({ path, payload }) =>
-        withInternalFallback(
+        withHandlerSpan('saveEpisodeProgress',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile

@@ -11,7 +11,7 @@ import {
   internalTryPromise,
   serializeLibrary,
   serializeScanJob,
-  withInternalFallback
+  withHandlerSpan
 } from './support'
 
 // Ports the JSON routes of src/api/routes/scan.ts. GET /scan/stream (SSE)
@@ -22,7 +22,7 @@ export const scanHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('listLibraries', () =>
-        withInternalFallback(
+        withHandlerSpan('listLibraries',
           Effect.gen(function* () {
             const db = yield* Database
 
@@ -35,7 +35,7 @@ export const scanHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getStatus', () =>
-        withInternalFallback(
+        withHandlerSpan('getStatus',
           Effect.gen(function* () {
             const scanManager = yield* ScanManager
 
@@ -56,7 +56,7 @@ export const scanHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('startScan', () =>
-        withInternalFallback(
+        withHandlerSpan('startScan',
           Effect.gen(function* () {
             const db = yield* Database
             const scanManager = yield* ScanManager

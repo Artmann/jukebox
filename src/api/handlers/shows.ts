@@ -12,7 +12,7 @@ import {
   serializeEpisode,
   serializeShow,
   serializeSubtitleTrack,
-  withInternalFallback
+  withHandlerSpan
 } from './support'
 
 // Ports src/api/routes/shows.ts. Hono needed /episodes/:id registered before
@@ -24,7 +24,7 @@ export const showsHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('listShows', () =>
-        withInternalFallback(
+        withHandlerSpan('listShows',
           Effect.gen(function* () {
             const db = yield* Database
 
@@ -58,7 +58,7 @@ export const showsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getEpisode', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('getEpisode',
           Effect.gen(function* () {
             const db = yield* Database
 
@@ -105,7 +105,7 @@ export const showsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getNextEpisode', ({ path, urlParams }) =>
-        withInternalFallback(
+        withHandlerSpan('getNextEpisode',
           Effect.gen(function* () {
             const db = yield* Database
 
@@ -182,7 +182,7 @@ export const showsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getShow', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('getShow',
           Effect.gen(function* () {
             const db = yield* Database
 
@@ -230,7 +230,7 @@ export const showsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('listSeasonEpisodes', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('listSeasonEpisodes',
           Effect.gen(function* () {
             const db = yield* Database
 

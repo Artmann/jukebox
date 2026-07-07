@@ -13,7 +13,7 @@ import {
   errorMessage,
   internalTryPromise,
   serializeProfile,
-  withInternalFallback
+  withHandlerSpan
 } from './support'
 
 // The contract keeps the :id path param a raw string so this reproduces the
@@ -38,7 +38,7 @@ export const profilesHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('listProfiles', () =>
-        withInternalFallback(
+        withHandlerSpan('listProfiles',
           Effect.gen(function* () {
             const db = yield* Database
             const profiles = yield* internalTryPromise(() =>
@@ -53,7 +53,7 @@ export const profilesHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getActiveProfile', () =>
-        withInternalFallback(
+        withHandlerSpan('getActiveProfile',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
@@ -77,7 +77,7 @@ export const profilesHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('createProfile', ({ payload }) =>
-        withInternalFallback(
+        withHandlerSpan('createProfile',
           Effect.gen(function* () {
             const db = yield* Database
             const name = payload.name?.trim()
@@ -116,7 +116,7 @@ export const profilesHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('updateProfile', ({ path, payload }) =>
-        withInternalFallback(
+        withHandlerSpan('updateProfile',
           Effect.gen(function* () {
             const db = yield* Database
             const id = yield* parseProfileId(path.id)
@@ -162,7 +162,7 @@ export const profilesHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('deleteProfile', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('deleteProfile',
           Effect.gen(function* () {
             const db = yield* Database
             const id = yield* parseProfileId(path.id)
@@ -198,7 +198,7 @@ export const profilesHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('activateProfile', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('activateProfile',
           Effect.gen(function* () {
             const db = yield* Database
             const id = yield* parseProfileId(path.id)

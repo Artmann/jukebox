@@ -5,7 +5,17 @@ import {
 } from '@effect/platform'
 import { Effect, Layer, Stream } from 'effect'
 
-const vitePort = 5173
+// Dev Vite defaults to 5191 so it doesn't collide with other apps on 5173.
+// VITE_PORT overrides; HMR connects to this port directly from the browser.
+function getVitePort(): number {
+  if (process.env.VITE_PORT) {
+    return Number(process.env.VITE_PORT)
+  }
+
+  return 5191
+}
+
+const vitePort = getVitePort()
 
 const hopByHopHeaders = new Set([
   'connection',
@@ -45,8 +55,8 @@ const viteServerLive = Layer.scopedDiscard(
 // Dev-mode frontend: non-/api requests forward to the Vite dev server with
 // hop-by-hop headers stripped, matching the Hono setupViteProxy. A proxy
 // failure falls through to the router (and its 404) instead of erroring, so
-// a Vite restart doesn't take the API down with it. HMR connects to :5173
-// directly, as before.
+// a Vite restart doesn't take the API down with it. HMR connects to the Vite
+// port directly from the browser, not through the API proxy.
 const viteProxyMiddlewareLive = HttpApiBuilder.middleware(
   (httpApp) =>
     Effect.gen(function* () {

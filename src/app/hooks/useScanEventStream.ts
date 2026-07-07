@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
 
 import { scanStatusQueryKey } from './useScanStatus'
+import { buildTraceparent, generateSpanId, generateTraceId } from '../lib/trace'
 import type { LibraryProgress } from '../pages/scan-types'
 
 export function useScanEventStream(
@@ -12,7 +13,12 @@ export function useScanEventStream(
   const queryClient = useQueryClient()
 
   useEffect(() => {
-    const eventSource = new EventSource('/api/scan/stream')
+    // EventSource can't set headers, so the trace context rides as a query
+    // param that the backend request middleware reads as a fallback.
+    const traceparent = buildTraceparent(generateTraceId(), generateSpanId())
+    const eventSource = new EventSource(
+      `/api/scan/stream?traceparent=${traceparent}`
+    )
 
     // Resetting rows on the server's scan-started event (instead of after the
     // start POST resolves) keeps resets strictly ordered with the library

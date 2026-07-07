@@ -13,7 +13,7 @@ import {
   internalTryPromise,
   serializeEpisode,
   serializeShow,
-  withInternalFallback
+  withHandlerSpan
 } from './support'
 
 // Ports src/api/routes/up-next.ts: for each show the active profile has
@@ -25,7 +25,7 @@ export const upNextHandlersLive = HttpApiBuilder.group(
   'upNext',
   (handlers) =>
     handlers.handle('listUpNext', () =>
-      withInternalFallback(
+      withHandlerSpan('listUpNext',
         Effect.gen(function* () {
           const db = yield* Database
           const { id: profileId } = yield* CurrentProfile

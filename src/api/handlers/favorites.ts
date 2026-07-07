@@ -14,7 +14,7 @@ import {
   internalTryPromise,
   serializeMovie,
   serializeShow,
-  withInternalFallback
+  withHandlerSpan
 } from './support'
 
 // Ports src/api/routes/favorites.ts.
@@ -24,7 +24,7 @@ export const favoritesHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('listFavorites', () =>
-        withInternalFallback(
+        withHandlerSpan('listFavorites',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
@@ -91,7 +91,7 @@ export const favoritesHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getFavoriteStatus', ({ urlParams }) =>
-        withInternalFallback(
+        withHandlerSpan('getFavoriteStatus',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
@@ -153,7 +153,7 @@ export const favoritesHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('addFavorite', ({ payload }) =>
-        withInternalFallback(
+        withHandlerSpan('addFavorite',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
@@ -200,7 +200,7 @@ export const favoritesHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('removeFavorite', ({ payload }) =>
-        withInternalFallback(
+        withHandlerSpan('removeFavorite',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile

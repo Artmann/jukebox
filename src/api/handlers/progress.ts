@@ -13,7 +13,7 @@ import {
   serializeEpisode,
   serializeMovie,
   serializeShow,
-  withInternalFallback
+  withHandlerSpan
 } from './support'
 
 // Ports src/api/routes/progress.ts.
@@ -23,7 +23,7 @@ export const progressHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('listContinueWatching', () =>
-        withInternalFallback(
+        withHandlerSpan('listContinueWatching',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
@@ -123,7 +123,7 @@ export const progressHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getMovieProgress', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('getMovieProgress',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile
@@ -153,7 +153,7 @@ export const progressHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('saveMovieProgress', ({ path, payload }) =>
-        withInternalFallback(
+        withHandlerSpan('saveMovieProgress',
           Effect.gen(function* () {
             const db = yield* Database
             const { id: profileId } = yield* CurrentProfile

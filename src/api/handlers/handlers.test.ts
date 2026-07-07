@@ -35,6 +35,7 @@ vi.mock('../../database', () => ({
 const { databaseTestLayer } = await import('../../database/layer')
 const { apiLive, decodeErrorRemapLive, rawRoutesLive, scanServicesLive } =
   await import('../../http/app')
+const { telemetryTestLayer } = await import('../../telemetry/test-layer')
 
 // The scan services (ScanManager + Scheduler) are built once against the test
 // database and provided at the root so the api groups and the raw SSE route
@@ -51,6 +52,7 @@ const { dispose, handler } = HttpApiBuilder.toWebHandler(
     Layer.provide(
       scanServicesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db)))
     ),
+    Layer.provide(telemetryTestLayer),
     Layer.provide(databaseTestLayer(testDatabase.db))
   )
 )

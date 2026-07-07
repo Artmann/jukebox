@@ -3,7 +3,7 @@ import { Effect } from 'effect'
 
 import { jukeboxApi } from '../contract'
 
-import { withInternalFallback } from './support'
+import { withHandlerSpan } from './support'
 
 // Ports src/api/routes/hello.ts plus the inline `GET /api` route from
 // src/api/index.ts.
@@ -13,20 +13,20 @@ export const helloHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('root', () =>
-        withInternalFallback(Effect.succeed({ message: 'Jukebox API' }))
+        withHandlerSpan('root', Effect.succeed({ message: 'Jukebox API' }))
       )
       .handle('getHello', () =>
-        withInternalFallback(
+        withHandlerSpan('getHello',
           Effect.succeed({ message: 'Hello, world!', method: 'GET' })
         )
       )
       .handle('putHello', () =>
-        withInternalFallback(
+        withHandlerSpan('putHello',
           Effect.succeed({ message: 'Hello, world!', method: 'PUT' })
         )
       )
       .handle('greet', ({ path }) =>
-        withInternalFallback(
+        withHandlerSpan('greet',
           Effect.succeed({ message: `Hello, ${path.name}!` })
         )
       )

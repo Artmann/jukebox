@@ -464,7 +464,9 @@ export class ScanManager extends Effect.Service<ScanManager>()(
         getStatus,
         isRunning,
         recoverInterruptedJobs,
-        start,
+        // A library scan is a long background operation worth its own trace, so
+        // callers (the scan handler and the scheduler) record a span around it.
+        start: start.pipe(Effect.withSpan('ScanManager.start', { kind: 'internal' })),
         subscribe
       }
     })

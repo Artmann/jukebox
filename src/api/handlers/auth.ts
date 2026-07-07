@@ -17,7 +17,7 @@ import * as schema from '../../database/schema'
 import { jukeboxApi } from '../contract'
 import { BadRequest, TooManyRequests, Unauthorized } from '../contract/errors'
 
-import { internalTryPromise, withInternalFallback } from './support'
+import { internalTryPromise, withHandlerSpan } from './support'
 
 const scryptAsync = promisify(scrypt) as (
   password: string | Buffer,
@@ -207,7 +207,7 @@ export const authHandlersLive = HttpApiBuilder.group(
 
       return handlers
         .handle('getStatus', () =>
-          withInternalFallback(
+          withHandlerSpan('getStatus',
             Effect.gen(function* () {
               const db = yield* Database
               const config = yield* loadAuthConfig(db)
@@ -240,7 +240,7 @@ export const authHandlersLive = HttpApiBuilder.group(
           )
         )
         .handle('login', ({ payload }) =>
-          withInternalFallback(
+          withHandlerSpan('login',
             Effect.gen(function* () {
               const db = yield* Database
               const request = yield* HttpServerRequest.HttpServerRequest
@@ -309,7 +309,7 @@ export const authHandlersLive = HttpApiBuilder.group(
           )
         )
         .handle('logout', () =>
-          withInternalFallback(
+          withHandlerSpan('logout',
             Effect.gen(function* () {
               const db = yield* Database
               const request = yield* HttpServerRequest.HttpServerRequest
@@ -328,7 +328,7 @@ export const authHandlersLive = HttpApiBuilder.group(
           )
         )
         .handle('changePassword', ({ payload }) =>
-          withInternalFallback(
+          withHandlerSpan('changePassword',
             Effect.gen(function* () {
               const db = yield* Database
               const newPassword =

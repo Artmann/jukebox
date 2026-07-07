@@ -4,7 +4,17 @@ import { Effect, Layer } from 'effect'
 // depends on Bun's ambient global types.
 declare const Bun: unknown
 
-const port = process.env.PORT ? Number(process.env.PORT) : 1990
+// Dev defaults to 1991 so `bun dev` doesn't collide with an installed server
+// on 1990; production and compiled binaries keep 1990. PORT overrides either.
+export function getHttpPort(): number {
+  if (process.env.PORT) {
+    return Number(process.env.PORT)
+  }
+
+  return process.env.NODE_ENV === 'production' ? 1990 : 1991
+}
+
+const port = getHttpPort()
 
 // The HTTP server must run under both Node (tsx dev, `node dist/server/index.js`)
 // and Bun (`bun build --compile` executables), so we pick the platform layer at

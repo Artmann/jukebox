@@ -1,11 +1,15 @@
 import {
   HttpApiBuilder,
   HttpApiError,
+  HttpApp,
   HttpMiddleware,
   HttpServerError,
+  HttpServerRequest,
   HttpServerResponse
 } from '@effect/platform'
-import { Cause, Effect, Layer, Option } from 'effect'
+import { Cause, Effect, Layer, Option, Tracer } from 'effect'
+
+import { parseTraceparent } from '../telemetry/traceparent'
 
 import { jukeboxApi } from '../api/contract'
 import { authHandlersLive } from '../api/handlers/auth'
@@ -21,6 +25,7 @@ import { searchHandlersLive } from '../api/handlers/search'
 import { settingsHandlersLive } from '../api/handlers/settings'
 import { setupHandlersLive } from '../api/handlers/setup'
 import { showsHandlersLive } from '../api/handlers/shows'
+import { telemetryHandlersLive } from '../api/handlers/telemetry'
 import { upNextHandlersLive } from '../api/handlers/up-next'
 import { AuthMiddlewareLive } from '../api/middleware/auth-effect'
 import { ProfileMiddlewareLive } from '../api/middleware/profile-effect'
@@ -146,6 +151,7 @@ export const apiLive = HttpApiBuilder.api(jukeboxApi).pipe(
     settingsHandlersLive,
     setupHandlersLive,
     showsHandlersLive,
+    telemetryHandlersLive,
     upNextHandlersLive
   ]),
   Layer.provide([AuthMiddlewareLive, ProfileMiddlewareLive])
@@ -174,16 +180,86 @@ export const scanServicesLive = Layer.mergeAll(
   Scheduler.Default
 )
 
-// The served app: HttpMiddleware.logger replaces hono/logger. The frontend
-// layer is either static file serving (production) or the Vite dev proxy —
-// src/index.ts decides from NODE_ENV, keeping vite out of this module. The
-// scan services are provided once at this root so both the api groups and the
-// raw routes share the single ScanManager instance.
+// The outermost request span. This wraps the whole served app — contract
+// routes, raw streaming routes, and the frontend — so it is the one seam that
+// sees every /api request. It continues the frontend's trace by reading the
+// W3C `traceparent` header (or, for EventSource/SSE which cannot set headers, a
+// `?traceparent=` query param), making the browser's client span the parent of
+// this server span.
+//
+// The whole /api/telemetry surface is skipped: tracing the ingest and dashboard
+// endpoints would record spans about recording spans. Non-/api requests (static
+// assets, the SPA) are not traced either.
+//
+// HttpApi encodes a handler's typed failure into an HTTP response before it
+// reaches this middleware, so the request effect succeeds even for a 500 — the
+// error status lives on the per-handler span (see withHandlerSpan). Here we only
+// annotate the response status code.
+const tracingMiddleware = <E, R>(
+  httpApp: HttpApp.Default<E, R>
+): HttpApp.Default<E, R> =>
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest
+    const url = new URL(request.url, 'http://localhost')
+    const path = url.pathname
+
+    if (!path.startsWith('/api') || path.startsWith('/api/telemetry')) {
+      return yield* httpApp
+    }
+
+    const traceparent =
+      request.headers['traceparent'] ??
+      url.searchParams.get('traceparent') ??
+      undefined
+    const parent = parseTraceparent(traceparent)
+
+    const traced = httpApp.pipe(
+      Effect.tap((response) =>
+        Effect.annotateCurrentSpan('http.status_code', response.status)
+      ),
+      Effect.withSpan(`${request.method} ${path}`, {
+        attributes: { 'http.method': request.method, 'http.route': path },
+        kind: 'server'
+      })
+    )
+
+    if (Option.isSome(parent)) {
+      return yield* traced.pipe(
+        Effect.withParentSpan(
+          Tracer.externalSpan({
+            sampled: parent.value.sampled,
+            spanId: parent.value.spanId,
+            traceId: parent.value.traceId
+          })
+        )
+      )
+    }
+
+    return yield* traced
+  })
+
+// The served app: tracingMiddleware wraps HttpMiddleware.logger (which replaces
+// hono/logger). The frontend layer is either static file serving (production)
+// or the Vite dev proxy — src/index.ts decides from NODE_ENV, keeping vite out
+// of this module. The scan services are provided once at this root so both the
+// api groups and the raw routes share the single ScanManager instance.
+//
+// The platform's built-in `http.server` span is disabled for every request
+// (withTracerDisabledWhen `() => true`): tracingMiddleware already records one
+// clean span per /api request with the right name and W3C parent, and — unlike
+// the platform span — it honours the /api/telemetry skip so the dashboard and
+// ingest endpoints don't trace themselves. Leaving both on would double every
+// span and split each request across two traces.
 export const makeHttpAppLive = <E, R>(frontend: Layer.Layer<never, E, R>) =>
-  HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
-    Layer.provide(frontend),
-    Layer.provide(decodeErrorRemapLive),
-    Layer.provide(rawRoutesLive),
-    Layer.provide(apiLive),
-    Layer.provide(scanServicesLive)
+  HttpMiddleware.withTracerDisabledWhen(
+    HttpApiBuilder.serve((httpApp) =>
+      tracingMiddleware(HttpMiddleware.logger(httpApp))
+    ).pipe(
+      Layer.provide(frontend),
+      Layer.provide(decodeErrorRemapLive),
+      Layer.provide(rawRoutesLive),
+      Layer.provide(apiLive),
+      Layer.provide(scanServicesLive)
+    ),
+    () => true
   )

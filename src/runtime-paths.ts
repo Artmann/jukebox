@@ -85,6 +85,10 @@ export function getMigrationsDirectory(): string {
   return path.join(getApplicationRoot(), 'drizzle')
 }
 
+export function getTelemetryMigrationsDirectory(): string {
+  return path.join(getApplicationRoot(), 'drizzle-telemetry')
+}
+
 export function getPackageJsonPath(): string {
   return path.join(getApplicationRoot(), 'package.json')
 }

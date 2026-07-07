@@ -33,6 +33,7 @@ vi.mock('../../database', () => ({
 const { databaseTestLayer } = await import('../../database/layer')
 const { apiLive, decodeErrorRemapLive, rawRoutesLive, scanServicesLive } =
   await import('../../http/app')
+const { telemetryTestLayer } = await import('../../telemetry/test-layer')
 
 const { dispose, handler } = HttpApiBuilder.toWebHandler(
   Layer.mergeAll(
@@ -44,6 +45,7 @@ const { dispose, handler } = HttpApiBuilder.toWebHandler(
     Layer.provide(
       scanServicesLive.pipe(Layer.provide(databaseTestLayer(testDatabase.db)))
     ),
+    Layer.provide(telemetryTestLayer),
     Layer.provide(databaseTestLayer(testDatabase.db))
   )
 )

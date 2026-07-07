@@ -26,7 +26,7 @@ import {
   internalTry,
   internalTryPromise,
   serializeLibrary,
-  withInternalFallback
+  withHandlerSpan
 } from './support'
 
 // Keys that have dedicated routes with their own validation. The generic
@@ -89,7 +89,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('listLibraries', () =>
-        withInternalFallback(
+        withHandlerSpan('listLibraries',
           Effect.gen(function* () {
             const db = yield* Database
             const libraries = yield* internalTryPromise(() =>
@@ -101,7 +101,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('createLibrary', ({ payload }) =>
-        withInternalFallback(
+        withHandlerSpan('createLibrary',
           Effect.gen(function* () {
             const db = yield* Database
             const parsed = validateLibraryInput(payload)
@@ -166,7 +166,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('deleteLibrary', ({ path: pathParams, urlParams }) =>
-        withInternalFallback(
+        withHandlerSpan('deleteLibrary',
           Effect.gen(function* () {
             const db = yield* Database
 
@@ -306,7 +306,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getScanSchedule', () =>
-        withInternalFallback(
+        withHandlerSpan('getScanSchedule',
           Effect.gen(function* () {
             const db = yield* Database
             const scheduler = yield* Scheduler
@@ -328,7 +328,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('updateScanSchedule', ({ payload }) =>
-        withInternalFallback(
+        withHandlerSpan('updateScanSchedule',
           Effect.gen(function* () {
             const db = yield* Database
             const scheduler = yield* Scheduler
@@ -359,7 +359,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('getSetting', ({ path: pathParams }) =>
-        withInternalFallback(
+        withHandlerSpan('getSetting',
           Effect.gen(function* () {
             const db = yield* Database
             const key = pathParams.key
@@ -379,7 +379,7 @@ export const settingsHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('updateSetting', ({ path: pathParams, payload }) =>
-        withInternalFallback(
+        withHandlerSpan('updateSetting',
           Effect.gen(function* () {
             const db = yield* Database
             const key = pathParams.key

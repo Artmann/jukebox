@@ -15,7 +15,7 @@ import {
 } from '../contract/errors'
 import type { BrowseEntry, BrowseResponse } from '../contract/schemas'
 
-import { withInternalFallback } from './support'
+import { withHandlerSpan } from './support'
 
 async function listWindowsDrives(): Promise<BrowseEntry[]> {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
@@ -128,7 +128,7 @@ export const filesystemHandlersLive = HttpApiBuilder.group(
   'filesystem',
   (handlers) =>
     handlers.handle('browse', ({ urlParams }) =>
-      withInternalFallback(
+      withHandlerSpan('browse',
         Effect.gen(function* () {
           const rawPath = urlParams.path
           const trimmed = typeof rawPath === 'string' ? rawPath.trim() : ''

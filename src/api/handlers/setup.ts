@@ -20,7 +20,7 @@ import {
   internalTry,
   internalTryPromise,
   serializeLibrary,
-  withInternalFallback
+  withHandlerSpan
 } from './support'
 
 function comparablePath(path: string): string {
@@ -35,7 +35,7 @@ export const setupHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle('getStatus', () =>
-        withInternalFallback(
+        withHandlerSpan('getStatus',
           Effect.gen(function* () {
             const db = yield* Database
             const libraries = yield* internalTryPromise(() =>
@@ -51,7 +51,7 @@ export const setupHandlersLive = HttpApiBuilder.group(
         )
       )
       .handle('completeSetup', ({ payload }) =>
-        withInternalFallback(
+        withHandlerSpan('completeSetup',
           Effect.gen(function* () {
             const db = yield* Database
             const entries = Array.isArray(payload.libraries)

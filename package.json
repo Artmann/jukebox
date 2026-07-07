@@ -19,6 +19,7 @@
     "dist/",
     "bin/",
     "drizzle/",
+    "drizzle-telemetry/",
     "LICENSE",
     "README.md"
   ],
@@ -46,7 +47,9 @@
     "build:executable": "tsx scripts/build-executable.ts",
     "build:server": "rolldown -c rolldown.config.ts",
     "db:generate": "drizzle-kit generate",
+    "db:generate:telemetry": "drizzle-kit generate --config drizzle.telemetry.config.ts",
     "db:migrate": "tsx src/scripts/migrate.ts",
+    "db:migrate:telemetry": "tsx src/telemetry/scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "dev": "tsx watch src/index.ts",
     "format": "prettier --write .",

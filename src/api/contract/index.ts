@@ -14,6 +14,7 @@ import { searchGroup } from './groups/search'
 import { settingsGroup } from './groups/settings'
 import { setupGroup } from './groups/setup'
 import { showsGroup } from './groups/shows'
+import { telemetryGroup } from './groups/telemetry'
 import { upNextGroup } from './groups/up-next'
 
 // InternalError at the api level mirrors the Hono app.onError fallback: any
@@ -32,6 +33,7 @@ export const jukeboxApi = HttpApi.make('jukebox')
   .add(settingsGroup)
   .add(setupGroup)
   .add(showsGroup)
+  .add(telemetryGroup)
   .add(upNextGroup)
   .addError(InternalErrorWire)
   .prefix('/api')
@@ -52,4 +54,5 @@ export * from './groups/search'
 export * from './groups/settings'
 export * from './groups/setup'
 export * from './groups/shows'
+export * from './groups/telemetry'
 export * from './groups/up-next'

@@ -48,6 +48,21 @@ export const withInternalFallback = <A, E, R>(
     Effect.fail(new InternalError({ message: errorMessage(defect) }))
   )
 
+// The same internal-defect fallback, plus a tracing span named after the
+// handler so each request records a `handler <name>` span under its root
+// request span. A handler that fails flips the span to error status
+// automatically (the tracer reads the Exit). Used in place of
+// `withInternalFallback` by every traced handler; the telemetry ingest handler
+// deliberately keeps plain `withInternalFallback` so recording frontend spans
+// never produces backend spans of its own.
+export const withHandlerSpan = <A, E, R>(
+  name: string,
+  effect: Effect.Effect<A, E, R>
+): Effect.Effect<A, E | InternalError, R> =>
+  withInternalFallback(effect).pipe(
+    Effect.withSpan(`handler ${name}`, { kind: 'internal' })
+  )
+
 // --- Row-to-wire serializers ------------------------------------------------
 // Hono relied on JSON.stringify turning drizzle Date columns into ISO strings;
 // the contract schemas expect those strings explicitly.
