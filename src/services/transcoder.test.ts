@@ -134,19 +134,29 @@ describe('startTranscode', () => {
   })
 
   it('resolves readyPromise once the playlist file appears on disk', async () => {
-    const fakeProcess = createFakeProcess()
-    const spawner = vi.fn(() => fakeProcess) as unknown as typeof import('child_process').spawn
+    vi.useFakeTimers()
 
-    const session = startTranscode({
-      fileId: 'movie-5',
-      filePath: '/tmp/sample.mkv',
-      profileId: 1,
-      spawnImplementation: spawner
-    })
+    try {
+      const fakeProcess = createFakeProcess()
+      const spawner = vi.fn(() => fakeProcess) as unknown as typeof import('child_process').spawn
 
-    // Simulate ffmpeg producing the playlist.
-    writeFileSync(session.playlistPath, '#EXTM3U\n')
+      const session = startTranscode({
+        fileId: 'movie-5',
+        filePath: '/tmp/sample.mkv',
+        profileId: 1,
+        spawnImplementation: spawner
+      })
 
-    await expect(session.readyPromise).resolves.toBeUndefined()
+      // Simulate ffmpeg producing the playlist.
+      writeFileSync(session.playlistPath, '#EXTM3U\n')
+
+      const ready = session.readyPromise
+
+      await vi.advanceTimersByTimeAsync(200)
+
+      await expect(ready).resolves.toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
