@@ -1,6 +1,6 @@
 {
   "name": "jukebox-media-server",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Self-hosted media server with a Netflix-style interface for browsing and streaming your personal movie and TV show collection.",
   "license": "MIT",
   "repository": {

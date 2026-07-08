@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.7.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.6.0...jukebox-media-server-v0.7.0) (2026-07-08)
+
+
+### Features
+
+* **effect:** api contract — schemas, error catalog, 14 http api groups ([d3a0713](https://github.com/Artmann/jukebox/commit/d3a07133d3145487dfb022f3b5c428ab659ee0d5))
+* **effect:** derive a typed api client from the contract ([463af7c](https://github.com/Artmann/jukebox/commit/463af7ca469444638a7ab322a1a205c74312c726))
+* **effect:** foundation — deps, database layer, dual-runtime http server, effect main ([c5d3c43](https://github.com/Artmann/jukebox/commit/c5d3c4356bde598c65933c0708dfb99518c5e202))
+* **effect:** HLS transcode routes, session engine extracted to a service ([d5a14be](https://github.com/Artmann/jukebox/commit/d5a14bea6a6c94d4e4da7ab0ab0aabe6fd385dec))
+* **effect:** middleware + 8 handler groups + app assembly ([659d274](https://github.com/Artmann/jukebox/commit/659d274d878fb75ff8ab53f9b18d2c14f74fce41))
+* **effect:** port the six remaining JSON groups, drop the stubs ([02ea00c](https://github.com/Artmann/jukebox/commit/02ea00c906114541315701e0816123a0d3be9bf8))
+* **effect:** range video and subtitle streaming as raw router routes ([c858e4e](https://github.com/Artmann/jukebox/commit/c858e4eb48080a34ee2b1c5fe9f8760e1aedfed4))
+* **effect:** scan SSE stream as a raw router route ([d1690d5](https://github.com/Artmann/jukebox/commit/d1690d586b900966978e25ef91b51aaa63ecef2e))
+* **effect:** serve the frontend — static files in prod, Vite proxy in dev ([fcfe040](https://github.com/Artmann/jukebox/commit/fcfe0401320e1a5711b91b240787a5e104c8e1a0))
+
+
+### Bug Fixes
+
+* **dev:** default the dev server to port 1991 ([f8a6984](https://github.com/Artmann/jukebox/commit/f8a6984eccd7c5d42d379ff8c048e0593ac1d30a))
+* **dev:** default the dev server to port 1991 ([4d58a55](https://github.com/Artmann/jukebox/commit/4d58a55f7efe7e4bbd47fa82f0562dc16e5d74f6))
+* **effect:** restore actionable 400 messages, 429 test, stub comment ([fe10da6](https://github.com/Artmann/jukebox/commit/fe10da6390d1ce82b413fe3bdc778f18c4ad5767))
+* **effect:** restore scan crash recovery and the scheduler at boot ([eaf910f](https://github.com/Artmann/jukebox/commit/eaf910fba6524607251401d0d4f1799fa2646a06))
+* **scan:** address React Doctor review comments ([d32d29d](https://github.com/Artmann/jukebox/commit/d32d29d57efcc6be546b730addfe8b3a662bfb57))
+* **scan:** put the Continue button to the right of Start manual scan ([88d5ac6](https://github.com/Artmann/jukebox/commit/88d5ac6162880d1cae71d88c4570cfe2e25f3822))
+* **scan:** stop empty libraries from claiming to scan forever, add Continue ([8bcfd69](https://github.com/Artmann/jukebox/commit/8bcfd69eb7d2b7c2f7f328b86975d443560b33a5))
+* **setup:** keep React Doctor clean after rebasing onto the audit ([aea9082](https://github.com/Artmann/jukebox/commit/aea90828cf532b1aa7f974b46a84d04564786c2e))
+* **setup:** make the first-run setup and scan flow rock solid ([7a088af](https://github.com/Artmann/jukebox/commit/7a088af9fdd064b80357a405b4153de7e9b0c709))
+
+
+### Refactoring
+
+* **app:** convert hooks and pages to the typed api client ([ad82ee5](https://github.com/Artmann/jukebox/commit/ad82ee58852fca80b095460ffa313665489e1390))
+* **effect:** convert the backend services to Effect idioms ([4ed55a7](https://github.com/Artmann/jukebox/commit/4ed55a7573c1633728a8b244f023e2249e66ee8a))
+
 ## [0.6.0](https://github.com/Artmann/jukebox/compare/jukebox-media-server-v0.5.2...jukebox-media-server-v0.6.0) (2026-07-03)
 
 
