@@ -1,5 +1,12 @@
 import type { ScanJobSummary } from '../hooks/useScanStatus'
 
+/**
+ * The scan page's visit-scoped lifecycle. `complete` only happens after a
+ * scan finished while the user was on the page — a fresh load with an old
+ * finished job starts back at `idle`.
+ */
+export type ScanPhase = 'complete' | 'idle' | 'running'
+
 export interface LibraryInfo {
   id: number
   name: string

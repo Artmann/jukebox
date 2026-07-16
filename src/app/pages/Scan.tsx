@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -16,7 +24,8 @@ import {
   mergeLibrariesWithJob,
   summarizeTotals,
   type LibraryInfo,
-  type LibraryProgress
+  type LibraryProgress,
+  type ScanPhase
 } from './scan-types'
 
 async function fetchLibraries(): Promise<ReadonlyArray<LibraryInfo>> {
@@ -39,6 +48,11 @@ export function ScanPage() {
 
   const [libraries, setLibraries] = useState<LibraryProgress[] | null>(null)
   const [liveActive, setLiveActive] = useState(false)
+  // Flips once a scan finishes while the user is on the page, switching the
+  // bottom action from "Start scan" to "Go to Library". Never set on a fresh
+  // load, even when an older finished job exists.
+  const [hasCompletedThisVisit, setHasCompletedThisVisit] = useState(false)
+  const sawScanRef = useRef(false)
   // Once live SSE events arrive they are the freshest source of truth, so
   // the merged view derived from the (possibly stale) status query steps
   // aside in favor of the event-driven rows.
@@ -88,9 +102,44 @@ export function ScanPage() {
     setLiveSeen(true)
   }, [])
 
-  useScanEventStream(setLibraries, setLiveActive, markLiveSeen)
+  // Intercept the stream's live-active toggles so completion is caught even
+  // when a fast scan starts and finishes within a single render batch, where
+  // `isRunning` never commits as true and the transition effect below would
+  // miss it.
+  const handleLiveActiveChange = useCallback<Dispatch<SetStateAction<boolean>>>(
+    (value) => {
+      if (value === true) {
+        sawScanRef.current = true
+      }
+
+      if (value === false && sawScanRef.current) {
+        setHasCompletedThisVisit(true)
+      }
+
+      setLiveActive(value)
+    },
+    []
+  )
+
+  useScanEventStream(setLibraries, handleLiveActiveChange, markLiveSeen)
 
   const isRunning = liveActive || (status?.isRunning ?? false)
+
+  // Catch scans this page merely observed (opened mid-scan, so the running
+  // signal came from the status query rather than a live-active toggle).
+  useEffect(() => {
+    if (isRunning) {
+      sawScanRef.current = true
+    } else if (sawScanRef.current) {
+      setHasCompletedThisVisit(true)
+    }
+  }, [isRunning])
+
+  const phase: ScanPhase = isRunning
+    ? 'running'
+    : hasCompletedThisVisit
+      ? 'complete'
+      : 'idle'
 
   // Until live SSE events arrive, derive the rows from the persisted
   // per-library results of the current or last job, so a page opened after
@@ -163,10 +212,13 @@ export function ScanPage() {
     }
   }, [handleStartScan, location, navigate, status])
 
+  const hasLibraries = (displayedLibraries?.length ?? 0) > 0
+  const lastJobFailed = status?.lastJob?.status === 'error'
+
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-16">
       <ScanPageHeader
-        isRunning={isRunning}
+        phase={phase}
         status={status}
         totals={totals}
       />
@@ -179,10 +231,12 @@ export function ScanPage() {
       </div>
 
       <ScanActions
+        hasLibraries={hasLibraries}
         isPending={startScanMutation.isPending}
-        isRunning={isRunning}
-        onContinue={() => void navigate('/')}
+        lastJobFailed={lastJobFailed}
+        onGoToLibrary={() => void navigate('/')}
         onStart={() => void handleStartScan()}
+        phase={phase}
       />
     </div>
   )

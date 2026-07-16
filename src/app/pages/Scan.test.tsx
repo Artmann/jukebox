@@ -156,7 +156,7 @@ describe('ScanPage', () => {
     })
   })
 
-  it('shows a Start manual scan button when idle with libraries', async () => {
+  it('shows a Start scan button when idle with libraries', async () => {
     setFetchResponses({
       '/api/scan/libraries': {
         ok: true,
@@ -180,12 +180,19 @@ describe('ScanPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: 'Start manual scan' })
+        screen.getByRole('button', { name: 'Start scan' })
       ).toBeInTheDocument()
     })
+
+    expect(
+      screen.queryByRole('button', { name: 'Continue' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Go to Library' })
+    ).not.toBeInTheDocument()
   })
 
-  it('disables both buttons while a scan is running', async () => {
+  it('shows a disabled Scanning button while a scan is running', async () => {
     setFetchResponses({
       '/api/scan/libraries': {
         ok: true,
@@ -219,10 +226,13 @@ describe('ScanPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: 'Scan in progress…' })
+        screen.getByRole('button', { name: 'Scanning…' })
       ).toBeDisabled()
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
     })
+
+    expect(
+      screen.queryByRole('button', { name: 'Continue' })
+    ).not.toBeInTheDocument()
   })
 
   it('keeps a row complete when SSE events land before the start POST resolves', async () => {
@@ -256,11 +266,11 @@ describe('ScanPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: 'Start manual scan' })
+        screen.getByRole('button', { name: 'Start scan' })
       ).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start manual scan' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start scan' }))
 
     // A fast (e.g. empty-folder) scan finishes entirely while the start POST
     // is still in flight.
@@ -349,6 +359,15 @@ describe('ScanPage', () => {
       expect(screen.getByText('Not scanned yet')).toBeInTheDocument()
       expect(screen.queryByText('Waiting')).not.toBeInTheDocument()
     })
+
+    // A finished job from an earlier visit keeps the page in the idle phase —
+    // completion actions only appear when a scan finishes during this visit.
+    expect(
+      screen.getByRole('button', { name: 'Start scan' })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Go to Library' })
+    ).not.toBeInTheDocument()
   })
 
   it('resets completed rows to Waiting when a new scan starts', async () => {
@@ -444,6 +463,25 @@ describe('ScanPage', () => {
 
       expect(startCalls).toHaveLength(1)
     })
+
+    // The onboarding flow ends in the same completed phase as a manual scan.
+    act(() => {
+      const source = scanStreamSource()
+      source.dispatch('scan-started', { jobId: 1, startedAt: '2026-07-03T12:00:00.000Z' })
+      source.dispatch('library-start', { index: 0, libraryId: 1, name: 'Movies', type: 'movies' })
+      source.dispatch('library-complete', { added: 4, index: 0, libraryId: 1, total: 4, updated: 0 })
+      source.dispatch('scan-complete', { added: 4, errorMessage: null, found: 4, status: 'done', updated: 0 })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Scan complete')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Go to Library' })
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Scan again' })
+      ).toBeInTheDocument()
+    })
   })
 
   it('does not auto-start without the router state flag', async () => {
@@ -470,7 +508,7 @@ describe('ScanPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: 'Start manual scan' })
+        screen.getByRole('button', { name: 'Start scan' })
       ).toBeInTheDocument()
     })
 
@@ -542,7 +580,7 @@ describe('ScanPage', () => {
     })
   })
 
-  it('navigates home when Continue is clicked while idle', async () => {
+  it('shows completion actions and navigates home after a scan finishes', async () => {
     setFetchResponses({
       '/api/scan/libraries': {
         ok: true,
@@ -559,6 +597,10 @@ describe('ScanPage', () => {
             isRunning: false,
             lastJob: null
           })
+      },
+      '/api/scan/start': {
+        ok: true,
+        json: () => Promise.resolve({ status: 'started' })
       }
     })
 
@@ -585,14 +627,90 @@ describe('ScanPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: 'Continue' })
+        screen.getByRole('button', { name: 'Start scan' })
       ).not.toBeDisabled()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start scan' }))
+
+    act(() => {
+      const source = scanStreamSource()
+      source.dispatch('scan-started', { jobId: 1, startedAt: '2026-07-03T12:00:00.000Z' })
+      source.dispatch('library-start', { index: 0, libraryId: 1, name: 'Movies', type: 'movies' })
+      source.dispatch('library-complete', { added: 2, index: 0, libraryId: 1, total: 2, updated: 0 })
+      source.dispatch('scan-complete', { added: 2, errorMessage: null, found: 2, status: 'done', updated: 0 })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Scan complete')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Scan again' })
+      ).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to Library' }))
 
     await waitFor(() => {
       expect(screen.getByText('Home page')).toBeInTheDocument()
+    })
+  })
+
+  it('starts another scan when Scan again is clicked after completion', async () => {
+    setFetchResponses({
+      '/api/scan/libraries': {
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            { id: 1, name: 'Movies', path: '/media/movies', type: 'movies' }
+          ])
+      },
+      '/api/scan/status': {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            currentJob: null,
+            isRunning: false,
+            lastJob: null
+          })
+      },
+      '/api/scan/start': {
+        ok: true,
+        json: () => Promise.resolve({ status: 'started' })
+      }
+    })
+
+    renderScan()
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Start scan' })
+      ).not.toBeDisabled()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start scan' }))
+
+    act(() => {
+      const source = scanStreamSource()
+      source.dispatch('scan-started', { jobId: 1, startedAt: '2026-07-03T12:00:00.000Z' })
+      source.dispatch('library-complete', { added: 2, index: 0, libraryId: 1, total: 2, updated: 0 })
+      source.dispatch('scan-complete', { added: 2, errorMessage: null, found: 2, status: 'done', updated: 0 })
+    })
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Scan again' })
+      ).not.toBeDisabled()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scan again' }))
+
+    await waitFor(() => {
+      const fetchMock = vi.mocked(global.fetch)
+      const startCalls = fetchMock.mock.calls.filter(
+        ([url]) => requestPathname(url as string | URL) === '/api/scan/start'
+      )
+
+      expect(startCalls).toHaveLength(2)
     })
   })
 
@@ -620,5 +738,9 @@ describe('ScanPage', () => {
         screen.getByText(/No libraries configured/i)
       ).toBeInTheDocument()
     })
+
+    // Scanning nothing isn't actionable — the message above tells the user
+    // to add a library first.
+    expect(screen.getByRole('button', { name: 'Start scan' })).toBeDisabled()
   })
 })
