@@ -1,10 +1,9 @@
-import path from 'path'
-
 import { HttpApiBuilder } from '@effect/platform'
 import { eq, inArray, sql } from 'drizzle-orm'
 import { Effect } from 'effect'
 
 import { Database, type DrizzleDatabase } from '../../database/layer'
+import { libraryPathPrefixPattern } from '../../database/path-prefix'
 import * as schema from '../../database/schema'
 import {
   defaultLibraryName,
@@ -37,26 +36,6 @@ const reservedKeys = new Set<string>([scanScheduleSettingKey])
 
 const reservedKeyRoute: Record<string, string> = {
   [scanScheduleSettingKey]: '/api/settings/scan-schedule'
-}
-
-/**
- * Build the LIKE pattern that matches any file path under the given library
- * root. Escapes SQL LIKE wildcards so a path containing `%` or `_` doesn't
- * accidentally match siblings.
- */
-function libraryPathPrefixPattern(libraryPath: string): string {
-  const resolved = path.resolve(libraryPath)
-  const withSeparator = resolved.endsWith(path.sep)
-    ? resolved
-    : `${resolved}${path.sep}`
-
-  // Escape LIKE meta-characters (`%`, `_`) and the escape character itself.
-  const escaped = withSeparator
-    .replace(/\\/g, '\\\\')
-    .replace(/%/g, '\\%')
-    .replace(/_/g, '\\_')
-
-  return `${escaped}%`
 }
 
 function countLibraryReferences(

@@ -1,18 +1,19 @@
 import { readdir, stat } from 'fs/promises'
 import { extname, join } from 'path'
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { Effect } from 'effect'
 
 import { Database } from '../database/layer'
 import * as schema from '../database/schema'
-import type { NewEpisode, NewSeason, NewShow } from '../database/schema'
+import type { NewEpisode, NewSeason, NewShow, Show } from '../database/schema'
 import { parseEpisodeFilename } from './episode-parser'
-import { readLibraryRoot } from './library-validation'
+import { pathIsReadable, readLibraryRoot } from './library-validation'
 import { subtitleExtensions, videoExtensions } from './media-extensions'
 import { Metadata } from './metadata'
-import type { EpisodeMetadata } from './metadata'
+import type { EpisodeMetadata, ShowMetadata } from './metadata'
 import { normalizeShowName, parseSeasonFolder } from './show-parser'
+import { reconcileShowLibrary } from './show-reconciliation'
 import { syncSubtitlesForEpisode } from './subtitle-sync'
 import { discoverSubtitlesForVideo } from './subtitles'
 
@@ -283,38 +284,129 @@ export class ShowScanner extends Effect.Service<ShowScanner>()(
             discoverShows(libraryPath)
           )
 
+          const scannedShowIds: number[] = []
+
           for (const discoveredShow of discoveredShows) {
             const { name, year, episodes } = discoveredShow
             const folderPath = discoveredShow.folders[0] ?? ''
 
-            // Find or create the show record
-            const existingShows = yield* tryPromise(() =>
+            // Find the show record by any of its folder paths — the cheap,
+            // exact match.
+            const showsAtFolder = yield* tryPromise(() =>
               database
                 .select()
                 .from(schema.shows)
-                .where(eq(schema.shows.folderPath, folderPath))
+                .where(inArray(schema.shows.folderPath, discoveredShow.folders))
                 .limit(1)
             )
+
+            let existingShow: Show | null = showsAtFolder[0] ?? null
+            let showMetadata: ShowMetadata | null = null
+
+            if (!existingShow) {
+              // The folder is new to the database. Before inserting a
+              // (possibly duplicate) row, look for the same show at a stale
+              // location — by external id first, then by normalized title —
+              // and re-point it here when its old folder is gone from disk.
+              // A candidate whose folder still exists is a live copy in
+              // another location and must keep its own row.
+              yield* consoleLog(`  Fetching metadata for show: ${name}`)
+
+              showMetadata = yield* metadata.fetchShowMetadata(
+                name,
+                year ?? undefined
+              )
+
+              const fetchedExternalId = showMetadata?.externalId ?? null
+
+              let candidates: Show[] = []
+
+              if (fetchedExternalId !== null) {
+                candidates = yield* tryPromise(() =>
+                  database
+                    .select()
+                    .from(schema.shows)
+                    .where(eq(schema.shows.externalId, fetchedExternalId))
+                )
+              }
+
+              if (candidates.length === 0) {
+                const allShows = yield* tryPromise(() =>
+                  database.select().from(schema.shows)
+                )
+
+                const nameKey = name.toLowerCase()
+
+                candidates = allShows.filter(
+                  (row) =>
+                    normalizeShowName(row.title).name.toLowerCase() === nameKey
+                )
+
+                // Remakes share a title; only claim a row when the year
+                // disambiguates.
+                if (candidates.length > 1) {
+                  candidates = candidates.filter(
+                    (row) => row.year !== null && row.year === year
+                  )
+                }
+              }
+
+              for (const candidate of candidates) {
+                const oldFolderStillExists = yield* tryPromise(() =>
+                  pathIsReadable(candidate.folderPath)
+                )
+
+                if (oldFolderStillExists) {
+                  continue
+                }
+
+                yield* consoleLog(
+                  `  Show moved: ${candidate.title} — updating folder path to ${folderPath}`
+                )
+
+                const claimedExternalId =
+                  candidate.externalId ?? fetchedExternalId
+
+                yield* tryPromise(() =>
+                  database
+                    .update(schema.shows)
+                    .set({
+                      externalId: claimedExternalId,
+                      folderPath,
+                      updatedAt: new Date()
+                    })
+                    .where(eq(schema.shows.id, candidate.id))
+                )
+
+                existingShow = {
+                  ...candidate,
+                  externalId: claimedExternalId,
+                  folderPath
+                }
+
+                break
+              }
+            }
 
             let showId: number
             let externalId: string | null
 
-            if (existingShows.length > 0 && existingShows[0]) {
-              const existingShow = existingShows[0]
-              showId = existingShow.id
-              externalId = existingShow.externalId ?? null
+            if (existingShow) {
+              const matchedShow = existingShow
+              showId = matchedShow.id
+              externalId = matchedShow.externalId ?? null
 
               // Refresh any missing artwork/overview for shows that have an
               // external id but are missing data (e.g. after a migration that
               // cleared URLs).
               if (
                 externalId !== null &&
-                (!existingShow.posterUrl ||
-                  !existingShow.backdropUrl ||
-                  !existingShow.overview)
+                (!matchedShow.posterUrl ||
+                  !matchedShow.backdropUrl ||
+                  !matchedShow.overview)
               ) {
                 yield* consoleLog(
-                  `  Refreshing metadata for show: ${existingShow.title}`
+                  `  Refreshing metadata for show: ${matchedShow.title}`
                 )
 
                 const refreshed =
@@ -327,14 +419,14 @@ export class ShowScanner extends Effect.Service<ShowScanner>()(
                     database
                       .update(schema.shows)
                       .set({
-                        year: existingShow.year ?? refreshed.year,
-                        overview: existingShow.overview ?? refreshed.overview,
-                        genres: existingShow.genres ?? refreshed.genres,
-                        rating: existingShow.rating ?? refreshed.rating,
+                        year: matchedShow.year ?? refreshed.year,
+                        overview: matchedShow.overview ?? refreshed.overview,
+                        genres: matchedShow.genres ?? refreshed.genres,
+                        rating: matchedShow.rating ?? refreshed.rating,
                         posterUrl:
-                          existingShow.posterUrl ?? refreshed.posterUrl,
+                          matchedShow.posterUrl ?? refreshed.posterUrl,
                         backdropUrl:
-                          existingShow.backdropUrl ?? refreshed.backdropUrl,
+                          matchedShow.backdropUrl ?? refreshed.backdropUrl,
                         updatedAt: new Date()
                       })
                       .where(eq(schema.shows.id, refreshedShowId))
@@ -342,13 +434,8 @@ export class ShowScanner extends Effect.Service<ShowScanner>()(
                 }
               }
             } else {
-              yield* consoleLog(`  Fetching metadata for show: ${name}`)
-
-              const showMetadata = yield* metadata.fetchShowMetadata(
-                name,
-                year ?? undefined
-              )
-
+              // showMetadata was already fetched above when the folder lookup
+              // missed.
               const now = new Date()
               const newShow: NewShow = {
                 title: showMetadata?.title ?? name,
@@ -374,6 +461,8 @@ export class ShowScanner extends Effect.Service<ShowScanner>()(
               showId = inserted[0]?.id ?? 0
               externalId = showMetadata?.externalId ?? null
             }
+
+            scannedShowIds.push(showId)
 
             // Group episodes by season number
             const seasonMap = new Map<number, ScannedEpisode[]>()
@@ -554,6 +643,22 @@ export class ShowScanner extends Effect.Service<ShowScanner>()(
 
             yield* consoleLog(
               `  Found show: ${name} (${episodes.length} episodes)`
+            )
+          }
+
+          // Clean up data left behind by moved or deleted folders: stale
+          // episodes, empty seasons, and duplicate/orphaned show rows.
+          const reconcileResult = yield* tryPromise(() =>
+            reconcileShowLibrary(database, libraryPath, scannedShowIds)
+          )
+
+          if (
+            reconcileResult.removedEpisodes > 0 ||
+            reconcileResult.removedSeasons > 0 ||
+            reconcileResult.removedShows > 0
+          ) {
+            yield* consoleLog(
+              `  Cleaned up ${reconcileResult.removedEpisodes} stale episode(s), ${reconcileResult.removedSeasons} empty season(s), ${reconcileResult.removedShows} orphaned show(s).`
             )
           }
 
