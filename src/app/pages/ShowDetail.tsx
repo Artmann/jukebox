@@ -1,18 +1,29 @@
-import { Loader2, PlayIcon } from 'lucide-react'
-import { useMemo, useState, type ReactElement } from 'react'
+import { CheckIcon, Loader2, PlayIcon, StarIcon } from 'lucide-react'
+import { Fragment, useMemo, useState, type ReactElement } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
-import type { EpisodeProgressEntry } from '../../api/contract'
+import type {
+  EpisodeProgressEntry,
+  ShowWithSeasons
+} from '../../api/contract'
+import { watchedThreshold } from '../../lib/watched'
+import { FavoriteButton } from '../components/FavoriteButton'
 import { PageHeader } from '../components/PageHeader'
-import { PosterImage } from '../components/PosterImage'
 import { useShow } from '../hooks/useShow'
 import { api } from '../lib/api-client'
+import { parseGenres } from '../lib/genres'
 
 type EpisodeProgress = EpisodeProgressEntry
 
 type EpisodeProgressMap = Record<number, EpisodeProgress>
+
+interface ResumeTarget {
+  episodeId: number
+  label: string
+  seasonNumber: number
+}
 
 async function fetchShowProgress(showId: number): Promise<EpisodeProgressMap> {
   return api((client) =>
@@ -48,7 +59,87 @@ function isWatched(progress: EpisodeProgress | undefined): boolean {
     return false
   }
 
-  return progress.currentTime >= progress.duration * 0.9
+  return progress.currentTime >= progress.duration * watchedThreshold
+}
+
+// The episode the big hero button should play: the most recently updated
+// in-progress episode, else the first unwatched episode, else the first
+// episode of the show. Specials (season 0) are only considered after the
+// regular seasons, so a fresh show starts at Season 1, not at the specials.
+function findResumeTarget(
+  allSeasons: ShowWithSeasons['seasons'],
+  progressMap: EpisodeProgressMap | undefined
+): ResumeTarget | null {
+  const seasons = [
+    ...allSeasons.filter((season) => season.seasonNumber > 0),
+    ...allSeasons.filter((season) => season.seasonNumber === 0)
+  ]
+
+  let inProgressEpisodeId: number | null = null
+  let inProgressSeasonNumber = 0
+  let inProgressEpisodeNumber = 0
+  let latestUpdatedAt = ''
+
+  for (const season of seasons) {
+    for (const episode of season.episodes) {
+      const progress = progressMap?.[episode.id]
+
+      if (!progress?.duration || progress.currentTime <= 0) {
+        continue
+      }
+
+      if (progress.currentTime >= progress.duration * watchedThreshold) {
+        continue
+      }
+
+      if (!latestUpdatedAt || progress.updatedAt > latestUpdatedAt) {
+        inProgressEpisodeId = episode.id
+        inProgressEpisodeNumber = episode.episodeNumber
+        inProgressSeasonNumber = episode.seasonNumber
+        latestUpdatedAt = progress.updatedAt
+      }
+    }
+  }
+
+  if (inProgressEpisodeId !== null) {
+    return {
+      episodeId: inProgressEpisodeId,
+      label: `Resume S${inProgressSeasonNumber}E${inProgressEpisodeNumber}`,
+      seasonNumber: inProgressSeasonNumber
+    }
+  }
+
+  let anyWatched = false
+
+  for (const season of seasons) {
+    for (const episode of season.episodes) {
+      if (isWatched(progressMap?.[episode.id])) {
+        anyWatched = true
+
+        continue
+      }
+
+      return {
+        episodeId: episode.id,
+        label: anyWatched
+          ? `Play S${episode.seasonNumber}E${episode.episodeNumber}`
+          : 'Play',
+        seasonNumber: episode.seasonNumber
+      }
+    }
+  }
+
+  const firstEpisode = seasons[0]?.episodes[0]
+
+  if (!firstEpisode) {
+    return null
+  }
+
+  return {
+    episodeId: firstEpisode.id,
+    label: `Play S${firstEpisode.seasonNumber}E${firstEpisode.episodeNumber}`,
+    seasonNumber: firstEpisode.seasonNumber
+  }
 }
 
 export function ShowDetailPage(): ReactElement {
@@ -63,48 +154,21 @@ export function ShowDetailPage(): ReactElement {
     enabled: !!showId
   })
 
-  // Find the season the user is currently watching (most recently updated episode).
-  const currentWatchingSeason = useMemo(() => {
-    if (!progressMap || !show) {
+  const resumeTarget = useMemo(() => {
+    if (!show) {
       return null
     }
 
-    let latestEpisodeId: number | null = null
-    let latestTime = ''
-
-    for (const [episodeIdStr, progress] of Object.entries(progressMap)) {
-      const episodeId = parseInt(episodeIdStr, 10)
-
-      if (progress.duration && progress.currentTime < progress.duration * 0.9) {
-        if (!latestTime || progress.updatedAt > latestTime) {
-          latestTime = progress.updatedAt
-          latestEpisodeId = episodeId
-        }
-      }
-    }
-
-    if (latestEpisodeId === null) {
-      return null
-    }
-
-    for (const season of show.seasons) {
-      for (const episode of season.episodes) {
-        if (episode.id === latestEpisodeId) {
-          return season.seasonNumber
-        }
-      }
-    }
-
-    return null
+    return findResumeTarget(show.seasons, progressMap)
   }, [progressMap, show])
 
   // The user's explicit pick wins; otherwise derive a default during render
-  // (the season currently being watched, falling back to the first season).
+  // (the season the resume target lives in, falling back to the first season).
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null)
 
   const activeSeasonNumber =
     selectedSeason ??
-    currentWatchingSeason ??
+    resumeTarget?.seasonNumber ??
     show?.seasons[0]?.seasonNumber ??
     null
 
@@ -141,52 +205,97 @@ export function ShowDetailPage(): ReactElement {
       (season) => season.seasonNumber === activeSeasonNumber
     ) ?? show.seasons[0]
 
-  const genres = show.genres
-    ? show.genres.split(',').map((genre) => genre.trim())
-    : []
+  const genres = parseGenres(show.genres)
   const seasonCount = show.seasons.length
 
+  const metadataItems: ReactElement[] = []
+
+  if (show.year) {
+    metadataItems.push(<span key="year">{show.year}</span>)
+  }
+
+  if (show.rating) {
+    metadataItems.push(
+      <span
+        className="flex items-center gap-1"
+        key="rating"
+      >
+        <StarIcon className="size-3.5 fill-current" />
+        {show.rating.toFixed(1)}
+      </span>
+    )
+  }
+
+  metadataItems.push(
+    <span key="seasons">
+      {seasonCount} {seasonCount === 1 ? 'season' : 'seasons'}
+    </span>
+  )
+
+  if (genres.length > 0) {
+    metadataItems.push(<span key="genres">{genres.join(', ')}</span>)
+  }
+
   return (
-    <>
+    <div className="relative">
+      <div className="absolute inset-x-0 top-0 h-[45vh] min-h-80 overflow-hidden">
+        {show.backdropUrl ? (
+          <img
+            alt=""
+            className="size-full object-cover object-top"
+            src={show.backdropUrl}
+          />
+        ) : (
+          <div className="size-full bg-gradient-to-b from-muted to-background" />
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/20" />
+      </div>
+
       <PageHeader />
 
-      <div className="px-4 pt-4 pb-12 sm:px-6 sm:pt-6">
-        <div className="flex flex-col gap-4 mb-8 sm:flex-row sm:gap-6">
-          <div className="flex-shrink-0 w-28 sm:w-40">
-            <PosterImage
-              alt={show.title}
-              className="w-full rounded-lg"
-              url={show.posterUrl}
-              title={show.title}
-            />
+      <main className="relative px-4 pb-12 sm:px-6">
+        <div className="flex flex-col items-start gap-3 pt-36 sm:gap-4 sm:pt-52">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-5xl">
+            {show.title}
+          </h1>
+
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            {metadataItems.map((item, index) => (
+              <Fragment key={item.key}>
+                {index > 0 && <span aria-hidden>·</span>}
+                {item}
+              </Fragment>
+            ))}
           </div>
 
-          <div className="flex flex-col gap-3 min-w-0">
-            <h1 className="text-xl font-bold text-foreground sm:text-2xl">
-              {show.title}
-            </h1>
+          {show.overview && (
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground line-clamp-3 sm:text-base sm:line-clamp-none">
+              {show.overview}
+            </p>
+          )}
 
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              {show.year && <span>{show.year}</span>}
-
-              {show.rating && <span>{show.rating.toFixed(1)} rating</span>}
-
-              <span>
-                {seasonCount} {seasonCount === 1 ? 'season' : 'seasons'}
-              </span>
-
-              {genres.length > 0 && <span>{genres.join(', ')}</span>}
-            </div>
-
-            {show.overview && (
-              <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
-                {show.overview}
-              </p>
+          <div className="mt-1 flex items-center gap-3">
+            {resumeTarget && (
+              <Button
+                asChild
+                size="lg"
+              >
+                <Link to={`/watch/episode/${resumeTarget.episodeId}`}>
+                  <PlayIcon className="fill-current" />
+                  {resumeTarget.label}
+                </Link>
+              </Button>
             )}
+
+            <FavoriteButton
+              className="size-11 opacity-100"
+              target={{ kind: 'show', showId: show.id }}
+            />
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="mt-10 mb-6 flex flex-wrap gap-2">
           {show.seasons.map((season) => (
             <button
               className={`cursor-pointer rounded-md px-4 min-h-11 text-sm font-medium transition-colors ${
@@ -204,7 +313,7 @@ export function ShowDetailPage(): ReactElement {
         </div>
 
         {currentSeason && (
-          <div className="flex flex-col gap-1">
+          <div className="max-w-4xl divide-y divide-border/60">
             {currentSeason.episodes.map((episode) => {
               const runtime = formatRuntime(episode.runtime)
               const progress = progressMap?.[episode.id]
@@ -214,60 +323,59 @@ export function ShowDetailPage(): ReactElement {
 
               return (
                 <Link
-                  className="group flex items-start gap-4 rounded-lg px-3 py-3 cursor-pointer hover:bg-muted transition-colors"
+                  className="group flex items-center gap-4 px-2 py-4 cursor-pointer hover:bg-muted/50 transition-colors sm:gap-6 sm:px-4 sm:py-5"
                   key={episode.id}
                   to={`/watch/episode/${episode.id}`}
                 >
-                  <div className="flex-shrink-0 w-10 text-right text-sm text-muted-foreground pt-0.5">
-                    {episode.episodeNumber}
+                  <div className="w-8 flex-shrink-0 text-center">
+                    <span className="text-xl font-light text-muted-foreground tabular-nums group-hover:hidden sm:text-2xl">
+                      {episode.episodeNumber}
+                    </span>
+
+                    <PlayIcon className="mx-auto hidden size-5 fill-current text-foreground group-hover:block" />
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`font-medium ${watched ? 'text-muted-foreground' : 'text-foreground'}`}
-                      >
-                        {episode.title}
-                      </span>
-
-                      {runtime && (
-                        <span className="text-xs text-muted-foreground">
-                          {runtime}
-                        </span>
-                      )}
-
-                      {watched && (
-                        <span className="text-xs text-muted-foreground/60">
-                          Watched
-                        </span>
-                      )}
-                    </div>
+                  <div className="min-w-0 flex-1">
+                    <span
+                      className={`font-medium ${watched ? 'text-muted-foreground' : 'text-foreground'}`}
+                    >
+                      {episode.title}
+                    </span>
 
                     {episode.overview && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                      <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
                         {episode.overview}
                       </p>
                     )}
 
-                    {inProgress && (
-                      <div className="mt-2 h-1 w-full max-w-xs rounded-full bg-muted">
+                    {(watched || inProgress) && (
+                      <div className="mt-2.5 h-1 w-full max-w-xs rounded-full bg-muted">
                         <div
-                          className="h-full rounded-full bg-red-600 transition-all"
-                          style={{ width: `${percent}%` }}
+                          className={`h-full rounded-full transition-all ${
+                            watched ? 'bg-muted-foreground/40' : 'bg-red-600'
+                          }`}
+                          style={{ width: `${watched ? 100 : percent}%` }}
                         />
                       </div>
                     )}
                   </div>
 
-                  <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
-                    <PlayIcon className="size-4 text-foreground" />
+                  <div className="ml-auto flex flex-shrink-0 items-center gap-2 text-sm text-muted-foreground">
+                    {watched && (
+                      <CheckIcon
+                        aria-label="Watched"
+                        className="size-4"
+                      />
+                    )}
+
+                    {runtime && <span>{runtime}</span>}
                   </div>
                 </Link>
               )
             })}
           </div>
         )}
-      </div>
-    </>
+      </main>
+    </div>
   )
 }

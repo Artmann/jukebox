@@ -20,7 +20,10 @@
       "Bash(mkdir:*)",
       "Bash(findstr:*)",
       "Bash(cat:*)",
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "Bash(bun run *)",
+      "Bash(git stash *)",
+      "Bash(bunx eslint *)"
     ]
   }
 }
