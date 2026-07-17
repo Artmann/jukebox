@@ -1,3 +1,4 @@
+import { ALL_FORMATS, Input, UrlSource } from 'mediabunny'
 import { useEffect, useRef, type KeyboardEvent } from 'react'
 import videojs from 'video.js'
 import type Player from 'video.js/dist/types/player'
@@ -30,11 +31,48 @@ function isIos(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent)
 }
 
-function pickSource(src: string): { src: string; type: string } {
-  // For Safari/iOS with an MKV source, rewrite to HLS transcode.
+// Checks whether the current browser can natively decode the source's audio
+// track, and reads the file's real duration from its container metadata.
+// Both come from the same probe so we only pay for one network round-trip.
+// audioRequiresTranscode returns true (needs transcode) whenever we can't
+// positively confirm decodability — a silently unplayable audio track is
+// worse than an unnecessary transcode. duration falls back to null on any
+// probe failure.
+async function probeSource(
+  src: string
+): Promise<{ audioRequiresTranscode: boolean; duration: number | null }> {
+  const input = new Input({ formats: ALL_FORMATS, source: new UrlSource(src) })
+
+  try {
+    const [audioTrack, duration] = await Promise.all([
+      input.getPrimaryAudioTrack(),
+      input.getDurationFromMetadata().catch(() => null)
+    ])
+
+    const audioRequiresTranscode = audioTrack
+      ? !(await audioTrack.canDecode())
+      : false
+
+    return { audioRequiresTranscode, duration }
+  } catch {
+    return { audioRequiresTranscode: true, duration: null }
+  } finally {
+    input.dispose()
+  }
+}
+
+export async function pickSource(
+  src: string
+): Promise<{ src: string; type: string; duration: number | null }> {
   const isMkv = /\.mkv(\?|$)/i.test(src)
 
-  if (isMkv && (isSafari() || isIos())) {
+  // Safari/iOS can't cast an MKV container over AirPlay, regardless of
+  // whether its audio is otherwise browser-playable.
+  const needsHlsForCasting = isMkv && (isSafari() || isIos())
+  const { audioRequiresTranscode: needsHlsForAudio, duration } =
+    await probeSource(src)
+
+  if (needsHlsForCasting || needsHlsForAudio) {
     // /api/stream/:id or /api/stream/episode/:id -> /api/transcode/<key>/index.m3u8
     const match = src.match(/\/api\/stream\/(?:episode\/)?(\d+)/)
 
@@ -45,12 +83,15 @@ function pickSource(src: string): { src: string; type: string } {
 
       return {
         src: `/api/transcode/${fileId}/index.m3u8`,
-        type: 'application/vnd.apple.mpegurl'
+        type: 'application/vnd.apple.mpegurl',
+        duration
       }
     }
   }
 
-  return { src, type: 'video/mp4' }
+  // Direct-play sources already show the correct duration from the
+  // container itself — no override needed.
+  return { src, type: isMkv ? 'video/x-matroska' : 'video/mp4', duration: null }
 }
 
 function handleVideoPlayerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -74,6 +115,7 @@ export function VideoPlayer({
   const onReadyRef = useRef(onReady)
   const initialSrcRef = useRef(src)
   const initialPosterRef = useRef(poster)
+  const durationOverrideRef = useRef<number | null>(null)
 
   useEffect(() => {
     onReadyRef.current = onReady
@@ -105,7 +147,6 @@ export function VideoPlayer({
         controls: false,
         autoplay: true,
         fill: true,
-        sources: [pickSource(initialSrcRef.current)],
         poster: initialPosterRef.current,
         html5: {
           vhs: {
@@ -122,6 +163,31 @@ export function VideoPlayer({
     )
 
     playerRef.current = player
+
+    // Live-HLS transcode playlists never hint their total duration (see
+    // pickSource), so VHS derives it from segments written so far and it
+    // grows wrong until playback ends. Re-assert the real, probed duration
+    // every time the tech reports one. player.duration(seconds) only fires
+    // this event when the value actually changes, so this settles instead
+    // of looping.
+    player.on('durationchange', () => {
+      const override = durationOverrideRef.current
+
+      if (override !== null && player.duration() !== override) {
+        player.duration(override)
+      }
+    })
+
+    // The codec check is async, so the source is set once it resolves
+    // rather than passed to the videojs() constructor above.
+    void pickSource(initialSrcRef.current).then((source) => {
+      if (player.isDisposed()) {
+        return
+      }
+
+      durationOverrideRef.current = source.duration
+      player.src(source)
+    })
 
     return () => {
       player.dispose()
@@ -141,7 +207,20 @@ export function VideoPlayer({
       return
     }
 
-    player.src(pickSource(src))
+    let cancelled = false
+
+    void pickSource(src).then((source) => {
+      if (cancelled || player.isDisposed()) {
+        return
+      }
+
+      durationOverrideRef.current = source.duration
+      player.src(source)
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [src])
 
   useEffect(() => {

@@ -65,9 +65,11 @@
     "fallow:fix": "fallow fix --dry-run"
   },
   "dependencies": {
+    "@mediabunny/server": "^1.50.8",
     "better-sqlite3": "^12.5.0",
     "cmdk": "^1.1.1",
-    "dayjs": "^1.11.20"
+    "dayjs": "^1.11.20",
+    "mediabunny": "^1.50.8"
   },
   "optionalDependencies": {
     "@rollup/rollup-darwin-arm64": "4.54.0",
@@ -146,5 +148,8 @@
     "vite": "^7.3.0",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.9"
-  }
+  },
+  "trustedDependencies": [
+    "node-av"
+  ]
 }

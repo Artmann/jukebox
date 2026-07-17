@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { EventEmitter } from 'events'
-import { writeFileSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import os from 'os'
 import path from 'path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -8,30 +8,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   _clearSessions,
   _listSessionKeys,
-  startTranscode
+  type ConversionHandle,
+  startTranscode,
+  waitForPlaylistContent
 } from './transcoder'
 
-interface FakeProcess extends EventEmitter {
-  exitCode: number | null
-  kill: (signal?: string) => boolean
-  stderr: EventEmitter
-  stdout: EventEmitter
-}
-
-function createFakeProcess(): FakeProcess {
-  const proc = new EventEmitter() as FakeProcess
-
-  proc.exitCode = null
-  proc.stdout = new EventEmitter()
-  proc.stderr = new EventEmitter()
-  proc.kill = () => {
-    proc.exitCode = 0
-    proc.emit('exit', 0)
-
-    return true
+function pendingConversion(): ConversionHandle {
+  return {
+    cancel: vi.fn(async () => {}),
+    promise: new Promise(() => {})
   }
-
-  return proc
 }
 
 afterEach(() => {
@@ -39,115 +25,101 @@ afterEach(() => {
 })
 
 describe('startTranscode', () => {
-  it('spawns ffmpeg with HLS arguments and copies video while transcoding audio', () => {
-    const fakeProcess = createFakeProcess()
-    const spawner = vi.fn(() => fakeProcess) as unknown as typeof import('child_process').spawn
+  it('starts a Mediabunny conversion for the requested file', () => {
+    const runConversion = vi.fn(pendingConversion)
 
     const session = startTranscode({
       fileId: 'movie-1',
       filePath: '/tmp/sample.mkv',
       profileId: 1,
-      spawnImplementation: spawner
+      runConversion
     })
 
-    expect(spawner).toHaveBeenCalledTimes(1)
-
-    const call = (
-      spawner as unknown as { mock: { calls: [string, string[]][] } }
-    ).mock.calls[0]
-
-    expect(call).toBeDefined()
-
-    const command = call?.[0] ?? ''
-    const args = call?.[1] ?? []
-
-    expect(command).toEqual('ffmpeg')
-    expect(args).toContain('-c:v')
-    expect(args).toContain('copy')
-    expect(args).toContain('-c:a')
-    expect(args).toContain('aac')
-    expect(args).toContain('-f')
-    expect(args).toContain('hls')
-    expect(args).toContain('/tmp/sample.mkv')
+    expect(runConversion).toHaveBeenCalledTimes(1)
+    expect(runConversion).toHaveBeenCalledWith({
+      filePath: '/tmp/sample.mkv',
+      tempDir: session.tempDir
+    })
 
     expect(session.tempDir.length).toBeGreaterThan(0)
-    expect(session.playlistPath).toEqual(path.join(session.tempDir, 'index.m3u8'))
+    expect(session.playlistPath).toEqual(
+      path.join(session.tempDir, 'index.m3u8')
+    )
   })
 
   it('reuses the same session when called again with the same fileId + profileId', () => {
-    const fakeProcess = createFakeProcess()
-    const spawner = vi.fn(() => fakeProcess) as unknown as typeof import('child_process').spawn
+    const runConversion = vi.fn(pendingConversion)
 
     const first = startTranscode({
       fileId: 'movie-2',
       filePath: '/tmp/sample.mkv',
       profileId: 1,
-      spawnImplementation: spawner
+      runConversion
     })
 
     const second = startTranscode({
       fileId: 'movie-2',
       filePath: '/tmp/sample.mkv',
       profileId: 1,
-      spawnImplementation: spawner
+      runConversion
     })
 
     expect(second).toEqual(first)
-    expect(spawner).toHaveBeenCalledTimes(1)
+    expect(runConversion).toHaveBeenCalledTimes(1)
     expect(_listSessionKeys()).toEqual(['movie-2:1'])
   })
 
   it('creates distinct sessions for different profiles on the same file', () => {
-    const spawner = vi.fn(() => createFakeProcess()) as unknown as typeof import('child_process').spawn
+    const runConversion = vi.fn(pendingConversion)
 
     startTranscode({
       fileId: 'movie-3',
       filePath: '/tmp/sample.mkv',
       profileId: 1,
-      spawnImplementation: spawner
+      runConversion
     })
 
     startTranscode({
       fileId: 'movie-3',
       filePath: '/tmp/sample.mkv',
       profileId: 2,
-      spawnImplementation: spawner
+      runConversion
     })
 
-    expect(spawner).toHaveBeenCalledTimes(2)
+    expect(runConversion).toHaveBeenCalledTimes(2)
     expect(_listSessionKeys().sort()).toEqual(['movie-3:1', 'movie-3:2'])
   })
 
-  it('throws an actionable error when ffmpeg cannot be spawned', () => {
-    const spawner = vi.fn(() => {
-      throw new Error('ENOENT')
-    }) as unknown as typeof import('child_process').spawn
+  it('rejects readyPromise with an actionable error when the conversion fails', async () => {
+    const runConversion = vi.fn(() => ({
+      cancel: vi.fn(async () => {}),
+      promise: Promise.reject(new Error('no decodable audio track'))
+    }))
 
-    expect(() =>
-      startTranscode({
-        fileId: 'movie-4',
-        filePath: '/tmp/sample.mkv',
-        profileId: 1,
-        spawnImplementation: spawner
-      })
-    ).toThrow(/ffmpeg is installed/)
+    const session = startTranscode({
+      fileId: 'movie-4',
+      filePath: '/tmp/sample.mkv',
+      profileId: 1,
+      runConversion
+    })
+
+    await expect(session.readyPromise).rejects.toThrow(/ffmpeg is installed/)
   })
 
   it('resolves readyPromise once the playlist file appears on disk', async () => {
     vi.useFakeTimers()
 
     try {
-      const fakeProcess = createFakeProcess()
-      const spawner = vi.fn(() => fakeProcess) as unknown as typeof import('child_process').spawn
+      const runConversion = vi.fn(pendingConversion)
 
       const session = startTranscode({
         fileId: 'movie-5',
         filePath: '/tmp/sample.mkv',
         profileId: 1,
-        spawnImplementation: spawner
+        runConversion
       })
 
-      // Simulate ffmpeg producing the playlist.
+      // Simulate the conversion producing the master playlist.
       writeFileSync(session.playlistPath, '#EXTM3U\n')
 
       const ready = session.readyPromise
@@ -158,5 +130,98 @@ describe('startTranscode', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('cancels the conversion when the session is stopped', () => {
+    const cancel = vi.fn(async () => {})
+    const runConversion = vi.fn(() => ({
+      cancel,
+      promise: new Promise<void>(() => {})
+    }))
+
+    startTranscode({
+      fileId: 'movie-6',
+      filePath: '/tmp/sample.mkv',
+      profileId: 1,
+      runConversion
+    })
+
+    _clearSessions()
+
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(_listSessionKeys()).toEqual([])
+  })
+})
+
+describe('waitForPlaylistContent', () => {
+  let workingDirectory: string
+
+  afterEach(() => {
+    rmSync(workingDirectory, { force: true, recursive: true })
+  })
+
+  it('resolves immediately when the file already holds valid playlist content', async () => {
+    workingDirectory = mkdtempSync(
+      path.join(os.tmpdir(), 'jukebox-playlist-test-')
+    )
+
+    const playlistPath = path.join(workingDirectory, 'media.m3u8')
+
+    writeFileSync(playlistPath, '#EXTM3U\n#EXT-X-VERSION:3\n')
+
+    const content = await waitForPlaylistContent(playlistPath, 1000, 50)
+
+    expect(content).toEqual('#EXTM3U\n#EXT-X-VERSION:3\n')
+  })
+
+  // Regression test: Mediabunny's HLS muxer rewrites media.m3u8 by opening a
+  // brand new truncate-mode file handle on every new segment, for the whole
+  // lifetime of a live conversion. A reader that only checks the file's
+  // existence (the old behavior) can land in that truncate-to-refill window
+  // and read an empty file. waitForPlaylistContent must keep polling past an
+  // empty/mid-rewrite read until the content is actually a valid playlist.
+  it('waits past an empty truncate-then-rewrite window and resolves with the rewritten content', async () => {
+    workingDirectory = mkdtempSync(
+      path.join(os.tmpdir(), 'jukebox-playlist-test-')
+    )
+
+    const playlistPath = path.join(workingDirectory, 'media.m3u8')
+    const finalContent = '#EXTM3U\n#EXT-X-VERSION:3\nsegment-1.ts\n'
+
+    writeFileSync(playlistPath, '')
+
+    setTimeout(() => {
+      writeFileSync(playlistPath, finalContent)
+    }, 150)
+
+    const content = await waitForPlaylistContent(playlistPath, 2000, 50)
+
+    expect(content).toEqual(finalContent)
+  })
+
+  it('resolves null after the timeout when the file never settles on valid content', async () => {
+    workingDirectory = mkdtempSync(
+      path.join(os.tmpdir(), 'jukebox-playlist-test-')
+    )
+
+    const playlistPath = path.join(workingDirectory, 'media.m3u8')
+
+    writeFileSync(playlistPath, '')
+
+    const content = await waitForPlaylistContent(playlistPath, 300, 50)
+
+    expect(content).toBeNull()
+  })
+
+  it('resolves null after the timeout when the file never appears at all', async () => {
+    workingDirectory = mkdtempSync(
+      path.join(os.tmpdir(), 'jukebox-playlist-test-')
+    )
+
+    const playlistPath = path.join(workingDirectory, 'never-created.m3u8')
+
+    const content = await waitForPlaylistContent(playlistPath, 300, 50)
+
+    expect(content).toBeNull()
   })
 })

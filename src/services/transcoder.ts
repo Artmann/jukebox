@@ -1,9 +1,20 @@
-import { spawn, type ChildProcess } from 'child_process'
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'fs'
 import os from 'os'
 import path from 'path'
 
+import { registerMediabunnyServer } from '@mediabunny/server'
 import { eq } from 'drizzle-orm'
+import {
+  ALL_FORMATS,
+  Conversion,
+  FilePathSource,
+  FilePathTarget,
+  HlsOutputFormat,
+  Input,
+  MpegTsOutputFormat,
+  Output,
+  PathedTarget
+} from 'mediabunny'
 
 import { db, schema } from '../database'
 
@@ -17,6 +28,11 @@ const logger = {
   info: (...args: unknown[]) => console.info('[transcode]', ...args),
   warn: (...args: unknown[]) => console.warn('[transcode]', ...args)
 }
+
+registerMediabunnyServer()
+
+const castingErrorMessage =
+  "Couldn't prepare this file for casting. Check that ffmpeg is installed."
 
 export function waitForPath(
   filePath: string,
@@ -45,12 +61,61 @@ export function waitForPath(
   })
 }
 
+// Mediabunny's HLS muxer rewrites the media playlist by opening a brand new
+// FilePathTarget (truncate + rewrite + close) on every new segment, for the
+// lifetime of a "live" conversion. A GET landing in that truncate-to-refill
+// window sees a 0-byte (or, more rarely, partially written) file. Since the
+// whole playlist is written in a single positional write() call, the file is
+// either empty, mid-write, or a complete, valid playlist — never a stale-but-
+// parseable one — so polling until it starts with #EXTM3U is enough to dodge
+// the race without needing to patch Mediabunny itself.
+export function waitForPlaylistContent(
+  filePath: string,
+  timeoutMs: number,
+  pollIntervalMs: number
+): Promise<string | null> {
+  const read = (): string | null => {
+    try {
+      const content = readFileSync(filePath, 'utf8')
+
+      return content.startsWith('#EXTM3U') ? content : null
+    } catch {
+      return null
+    }
+  }
+
+  const immediate = read()
+
+  if (immediate !== null) {
+    return Promise.resolve(immediate)
+  }
+
+  return new Promise((resolve) => {
+    const startedAt = Date.now()
+
+    const interval = setInterval(() => {
+      const content = read()
+
+      if (content !== null) {
+        clearInterval(interval)
+        resolve(content)
+        return
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        clearInterval(interval)
+        resolve(null)
+      }
+    }, pollIntervalMs)
+  })
+}
+
 const reapIdleMs = 30 * 60 * 1000
 const reaperIntervalMs = 5 * 60 * 1000
 
 export interface TranscodeSession {
   fileId: string
-  ffmpegProcess: ChildProcess | null
+  cancel: () => Promise<void>
   lastAccessedAt: number
   playlistPath: string
   tempDir: string
@@ -86,11 +151,7 @@ function waitForPlaylist(
       }
 
       if (Date.now() - startedAt > timeoutMs) {
-        reject(
-          new Error(
-            "Couldn't prepare this file for casting. Check that ffmpeg is installed."
-          )
-        )
+        reject(new Error(castingErrorMessage))
 
         return
       }
@@ -109,18 +170,100 @@ export function getSession(
   return sessions.get(sessionKey(fileId, profileId))
 }
 
+export interface ConversionHandle {
+  cancel: () => Promise<void>
+  promise: Promise<void>
+}
+
+export type ConversionRunner = (options: {
+  filePath: string
+  tempDir: string
+}) => ConversionHandle
+
+// Video is stream-copied and audio is re-encoded to AAC, matching the
+// ffmpeg invocation this replaces (`-c:v copy -c:a aac -ac 2`). Only the
+// primary audio track is kept — multi-track files previously relied on
+// ffmpeg's default stream ordering, which picked the same track.
+export function runMediabunnyConversion({
+  filePath,
+  tempDir
+}: {
+  filePath: string
+  tempDir: string
+}): ConversionHandle {
+  let conversion: Conversion | null = null
+  let canceledBeforeInit = false
+
+  const promise = (async () => {
+    const input = new Input({
+      formats: ALL_FORMATS,
+      source: new FilePathSource(filePath)
+    })
+
+    try {
+      const output = new Output({
+        format: new HlsOutputFormat({
+          segmentFormat: new MpegTsOutputFormat(),
+          targetDuration: 6,
+          live: true,
+          // `index.m3u8` (the root/target path) is always a master
+          // playlist under Mediabunny — unlike ffmpeg's flat single-
+          // playlist `-f hls` output. Pin the (single, since we only ever
+          // convert one rendition) media playlist to a predictable name so
+          // transcode-stream.ts can recognize and serve it alongside
+          // segments.
+          getPlaylistPath: () => 'media.m3u8',
+          getSegmentPath: ({ n }) => `segment-${n}.ts`
+        }),
+        target: new PathedTarget(
+          'index.m3u8',
+          ({ path: relativePath }) =>
+            new FilePathTarget(path.join(tempDir, relativePath))
+        )
+      })
+
+      conversion = await Conversion.init({
+        input,
+        output,
+        tracks: 'primary',
+        video: {},
+        audio: { codec: 'aac', numberOfChannels: 2 }
+      })
+
+      if (canceledBeforeInit) {
+        await conversion.cancel()
+
+        return
+      }
+
+      await conversion.execute()
+    } finally {
+      input.dispose()
+    }
+  })()
+
+  return {
+    promise,
+    cancel: async () => {
+      canceledBeforeInit = true
+
+      await conversion?.cancel()
+    }
+  }
+}
+
 export interface StartTranscodeOptions {
   fileId: string
   filePath: string
   profileId: number
-  spawnImplementation?: typeof spawn
+  runConversion?: ConversionRunner
 }
 
 export function startTranscode({
   fileId,
   filePath,
   profileId,
-  spawnImplementation
+  runConversion
 }: StartTranscodeOptions): TranscodeSession {
   const key = sessionKey(fileId, profileId)
   const existing = sessions.get(key)
@@ -139,57 +282,31 @@ export function startTranscode({
   mkdirSync(tempDir, { recursive: true })
 
   const playlistPath = path.join(tempDir, 'index.m3u8')
-  const segmentPattern = path.join(tempDir, 'segment-%03d.ts')
 
-  const args = [
-    '-i',
+  const conversionRunner = runConversion ?? runMediabunnyConversion
+  const { promise: conversionPromise, cancel } = conversionRunner({
     filePath,
-    '-c:v',
-    'copy',
-    '-c:a',
-    'aac',
-    '-ac',
-    '2',
-    '-f',
-    'hls',
-    '-hls_time',
-    '6',
-    '-hls_list_size',
-    '0',
-    '-hls_segment_filename',
-    segmentPattern,
-    playlistPath
-  ]
+    tempDir
+  })
 
-  const spawner = spawnImplementation ?? spawn
+  // Never resolves — only used to fail fast (instead of waiting out the
+  // full playlist timeout) when the conversion itself errors.
+  const conversionFailure = conversionPromise
+    .catch((error) => {
+      logger.error(`Mediabunny conversion failed for ${fileId}:`, error)
 
-  let ffmpegProcess: ChildProcess
-  try {
-    ffmpegProcess = spawner('ffmpeg', args, {
-      stdio: ['ignore', 'pipe', 'pipe']
+      throw new Error(castingErrorMessage, { cause: error })
     })
-  } catch (error) {
-    logger.error(`Failed to spawn ffmpeg for ${fileId}:`, error)
+    .then(() => new Promise<void>(() => {}))
 
-    throw new Error(
-      "Couldn't prepare this file for casting. Check that ffmpeg is installed.",
-      { cause: error }
-    )
-  }
-
-  ffmpegProcess.on('error', (error) => {
-    logger.error(`ffmpeg process error for ${fileId}:`, error)
-  })
-
-  ffmpegProcess.on('exit', (code) => {
-    logger.info(`ffmpeg exited for ${fileId} with code ${code}`)
-  })
-
-  const readyPromise = waitForPlaylist(playlistPath, 30000)
+  const readyPromise = Promise.race([
+    waitForPlaylist(playlistPath, 30000),
+    conversionFailure
+  ])
 
   const session: TranscodeSession = {
     fileId,
-    ffmpegProcess,
+    cancel,
     lastAccessedAt: Date.now(),
     playlistPath,
     tempDir,
@@ -208,13 +325,9 @@ function stopSession(key: string): void {
     return
   }
 
-  if (session.ffmpegProcess && session.ffmpegProcess.exitCode === null) {
-    try {
-      session.ffmpegProcess.kill('SIGTERM')
-    } catch (error) {
-      logger.warn(`Failed to kill ffmpeg for ${session.fileId}:`, error)
-    }
-  }
+  session.cancel().catch((error) => {
+    logger.warn(`Failed to cancel conversion for ${session.fileId}:`, error)
+  })
 
   try {
     rmSync(session.tempDir, { recursive: true, force: true })

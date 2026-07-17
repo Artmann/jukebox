@@ -13,7 +13,8 @@ import {
   getSession,
   resolveFile,
   startTranscode,
-  waitForPath
+  waitForPath,
+  waitForPlaylistContent
 } from '../../services/transcoder'
 import { InternalError, Unauthorized } from '../contract/errors'
 import { internalTryPromise } from '../handlers/support'
@@ -36,8 +37,8 @@ const profileIdFromHeader = Effect.gen(function* () {
   return isNaN(parsed) ? 0 : parsed
 })
 
-// GET /api/transcode/:fileId/index.m3u8 — starts (or reuses) an ffmpeg HLS
-// session and answers with the playlist once ffmpeg has produced it.
+// GET /api/transcode/:fileId/index.m3u8 — starts (or reuses) an HLS
+// transcode session and answers with the master playlist once it's ready.
 const servePlaylist = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem
   const params = yield* HttpRouter.params
@@ -91,8 +92,26 @@ const servePlaylist = Effect.gen(function* () {
   )
 })
 
-// GET /api/transcode/:fileId/:segment — serves one HLS segment, waiting
-// briefly for ffmpeg to produce it if needed.
+// The master playlist served at index.m3u8 references a per-rendition
+// media playlist (see getPlaylistPath in transcoder.ts) in addition to
+// segments, so this route serves both asset kinds.
+const segmentContentType = 'video/mp2t'
+const playlistContentType = 'application/vnd.apple.mpegurl'
+
+function assetContentType(asset: string): string | null {
+  if (/^segment-\d+\.ts$/.test(asset)) {
+    return segmentContentType
+  }
+
+  if (asset === 'media.m3u8') {
+    return playlistContentType
+  }
+
+  return null
+}
+
+// GET /api/transcode/:fileId/:segment — serves one HLS segment or the
+// media playlist, waiting briefly for it to be produced if needed.
 const serveSegment = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem
   const params = yield* HttpRouter.params
@@ -106,14 +125,40 @@ const serveSegment = Effect.gen(function* () {
     return yield* jsonError(404, 'Transcode session not found')
   }
 
-  // Basic safety: only allow .ts files with our segment prefix.
-  if (!/^segment-\d+\.ts$/.test(segment)) {
+  // Basic safety: only allow known segment/playlist filenames.
+  const contentType = assetContentType(segment)
+
+  if (!contentType) {
     return yield* jsonError(400, 'Invalid segment')
   }
 
   const segmentPath = path.join(session.tempDir, segment)
 
-  // Wait briefly for the segment to appear if ffmpeg hasn't produced it yet.
+  // The media playlist is rewritten (truncated + rewritten + closed) on
+  // every new segment for the lifetime of a "live" conversion, so its
+  // content — not just its existence — needs to be polled for: a GET
+  // landing in the truncate-to-refill window would otherwise get an empty
+  // (or partial) file. Segment files are written once and never revisited,
+  // so existence alone is enough for those.
+  if (contentType === playlistContentType) {
+    const content = yield* internalTryPromise(() =>
+      waitForPlaylistContent(segmentPath, 15_000, 100)
+    )
+
+    if (content === null) {
+      return yield* jsonError(404, 'Playlist not ready')
+    }
+
+    session.lastAccessedAt = Date.now()
+
+    return HttpServerResponse.text(content, {
+      contentType,
+      headers: { 'cache-control': 'no-store' }
+    })
+  }
+
+  // Wait briefly for the asset to appear if the conversion hasn't produced
+  // it yet.
   const ready = yield* internalTryPromise(() =>
     waitForPath(segmentPath, 15_000, 200)
   )
@@ -124,15 +169,16 @@ const serveSegment = Effect.gen(function* () {
 
   session.lastAccessedAt = Date.now()
 
-  const stat = yield* fileSystem
-    .stat(segmentPath)
-    .pipe(
-      Effect.mapError((error) => new InternalError({ message: error.message }))
-    )
-
+  // No Content-Length: Mediabunny's HLS writer keeps a single file handle
+  // open and writes to it in place for the lifetime of a "live" conversion
+  // (a segment file itself can still be mid-write the moment it first
+  // appears on disk). A Content-Length computed from a stat() taken before
+  // streaming can promise more bytes than the read stream ends up
+  // delivering, which makes the HTTP response hang instead of failing
+  // cleanly. Chunked transfer (matching servePlaylist above) sidesteps that
+  // race entirely.
   return HttpServerResponse.stream(fileSystem.stream(segmentPath), {
-    contentLength: Number(stat.size),
-    contentType: 'video/mp2t',
+    contentType,
     headers: { 'cache-control': 'no-store' }
   })
 })
