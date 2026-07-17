@@ -83,13 +83,23 @@ const servePlaylist = Effect.gen(function* () {
     return yield* jsonError(500, outcome.left.message)
   }
 
-  return HttpServerResponse.stream(
-    fileSystem.stream(outcome.right.playlistPath),
-    {
-      contentType: 'application/vnd.apple.mpegurl',
-      headers: { 'cache-control': 'no-store' }
-    }
+  // Mediabunny's HLS muxer rewrites the master playlist (truncate + rewrite)
+  // on every new segment, same as it does for media.m3u8, so its content —
+  // not just its existence — needs to be polled for: a GET landing in the
+  // truncate-to-refill window would otherwise get an empty file streamed
+  // straight to the client.
+  const content = yield* internalTryPromise(() =>
+    waitForPlaylistContent(outcome.right.playlistPath, 15_000, 100)
   )
+
+  if (content === null) {
+    return yield* jsonError(500, fallbackMessage)
+  }
+
+  return HttpServerResponse.text(content, {
+    contentType: 'application/vnd.apple.mpegurl',
+    headers: { 'cache-control': 'no-store' }
+  })
 })
 
 // The master playlist served at index.m3u8 references a per-rendition
