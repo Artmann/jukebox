@@ -23,7 +23,9 @@
       "Bash(xargs cat:*)",
       "Bash(bun run *)",
       "Bash(git stash *)",
-      "Bash(bunx eslint *)"
+      "Bash(bunx eslint *)",
+      "Bash(xargs grep -l \"video.js\\\\|videojs\")",
+      "Bash(xargs grep -l \"canDecode\\\\|AudioCodec\\\\|eac3\\\\|ac-3\\\\|ac3\")"
     ]
   }
 }

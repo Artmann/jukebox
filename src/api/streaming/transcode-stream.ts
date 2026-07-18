@@ -122,6 +122,10 @@ const serveSegment = Effect.gen(function* () {
   const session = getSession(fileId, profileId)
 
   if (!session) {
+    console.warn(
+      `[transcode] Session not found for fileId=${fileId} profileId=${profileId} segment=${segment}`
+    )
+
     return yield* jsonError(404, 'Transcode session not found')
   }
 
@@ -146,6 +150,10 @@ const serveSegment = Effect.gen(function* () {
     )
 
     if (content === null) {
+      console.warn(
+        `[transcode] Playlist not ready after 15s: fileId=${fileId} profileId=${profileId}`
+      )
+
       return yield* jsonError(404, 'Playlist not ready')
     }
 
@@ -164,6 +172,10 @@ const serveSegment = Effect.gen(function* () {
   )
 
   if (!ready) {
+    console.warn(
+      `[transcode] Segment not ready after 15s: fileId=${fileId} profileId=${profileId} segment=${segment}`
+    )
+
     return yield* jsonError(404, 'Segment not ready')
   }
 

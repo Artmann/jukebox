@@ -4,6 +4,7 @@ import videojs from 'video.js'
 import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 
+import { Logger } from '../lib/logger'
 import type { SubtitleTrack } from '../lib/media'
 
 interface VideoPlayerProps {
@@ -94,6 +95,10 @@ export async function pickSource(
   return { src, type: isMkv ? 'video/x-matroska' : 'video/mp4', duration: null }
 }
 
+const logger = new Logger('video-player')
+
+let playerInstanceCounter = 0
+
 function handleVideoPlayerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   if (event.key !== 'Enter' && event.key !== ' ') {
     return
@@ -141,6 +146,10 @@ export function VideoPlayer({
 
     videoRef.current.appendChild(videoElement)
 
+    const instanceId = ++playerInstanceCounter
+
+    logger.info('instance', instanceId, 'created')
+
     const player = videojs(
       videoElement,
       {
@@ -164,6 +173,17 @@ export function VideoPlayer({
 
     playerRef.current = player
 
+    player.on('error', () => {
+      logger.error(
+        'instance',
+        instanceId,
+        'error',
+        player.error(),
+        'disposed=',
+        player.isDisposed()
+      )
+    })
+
     // Live-HLS transcode playlists never hint their total duration (see
     // pickSource), so VHS derives it from segments written so far and it
     // grows wrong until playback ends. Re-assert the real, probed duration
@@ -182,14 +202,23 @@ export function VideoPlayer({
     // rather than passed to the videojs() constructor above.
     void pickSource(initialSrcRef.current).then((source) => {
       if (player.isDisposed()) {
+        logger.warn(
+          'instance',
+          instanceId,
+          'pickSource resolved after dispose, skipping',
+          source
+        )
         return
       }
+
+      logger.info('instance', instanceId, 'src ->', source)
 
       durationOverrideRef.current = source.duration
       player.src(source)
     })
 
     return () => {
+      logger.info('instance', instanceId, 'disposing')
       player.dispose()
       playerRef.current = null
     }

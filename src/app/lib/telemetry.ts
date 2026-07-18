@@ -61,6 +61,22 @@ function recordError(error: FrontendError): void {
   }
 }
 
+// Called by Logger (see ../lib/logger.ts) instead of patching window.console
+// globally — call sites opt in explicitly rather than every console.error/warn
+// in the app (including third-party libraries) silently becoming telemetry.
+export function recordConsoleError(
+  name: 'console.error' | 'console.warn',
+  message: string
+): void {
+  recordError({
+    kind: 'console',
+    message,
+    name,
+    timestamp: Date.now(),
+    url: window.location.href
+  })
+}
+
 function resource(): Record<string, unknown> {
   return {
     'browser.userAgent': navigator.userAgent,
