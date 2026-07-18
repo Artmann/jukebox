@@ -39,6 +39,9 @@ const viteServerLive = Layer.scopedDiscard(
       const server = await createServer({
         configFile: './vite.config.ts',
         server: {
+          hmr: {
+            clientPort: vitePort
+          },
           port: vitePort,
           strictPort: true
         }
