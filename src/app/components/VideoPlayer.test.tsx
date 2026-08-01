@@ -27,12 +27,12 @@ class FakeInput {
     return { canDecode: vi.fn(() => audioTrackState.canDecode) }
   }
 
-  async getDurationFromMetadata() {
+  getDurationFromMetadata(): Promise<number | null> {
     if (durationState.shouldReject) {
-      throw new Error('duration probe failed')
+      return Promise.reject(new Error('duration probe failed'))
     }
 
-    return durationState.value
+    return Promise.resolve(durationState.value)
   }
 }
 
