@@ -132,8 +132,19 @@ function safeDirectoryName(fileId: string, profileId: number): string {
   return `${fileId}__${profileId}`
 }
 
+// Vitest runs test files in parallel worker processes, each of which imports
+// this module and runs the boot cleanup below. Sharing one root would let a
+// worker delete another worker's live session directories mid-test, so give
+// each test process its own root. It stays nested under the production root so
+// a real server boot still sweeps anything the tests leave behind.
 function getTranscodeRoot(): string {
-  return path.join(os.tmpdir(), 'jukebox-transcode')
+  const root = path.join(os.tmpdir(), 'jukebox-transcode')
+
+  if (process.env.VITEST) {
+    return path.join(root, `test-${process.pid}`)
+  }
+
+  return root
 }
 
 function waitForPlaylist(

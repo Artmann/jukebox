@@ -150,6 +150,7 @@
     "vitest": "^4.1.9"
   },
   "trustedDependencies": [
+    "better-sqlite3",
     "node-av"
   ]
 }
