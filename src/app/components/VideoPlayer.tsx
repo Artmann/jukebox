@@ -150,18 +150,20 @@ export function VideoPlayer({
 
     logger.info('instance', instanceId, 'created')
 
+    // vhs.overrideNative is deliberately left at VHS's own default
+    // (`!Safari && !iOS`). Chrome now claims native HLS support, so forcing
+    // it off handed the transcode playlists to Chrome's native HLS engine,
+    // which never re-reads the still-growing "live" playlist a running
+    // transcode serves — playback stalled after the first segments, or died
+    // with MEDIA_ERR_SRC_NOT_SUPPORTED. VHS polls the playlist properly.
+    // Safari/iOS still get native playback, which is what exposes AirPlay.
     const player = videojs(
       videoElement,
       {
         controls: false,
         autoplay: true,
         fill: true,
-        poster: initialPosterRef.current,
-        html5: {
-          vhs: {
-            overrideNative: false
-          }
-        }
+        poster: initialPosterRef.current
       },
       () => {
         // StrictMode can dispose this instance before the ready callback

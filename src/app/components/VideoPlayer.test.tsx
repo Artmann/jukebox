@@ -1,4 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { render, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const videojsMock = vi.hoisted(() => vi.fn())
+
+vi.mock('video.js', () => ({ default: videojsMock }))
+vi.mock('video.js/dist/video-js.css', () => ({}))
 
 const audioTrackState: { canDecode: boolean; hasTrack: boolean } = {
   canDecode: true,
@@ -44,7 +50,24 @@ vi.mock('mediabunny', () => ({
   UrlSource: vi.fn()
 }))
 
-import { pickSource } from './VideoPlayer'
+import { pickSource, VideoPlayer } from './VideoPlayer'
+
+function createFakePlayer() {
+  return {
+    addRemoteTextTrack: vi.fn(() => ({})),
+    dispose: vi.fn(),
+    duration: vi.fn(() => 0),
+    error: vi.fn(() => null),
+    isDisposed: vi.fn(() => false),
+    on: vi.fn(),
+    pause: vi.fn(),
+    paused: vi.fn(() => true),
+    play: vi.fn(),
+    poster: vi.fn(),
+    removeRemoteTextTrack: vi.fn(),
+    src: vi.fn()
+  }
+}
 
 function setUserAgent(userAgent: string) {
   Object.defineProperty(window.navigator, 'userAgent', {
@@ -65,6 +88,36 @@ afterEach(() => {
   durationState.value = 3240
   lastInputError = null
   setUserAgent(chromeUserAgent)
+})
+
+// Chrome now reports native HLS support (canPlayType('application/vnd.apple.
+// mpegurl') === 'maybe'). Setting vhs.overrideNative to false therefore handed
+// our transcode playlists to Chrome's native HLS engine, which never refreshes
+// the still-growing "live" playlist a running transcode serves: playback
+// stalled after the first segments and failed with MEDIA_ERR_SRC_NOT_SUPPORTED.
+// Leaving VHS's own default in place keeps MSE playback everywhere except
+// Safari/iOS, where native playback is what exposes the AirPlay picker.
+describe('player options', () => {
+  beforeEach(() => {
+    videojsMock.mockImplementation(() => createFakePlayer())
+  })
+
+  it('does not opt out of VHS, so HLS plays through MSE', async () => {
+    render(<VideoPlayer src="/api/stream/episode/677" />)
+
+    await waitFor(() => {
+      expect(videojsMock).toHaveBeenCalled()
+    })
+
+    const [, options] = videojsMock.mock.calls[0]
+
+    expect(options).toEqual({
+      autoplay: true,
+      controls: false,
+      fill: true,
+      poster: undefined
+    })
+  })
 })
 
 describe('pickSource', () => {
