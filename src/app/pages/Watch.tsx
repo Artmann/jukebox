@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { VideoPlayer } from '../components/VideoPlayer'
 import type { ResolvedSource } from '../lib/resolve-source'
 import { VolumeIndicator } from '../components/VolumeIndicator'
 import { WatchEpisodePanels } from '../components/WatchEpisodePanels'
+import { useControlsAutoHide } from '../hooks/useControlsAutoHide'
 import { useIsPlaying } from '../hooks/useIsPlaying'
 import { useMeasuredHeight } from '../hooks/useMeasuredHeight'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -15,14 +16,13 @@ import { usePlaybackTimeline } from '../hooks/usePlaybackTimeline'
 import { usePlayerHotkeys } from '../hooks/usePlayerHotkeys'
 import { useRestoreProgress } from '../hooks/useRestoreProgress'
 import { useSaveProgress } from '../hooks/useSaveProgress'
+import { useSourceSwapFade } from '../hooks/useSourceSwapFade'
 import { useUpNextCountdown } from '../hooks/useUpNextCountdown'
 import { useVolumeIndicator } from '../hooks/useVolumeIndicator'
 import { useWatchData } from '../hooks/useWatchData'
 import type { Episode } from '../lib/media'
 import { fetchSeekStart } from '../lib/seek-start'
 import type Player from 'video.js/dist/types/player'
-
-const hideDelayMs = 3000
 
 interface SeasonSelection {
   // The episode the viewer picked a season for. When the watched episode
@@ -62,13 +62,11 @@ export function WatchPage() {
   const navigate = useNavigate()
   const isEpisode = location.pathname.startsWith('/watch/episode/')
 
-  const [controlsVisible, setControlsVisible] = useState(true)
   const [player, setPlayer] = useState<Player | null>(null)
   const [episodePanelOpen, setEpisodePanelOpen] = useState(false)
   const isMobile = useMediaQuery('(max-width: 639px)')
   const [seasonSelection, setSeasonSelection] =
     useState<SeasonSelection | null>(null)
-  const [isSwapping, setIsSwapping] = useState(false)
   // What the player decided about the current stream: whether it's transcoded,
   // and the file's real duration. Tagged with the media it belongs to so the
   // page never treats the previous episode's answer as this one's.
@@ -83,7 +81,6 @@ export function WatchPage() {
     string | null
   >(null)
   const { height: controlsHeight, ref: controlsRef } = useMeasuredHeight()
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   const {
@@ -101,6 +98,8 @@ export function WatchPage() {
   } = useWatchData(id, isEpisode)
 
   const isPlaying = useIsPlaying(player)
+  const { controlsVisible, showControls } = useControlsAutoHide(isPlaying)
+  const { beginSwap, isSwapping } = useSourceSwapFade(player)
   const volumeIndicator = useVolumeIndicator(player)
   const { mutate: saveProgress } = useSaveProgress()
 
@@ -129,7 +128,7 @@ export function WatchPage() {
     (seconds: number) => {
       // Fade to black while the new conversion spins up, so the jump reads
       // as a seek instead of a reload.
-      setIsSwapping(true)
+      beginSwap()
 
       const requestId = ++restartRequestRef.current
 
@@ -151,7 +150,7 @@ export function WatchPage() {
         setStartSeconds(startSeconds)
       })()
     },
-    [restartFileId]
+    [beginSwap, restartFileId]
   )
 
   const handleSourceResolved = useCallback(
@@ -197,72 +196,16 @@ export function WatchPage() {
     }
   }, [])
 
-  const resetHideTimer = useCallback(() => {
-    setControlsVisible(true)
-
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current)
-    }
-
-    if (isPlaying) {
-      hideTimerRef.current = setTimeout(() => {
-        setControlsVisible(false)
-      }, hideDelayMs)
-    }
-  }, [isPlaying])
-
-  // When paused, always show controls. When playing, start the hide timer.
-  useEffect(() => {
-    setControlsVisible(true)
-
-    if (!isPlaying) {
-      if (hideTimerRef.current) {
-        clearTimeout(hideTimerRef.current)
-      }
-
-      return
-    }
-
-    hideTimerRef.current = setTimeout(() => {
-      setControlsVisible(false)
-    }, hideDelayMs)
-
-    return () => {
-      if (hideTimerRef.current) {
-        clearTimeout(hideTimerRef.current)
-      }
-    }
-  }, [isPlaying])
-
-  usePlayerHotkeys(player, timeline, resetHideTimer)
-
-  // Drop the fade overlay as soon as the new source is actually playing.
-  useEffect(() => {
-    if (!player || player.isDisposed()) {
-      return
-    }
-
-    const onPlaying = () => setIsSwapping(false)
-
-    player.on('playing', onPlaying)
-
-    return () => {
-      if (player.isDisposed()) {
-        return
-      }
-
-      player.off('playing', onPlaying)
-    }
-  }, [player])
+  usePlayerHotkeys(player, timeline, showControls)
 
   const goToNextEpisode = useCallback(() => {
     if (!nextEpisode) {
       return
     }
 
-    setIsSwapping(true)
+    beginSwap()
     void navigate(`/watch/episode/${nextEpisode.id}`)
-  }, [nextEpisode, navigate])
+  }, [beginSwap, nextEpisode, navigate])
 
   const handleSelectEpisode = useCallback(
     (selectedEpisode: Episode) => {
@@ -278,10 +221,10 @@ export function WatchPage() {
         })
       }
 
-      setIsSwapping(true)
+      beginSwap()
       void navigate(`/watch/episode/${selectedEpisode.id}`)
     },
-    [player, episode, navigate, saveProgress, timeline]
+    [beginSwap, player, episode, navigate, saveProgress, timeline]
   )
 
   const selectedSeason =
@@ -318,7 +261,7 @@ export function WatchPage() {
     <div
       ref={wrapperRef}
       className={`bg-black w-full h-screen relative ${controlsVisible ? '' : 'cursor-none'}`}
-      onMouseMove={resetHideTimer}
+      onMouseMove={showControls}
     >
       <div className="absolute inset-0">
         <VideoPlayer
