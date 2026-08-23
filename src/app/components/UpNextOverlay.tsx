@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, type ReactElement } from 'react'
+import { useMemo, type ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
 
+import { useUpNextAutoAdvance } from '../hooks/useUpNextAutoAdvance'
 import type { Episode, Show } from '../lib/media'
 import { PosterImage } from './PosterImage'
 
@@ -18,9 +19,7 @@ interface UpNextOverlayProps {
   isCountingDown: boolean
 }
 
-// 9s fill + 1s hold = 10s total from overlay appearing to transition.
 const defaultCountdownSeconds = 9
-const holdMs = 1000
 
 export function UpNextOverlay({
   nextEpisode,
@@ -30,62 +29,17 @@ export function UpNextOverlay({
   countdownSeconds = defaultCountdownSeconds,
   isCountingDown
 }: UpNextOverlayProps): ReactElement {
-  const fillRef = useRef<HTMLSpanElement>(null)
-  const firedRef = useRef(false)
-  const onPlayNowRef = useRef(onPlayNow)
-
-  // Stash the latest callback in a ref so the countdown effect doesn't need
-  // it as a dependency. Without this, a new callback identity during the
-  // countdown would cancel the animation and clear the auto-fire timeout,
-  // which is why the bar appeared frozen and auto-advance never fired.
-  useEffect(() => {
-    onPlayNowRef.current = onPlayNow
-  }, [onPlayNow])
-
-  useEffect(() => {
-    if (!isCountingDown) {
-      firedRef.current = false
-      return
-    }
-
-    const fillElement = fillRef.current
-
-    if (!fillElement) return
-
-    const animation = fillElement.animate(
-      [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
-      {
-        duration: countdownSeconds * 1000,
-        easing: 'linear',
-        fill: 'forwards'
-      }
-    )
-
-    const timeout = setTimeout(() => {
-      if (firedRef.current) return
-
-      firedRef.current = true
-      onPlayNowRef.current()
-    }, countdownSeconds * 1000 + holdMs)
-
-    return () => {
-      animation.cancel()
-      clearTimeout(timeout)
-    }
-  }, [isCountingDown, countdownSeconds])
+  const { advance, fillRef } = useUpNextAutoAdvance({
+    countdownSeconds,
+    isCountingDown,
+    onAdvance: onPlayNow
+  })
 
   const subtitle = useMemo(
     () =>
       `S${nextEpisode.seasonNumber} E${nextEpisode.episodeNumber} · ${nextEpisode.title}`,
     [nextEpisode]
   )
-
-  const handlePlayNowClick = () => {
-    if (firedRef.current) return
-
-    firedRef.current = true
-    onPlayNow()
-  }
 
   return (
     // A native non-modal dialog: rendered with `open` so it never steals
@@ -120,7 +74,7 @@ export function UpNextOverlay({
       <div className="mt-3 flex items-center gap-2">
         <Button
           className="flex-1 relative overflow-hidden bg-white/15 text-white hover:bg-white/25"
-          onClick={handlePlayNowClick}
+          onClick={advance}
           size="sm"
         >
           <span
