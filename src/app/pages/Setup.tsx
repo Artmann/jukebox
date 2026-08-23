@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -10,15 +10,16 @@ import {
   type LibraryDraft,
   type LibraryRowValidation
 } from '../components/library-draft'
-import { setupStatusQueryKey } from '../hooks/useSetupStatus'
+import { setupStatusQueryKey, useSetupStatus } from '../hooks/useSetupStatus'
 import { api, ApiError } from '../lib/api-client'
 
 export function SetupPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const setupStatus = useSetupStatus()
 
   const [libraries, setLibraries] = useState<LibraryDraft[]>([])
-  const [loaded, setLoaded] = useState(false)
+  const [seeded, setSeeded] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [validation, setValidation] = useState<
     Record<string, LibraryRowValidation>
@@ -28,30 +29,23 @@ export function SetupPage() {
   // latest check per row may write its result.
   const validationRequests = useRef<Record<string, number>>({})
 
-  useEffect(() => {
-    void loadExistingConfig()
-  }, [])
+  // Seed the editable drafts from the existing config exactly once, during
+  // render. On a failed status fetch the form simply starts empty — setup
+  // still works, and submitting validates everything server-side. Seeding is
+  // one-shot so a later refetch can never clobber what the user is editing.
+  if (!seeded && !setupStatus.isLoading) {
+    setSeeded(true)
 
-  async function loadExistingConfig() {
-    try {
-      const data = await api((client) => client.setup.getStatus())
-
-      if (data.libraries.length > 0) {
-        setLibraries(
-          data.libraries.map((library) =>
-            makeLibraryDraft({
-              name: library.name,
-              path: library.path,
-              type: library.type
-            })
-          )
+    if (setupStatus.data && setupStatus.data.libraries.length > 0) {
+      setLibraries(
+        setupStatus.data.libraries.map((library) =>
+          makeLibraryDraft({
+            name: library.name,
+            path: library.path,
+            type: library.type
+          })
         )
-      }
-    } catch {
-      // Start with an empty form when the status can't be loaded — setup
-      // still works, and submitting validates everything server-side.
-    } finally {
-      setLoaded(true)
+      )
     }
   }
 
@@ -227,7 +221,7 @@ export function SetupPage() {
 
   const hasAnyPath = libraries.some((library) => library.path.trim() !== '')
 
-  if (!loaded) {
+  if (!seeded) {
     return null
   }
 
