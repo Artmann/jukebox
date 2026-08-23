@@ -41,6 +41,19 @@
 - Single quotes
 - No semicolons
 
+## React
+
+- No `useEffect` in components or pages. Effects live only in custom hooks
+  under `src/app/hooks/`. This is enforced by ESLint.
+- Hooks must solve one specific problem and be named for it, like
+  `useControlsAutoHide` or `useScrollEpisodeIntoView`. No generic hooks like
+  `useEventListener`.
+- Before writing an effect, try to eliminate it: derive values during render,
+  set state in the event handler that caused the change, or subscribe with
+  `useSyncExternalStore`.
+- Don't mirror props or callbacks into refs. Use `useEffectEvent` to read the
+  latest values from an effect without re-running it.
+
 ## Prefered Tools
 
 - Bun
