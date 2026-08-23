@@ -68,6 +68,30 @@ export default tseslint.config(
     }
   },
 
+  // Effects are only allowed inside custom hooks: components and pages stay
+  // declarative, and each hook in src/app/hooks solves one named problem.
+  // src/components/ui is vendored shadcn code and exempt so regenerating a
+  // primitive never requires rewriting third-party internals.
+  {
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    ignores: ['src/app/hooks/**', 'src/components/ui/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          message:
+            'useEffect is not allowed in components or pages. Move the effect into a specific, problem-named hook in src/app/hooks/ — or eliminate it: derive values during render, set state in the event handler that caused the change, and use useEffectEvent to read the latest props from an existing effect.',
+          selector: "CallExpression[callee.name='useEffect']"
+        },
+        {
+          message:
+            'useEffect is not allowed in components or pages. Move the effect into a specific, problem-named hook in src/app/hooks/ — or eliminate it: derive values during render, set state in the event handler that caused the change, and use useEffectEvent to read the latest props from an existing effect.',
+          selector: "CallExpression[callee.object.name='React'][callee.property.name='useEffect']"
+        }
+      ]
+    }
+  },
+
   {
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
