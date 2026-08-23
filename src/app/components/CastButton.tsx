@@ -1,16 +1,10 @@
 import { Cast } from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-  useSyncExternalStore
-} from 'react'
 import { toast } from 'sonner'
 import type Player from 'video.js/dist/types/player'
 
+import { useChromecastConnection } from '../hooks/useChromecastConnection'
 import { useSaveProgress } from '../hooks/useSaveProgress'
+import { castWindow } from '../lib/chromecast'
 import type { PlaybackTimeline } from '../lib/playback-timeline'
 
 interface CastButtonProps {
@@ -21,59 +15,6 @@ interface CastButtonProps {
   timeline: PlaybackTimeline
   title: string
 }
-
-interface RemotePlayerLike {
-  currentTime: number
-  duration: number
-  isConnected: boolean
-}
-
-interface RemotePlayerControllerLike {
-  addEventListener: (event: string, handler: () => void) => void
-  removeEventListener: (event: string, handler: () => void) => void
-}
-
-interface CastContextLike {
-  requestSession: () => Promise<void>
-  getCurrentSession: () => CastSessionLike | null
-}
-
-interface CastSessionLike {
-  loadMedia: (request: unknown) => Promise<void>
-}
-
-interface ChromeCastWindow {
-  cast?: {
-    framework: {
-      CastContext: {
-        getInstance: () => CastContextLike
-      }
-      RemotePlayer: new () => RemotePlayerLike
-      RemotePlayerController: new (
-        player: RemotePlayerLike
-      ) => RemotePlayerControllerLike
-      RemotePlayerEventType: {
-        IS_CONNECTED_CHANGED: string
-        CURRENT_TIME_CHANGED: string
-      }
-      CastContextEventType: {
-        CAST_STATE_CHANGED: string
-      }
-    }
-  }
-  chrome?: {
-    cast?: {
-      media: {
-        MediaInfo: new (contentId: string, contentType: string) => unknown
-        LoadRequest: new (mediaInfo: unknown) => { currentTime?: number }
-      }
-      AutoJoinPolicy: { ORIGIN_SCOPED: string }
-    }
-  }
-  __onGCastApiAvailable?: (isAvailable: boolean) => void
-}
-
-const castWindow = (): ChromeCastWindow => window as unknown as ChromeCastWindow
 
 function absoluteUrl(pathOrUrl: string): string {
   if (/^https?:\/\//i.test(pathOrUrl)) {
@@ -95,23 +36,6 @@ function detectAirplaySupport(): boolean {
 
 const airplayAvailable = detectAirplaySupport()
 
-function readInitialCastingState(): boolean {
-  try {
-    const wnd = castWindow()
-    const framework = wnd.cast?.framework
-
-    if (!framework || !wnd.chrome?.cast) {
-      return false
-    }
-
-    const remote = new framework.RemotePlayer()
-
-    return remote.isConnected
-  } catch {
-    return false
-  }
-}
-
 function showAirplayPicker(): void {
   const video = document.querySelector('video') as
     | (HTMLVideoElement & {
@@ -132,174 +56,35 @@ export function CastButton({
   timeline,
   title
 }: CastButtonProps) {
-  // If the Cast SDK is already on the page the button can render right away;
-  // otherwise the SDK's ready callback flips this on once it loads.
-  const [chromecastAvailable, setChromecastAvailable] = useState(() => {
-    const wnd = castWindow()
-
-    return Boolean(wnd.cast?.framework && wnd.chrome?.cast)
-  })
-  const remoteRef = useRef<RemotePlayerLike | null>(null)
-  const controllerRef = useRef<RemotePlayerControllerLike | null>(null)
-  const castingListenersRef = useRef<Set<() => void> | null>(null)
   const { mutate: saveProgress } = useSaveProgress()
 
-  const getCastingListeners = () => {
-    return (castingListenersRef.current ??= new Set())
-  }
+  const { chromecastAvailable, isCasting } = useChromecastConnection({
+    onRemoteDisconnected: (remoteCurrentTime) => {
+      if (!player) {
+        return
+      }
 
-  const subscribeToCasting = useCallback((onStoreChange: () => void) => {
-    getCastingListeners().add(onStoreChange)
-
-    return () => {
-      getCastingListeners().delete(onStoreChange)
-    }
-  }, [])
-
-  const getCastingSnapshot = useCallback(() => {
-    return remoteRef.current?.isConnected ?? readInitialCastingState()
-  }, [])
-
-  const isCasting = useSyncExternalStore(
-    subscribeToCasting,
-    getCastingSnapshot,
-    () => false
-  )
-
-  const notifyCastingChange = () => {
-    const listeners = castingListenersRef.current
-
-    if (listeners === null) {
-      return
-    }
-
-    for (const listener of listeners) {
-      listener()
-    }
-  }
-
-  const handleConnectedChange = useEffectEvent((remote: RemotePlayerLike) => {
-    notifyCastingChange()
-
-    if (player && !remote.isConnected && remote.currentTime > 0) {
       // Resume locally from the remote position. The cast device plays the
       // whole file, so its position is an absolute one — going through the
       // timeline is what restarts a transcode when it lands past the head.
-      timeline.seek(remote.currentTime)
+      timeline.seek(remoteCurrentTime)
       void player.play()
-    }
-  })
+    },
+    onRemoteTimeChanged: (currentTime, duration) => {
+      const progressUrl = episodeId
+        ? `/api/progress/episode/${episodeId}`
+        : movieId
+          ? `/api/progress/${movieId}`
+          : null
 
-  const handleRemoteTimeChange = useEffectEvent((remote: RemotePlayerLike) => {
-    if (!remote.isConnected) {
-      return
-    }
-
-    const progressUrl = episodeId
-      ? `/api/progress/episode/${episodeId}`
-      : movieId
-        ? `/api/progress/${movieId}`
-        : null
-
-    if (!progressUrl) {
-      return
-    }
-
-    // Best-effort progress save; failures stay in the mutation state.
-    saveProgress({
-      currentTime: remote.currentTime,
-      duration: remote.duration,
-      progressUrl
-    })
-  })
-
-  // Detect Chromecast availability by waiting for the SDK. Runs once per
-  // mount — the SDK, remote player, and controller are all app-global.
-  useEffect(() => {
-    let cancelled = false
-    let removeListeners: (() => void) | null = null
-
-    const initialise = () => {
-      if (cancelled) {
+      if (!progressUrl) {
         return
       }
 
-      const wnd = castWindow()
-      const framework = wnd.cast?.framework
-
-      if (!framework || !wnd.chrome?.cast) {
-        return
-      }
-
-      try {
-        const context = framework.CastContext.getInstance()
-        const remote = remoteRef.current ?? new framework.RemotePlayer()
-        const controller =
-          controllerRef.current ?? new framework.RemotePlayerController(remote)
-
-        remoteRef.current = remote
-        controllerRef.current = controller
-
-        const onConnectedChange = () => handleConnectedChange(remote)
-        const onTimeChange = () => handleRemoteTimeChange(remote)
-
-        controller.addEventListener(
-          framework.RemotePlayerEventType.IS_CONNECTED_CHANGED,
-          onConnectedChange
-        )
-        controller.addEventListener(
-          framework.RemotePlayerEventType.CURRENT_TIME_CHANGED,
-          onTimeChange
-        )
-
-        removeListeners = () => {
-          controller.removeEventListener(
-            framework.RemotePlayerEventType.IS_CONNECTED_CHANGED,
-            onConnectedChange
-          )
-          controller.removeEventListener(
-            framework.RemotePlayerEventType.CURRENT_TIME_CHANGED,
-            onTimeChange
-          )
-        }
-
-        // Best-effort availability. If the user has a Chromecast on LAN,
-        // requestSession will show the picker; if not, it will error cleanly.
-        void context
-      } catch (error) {
-        console.warn('Cast framework initialisation failed:', error)
-      }
+      // Best-effort progress save; failures stay in the mutation state.
+      saveProgress({ currentTime, duration, progressUrl })
     }
-
-    // The Cast SDK calls __onGCastApiAvailable when ready.
-    const wnd = castWindow()
-    const existing = wnd.__onGCastApiAvailable
-
-    const onCastApiAvailable = (isAvailable: boolean) => {
-      existing?.(isAvailable)
-
-      if (isAvailable) {
-        initialise()
-        setChromecastAvailable(true)
-      }
-    }
-
-    wnd.__onGCastApiAvailable = onCastApiAvailable
-
-    // If SDK already loaded, initialise immediately.
-    if (wnd.cast?.framework && wnd.chrome?.cast) {
-      initialise()
-    }
-
-    return () => {
-      cancelled = true
-      removeListeners?.()
-
-      if (wnd.__onGCastApiAvailable === onCastApiAvailable) {
-        wnd.__onGCastApiAvailable = existing
-      }
-    }
-  }, [])
+  })
 
   const handleChromecast = async () => {
     const wnd = castWindow()
