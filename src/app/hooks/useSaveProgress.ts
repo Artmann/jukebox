@@ -4,6 +4,7 @@ import invariant from 'tiny-invariant'
 import type Player from 'video.js/dist/types/player'
 
 import { api } from '../lib/api-client'
+import type { PlaybackTimeline } from '../lib/playback-timeline'
 
 const saveIntervalMs = 10000
 
@@ -70,6 +71,7 @@ export function useSaveProgress() {
 interface ProgressAutoSaveOptions {
   episodeId?: number
   movieId?: number
+  timeline: PlaybackTimeline
 }
 
 /**
@@ -78,7 +80,7 @@ interface ProgressAutoSaveOptions {
  */
 export function useProgressAutoSave(
   player: Player | null,
-  { episodeId, movieId }: ProgressAutoSaveOptions
+  { episodeId, movieId, timeline }: ProgressAutoSaveOptions
 ): void {
   const { mutate: saveProgress } = useSaveProgress()
   const lastSavedTimeRef = useRef(0)
@@ -88,8 +90,11 @@ export function useProgressAutoSave(
       return
     }
 
-    const currentTime = player.currentTime() ?? 0
-    const duration = player.duration() ?? 0
+    // Absolute positions: a transcode session that starts mid-file plays from
+    // 0 on its own clock, and saving that would resume the viewer at the wrong
+    // place — or at the very beginning.
+    const currentTime = timeline.currentTime()
+    const duration = timeline.duration()
 
     if (currentTime === lastSavedTimeRef.current) {
       return

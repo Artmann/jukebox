@@ -17,9 +17,14 @@ const durationState: { shouldReject: boolean; value: number | null } = {
 }
 
 let lastInputError: Error | null = null
+let probeCount = 0
 
 class FakeInput {
   dispose = vi.fn()
+
+  constructor() {
+    probeCount++
+  }
 
   getPrimaryAudioTrack() {
     if (lastInputError) {
@@ -50,16 +55,31 @@ vi.mock('mediabunny', () => ({
   UrlSource: vi.fn()
 }))
 
-import { pickSource, VideoPlayer } from './VideoPlayer'
+import { resolveSource, VideoPlayer } from './VideoPlayer'
+
+type EventHandler = () => void
 
 function createFakePlayer() {
+  const handlers = new Map<string, EventHandler[]>()
+
+  const on = vi.fn((event: string, handler: EventHandler) => {
+    handlers.set(event, [...(handlers.get(event) ?? []), handler])
+  })
+
   return {
     addRemoteTextTrack: vi.fn(() => ({})),
     dispose: vi.fn(),
     duration: vi.fn(() => 0),
+    emit: (event: string) => {
+      for (const handler of handlers.get(event) ?? []) {
+        handler()
+      }
+    },
     error: vi.fn(() => null),
     isDisposed: vi.fn(() => false),
-    on: vi.fn(),
+    off: vi.fn(),
+    on,
+    one: on,
     pause: vi.fn(),
     paused: vi.fn(() => true),
     play: vi.fn(),
@@ -87,6 +107,7 @@ afterEach(() => {
   durationState.shouldReject = false
   durationState.value = 3240
   lastInputError = null
+  probeCount = 0
   setUserAgent(chromeUserAgent)
 })
 
@@ -120,28 +141,174 @@ describe('player options', () => {
   })
 })
 
-describe('pickSource', () => {
+// A transcode only ever produces output forward from where it started, so a
+// seek past its head restarts the conversion at the seek position. The player
+// asks for that by sourcing the `at/<start>` URL, and its own timeline starts
+// over at 0 there — which is why the duration override has to shrink with it.
+describe('seeking past the transcode head', () => {
+  let player: ReturnType<typeof createFakePlayer>
+
+  beforeEach(() => {
+    player = createFakePlayer()
+    videojsMock.mockImplementation(() => player)
+    audioTrackState.canDecode = false
+  })
+
+  it('sources the transcode at the requested position', async () => {
+    const view = render(
+      <VideoPlayer
+        src="/api/stream/episode/677"
+        startSeconds={0}
+      />
+    )
+
+    await waitFor(() => {
+      expect(player.src).toHaveBeenCalledWith({
+        src: '/api/transcode/episode-677/index.m3u8',
+        type: 'application/vnd.apple.mpegurl'
+      })
+    })
+
+    view.rerender(
+      <VideoPlayer
+        src="/api/stream/episode/677"
+        startSeconds={1800}
+      />
+    )
+
+    await waitFor(() => {
+      expect(player.src).toHaveBeenCalledWith({
+        src: '/api/transcode/episode-677/at/1800/index.m3u8',
+        type: 'application/vnd.apple.mpegurl'
+      })
+    })
+  })
+
+  it('shrinks the duration override to the restarted session', async () => {
+    const view = render(
+      <VideoPlayer
+        src="/api/stream/episode/677"
+        startSeconds={1800}
+      />
+    )
+
+    await waitFor(() => {
+      expect(player.src).toHaveBeenCalled()
+    })
+
+    player.emit('durationchange')
+
+    expect(player.duration).toHaveBeenCalledWith(3240 - 1800)
+
+    view.rerender(
+      <VideoPlayer
+        src="/api/stream/episode/677"
+        startSeconds={0}
+      />
+    )
+
+    await waitFor(() => {
+      expect(player.src).toHaveBeenCalledTimes(2)
+    })
+
+    player.emit('durationchange')
+
+    expect(player.duration).toHaveBeenCalledWith(3240)
+  })
+
+  // Probing is a network round-trip against the file itself. Paying for it on
+  // every seek would make jumping around the timeline needlessly slow.
+  it('does not probe the file again when restarting at a new position', async () => {
+    const view = render(
+      <VideoPlayer
+        src="/api/stream/episode/677"
+        startSeconds={0}
+      />
+    )
+
+    await waitFor(() => {
+      expect(player.src).toHaveBeenCalled()
+    })
+
+    const probesAfterFirstSource = probeCount
+
+    view.rerender(
+      <VideoPlayer
+        src="/api/stream/episode/677"
+        startSeconds={1800}
+      />
+    )
+
+    await waitFor(() => {
+      expect(player.src).toHaveBeenCalledTimes(2)
+    })
+
+    expect(probeCount).toEqual(probesAfterFirstSource)
+  })
+
+  it('reports the resolved source once per stream', async () => {
+    const onSourceResolved = vi.fn()
+
+    const view = render(
+      <VideoPlayer
+        onSourceResolved={onSourceResolved}
+        src="/api/stream/episode/677"
+        startSeconds={0}
+      />
+    )
+
+    await waitFor(() => {
+      expect(onSourceResolved).toHaveBeenCalledWith({
+        duration: 3240,
+        fileId: 'episode-677',
+        isTranscoded: true,
+        src: '/api/transcode/episode-677/index.m3u8',
+        type: 'application/vnd.apple.mpegurl'
+      })
+    })
+
+    view.rerender(
+      <VideoPlayer
+        onSourceResolved={onSourceResolved}
+        src="/api/stream/episode/677"
+        startSeconds={1800}
+      />
+    )
+
+    await waitFor(() => {
+      expect(player.src).toHaveBeenCalledTimes(2)
+    })
+
+    expect(onSourceResolved).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('resolveSource', () => {
   it('direct-plays a non-mkv source with decodable audio', async () => {
     setUserAgent(chromeUserAgent)
 
-    const source = await pickSource('/api/stream/42')
+    const source = await resolveSource('/api/stream/42')
 
     expect(source).toEqual({
+      duration: null,
+      fileId: null,
+      isTranscoded: false,
       src: '/api/stream/42',
-      type: 'video/mp4',
-      duration: null
+      type: 'video/mp4'
     })
   })
 
   it('direct-plays an mkv source with decodable audio as video/x-matroska', async () => {
     setUserAgent(chromeUserAgent)
 
-    const source = await pickSource('/api/stream/episode/677.mkv')
+    const source = await resolveSource('/api/stream/episode/677.mkv')
 
     expect(source).toEqual({
+      duration: null,
+      fileId: null,
+      isTranscoded: false,
       src: '/api/stream/episode/677.mkv',
-      type: 'video/x-matroska',
-      duration: null
+      type: 'video/x-matroska'
     })
   })
 
@@ -149,12 +316,14 @@ describe('pickSource', () => {
     setUserAgent(chromeUserAgent)
     audioTrackState.canDecode = false
 
-    const source = await pickSource('/api/stream/episode/677')
+    const source = await resolveSource('/api/stream/episode/677')
 
     expect(source).toEqual({
+      duration: 3240,
+      fileId: 'episode-677',
+      isTranscoded: true,
       src: '/api/transcode/episode-677/index.m3u8',
-      type: 'application/vnd.apple.mpegurl',
-      duration: 3240
+      type: 'application/vnd.apple.mpegurl'
     })
   })
 
@@ -162,12 +331,14 @@ describe('pickSource', () => {
     setUserAgent(chromeUserAgent)
     audioTrackState.canDecode = false
 
-    const source = await pickSource('/api/stream/42')
+    const source = await resolveSource('/api/stream/42')
 
     expect(source).toEqual({
+      duration: 3240,
+      fileId: 'movie-42',
+      isTranscoded: true,
       src: '/api/transcode/movie-42/index.m3u8',
-      type: 'application/vnd.apple.mpegurl',
-      duration: 3240
+      type: 'application/vnd.apple.mpegurl'
     })
   })
 
@@ -175,12 +346,14 @@ describe('pickSource', () => {
     setUserAgent(chromeUserAgent)
     audioTrackState.hasTrack = false
 
-    const source = await pickSource('/api/stream/episode/677.mkv')
+    const source = await resolveSource('/api/stream/episode/677.mkv')
 
     expect(source).toEqual({
+      duration: null,
+      fileId: null,
+      isTranscoded: false,
       src: '/api/stream/episode/677.mkv',
-      type: 'video/x-matroska',
-      duration: null
+      type: 'video/x-matroska'
     })
   })
 
@@ -188,24 +361,28 @@ describe('pickSource', () => {
     setUserAgent(chromeUserAgent)
     lastInputError = new Error('probe failed')
 
-    const source = await pickSource('/api/stream/episode/677')
+    const source = await resolveSource('/api/stream/episode/677')
 
     expect(source).toEqual({
+      duration: null,
+      fileId: 'episode-677',
+      isTranscoded: true,
       src: '/api/transcode/episode-677/index.m3u8',
-      type: 'application/vnd.apple.mpegurl',
-      duration: null
+      type: 'application/vnd.apple.mpegurl'
     })
   })
 
   it('still routes Safari + mkv to HLS for AirPlay, even with decodable audio', async () => {
     setUserAgent(safariUserAgent)
 
-    const source = await pickSource('/api/stream/episode/677.mkv')
+    const source = await resolveSource('/api/stream/episode/677.mkv')
 
     expect(source).toEqual({
+      duration: 3240,
+      fileId: 'episode-677',
+      isTranscoded: true,
       src: '/api/transcode/episode-677/index.m3u8',
-      type: 'application/vnd.apple.mpegurl',
-      duration: 3240
+      type: 'application/vnd.apple.mpegurl'
     })
   })
 
@@ -214,12 +391,14 @@ describe('pickSource', () => {
     audioTrackState.canDecode = false
     durationState.shouldReject = true
 
-    const source = await pickSource('/api/stream/episode/677')
+    const source = await resolveSource('/api/stream/episode/677')
 
     expect(source).toEqual({
+      duration: null,
+      fileId: 'episode-677',
+      isTranscoded: true,
       src: '/api/transcode/episode-677/index.m3u8',
-      type: 'application/vnd.apple.mpegurl',
-      duration: null
+      type: 'application/vnd.apple.mpegurl'
     })
   })
 })

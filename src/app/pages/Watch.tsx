@@ -4,12 +4,13 @@ import { ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { UpNextOverlay } from '../components/UpNextOverlay'
 import { VideoControls } from '../components/VideoControls'
-import { VideoPlayer } from '../components/VideoPlayer'
+import { VideoPlayer, type ResolvedSource } from '../components/VideoPlayer'
 import { VolumeIndicator } from '../components/VolumeIndicator'
 import { WatchEpisodePanels } from '../components/WatchEpisodePanels'
 import { useIsPlaying } from '../hooks/useIsPlaying'
 import { useMeasuredHeight } from '../hooks/useMeasuredHeight'
 import { useMediaQuery } from '../hooks/useMediaQuery'
+import { usePlaybackTimeline } from '../hooks/usePlaybackTimeline'
 import { usePlayerHotkeys } from '../hooks/usePlayerHotkeys'
 import { useRestoreProgress } from '../hooks/useRestoreProgress'
 import { useSaveProgress } from '../hooks/useSaveProgress'
@@ -17,6 +18,7 @@ import { useUpNextCountdown } from '../hooks/useUpNextCountdown'
 import { useVolumeIndicator } from '../hooks/useVolumeIndicator'
 import { useWatchData } from '../hooks/useWatchData'
 import type { Episode } from '../lib/media'
+import { fetchSeekStart } from '../lib/seek-start'
 import type Player from 'video.js/dist/types/player'
 
 const hideDelayMs = 3000
@@ -66,6 +68,19 @@ export function WatchPage() {
   const [seasonSelection, setSeasonSelection] =
     useState<SeasonSelection | null>(null)
   const [isSwapping, setIsSwapping] = useState(false)
+  // What the player decided about the current stream: whether it's transcoded,
+  // and the file's real duration. Tagged with the media it belongs to so the
+  // page never treats the previous episode's answer as this one's.
+  const [resolvedSource, setResolvedSource] = useState<{
+    mediaKey: string
+    source: ResolvedSource
+  } | null>(null)
+  // Where the current playback session starts in the file. Non-zero only after
+  // a seek past a running transcode, which restarts the conversion there.
+  const [startSeconds, setStartSeconds] = useState(0)
+  const [startSecondsMediaKey, setStartSecondsMediaKey] = useState<
+    string | null
+  >(null)
   const { height: controlsHeight, ref: controlsRef } = useMeasuredHeight()
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -96,7 +111,70 @@ export function WatchPage() {
       ? `movie-${movie.id}`
       : null
 
-  useRestoreProgress(player, savedProgress, mediaKey)
+  // Reset the offset during render rather than in an effect, so the player is
+  // never handed a new episode together with the previous one's seek position.
+  if (startSecondsMediaKey !== mediaKey) {
+    setStartSecondsMediaKey(mediaKey)
+    setStartSeconds(0)
+  }
+
+  const isSourceReady =
+    mediaKey !== null && resolvedSource?.mediaKey === mediaKey
+
+  const restartFileId = resolvedSource?.source.fileId ?? null
+  const restartRequestRef = useRef(0)
+
+  const handleRestart = useCallback(
+    (seconds: number) => {
+      // Fade to black while the new conversion spins up, so the jump reads
+      // as a seek instead of a reload.
+      setIsSwapping(true)
+
+      const requestId = ++restartRequestRef.current
+
+      void (async () => {
+        // Stream-copied video can only begin at a keyframe, so ask the
+        // server where this seek actually starts and use that as the
+        // session offset — otherwise absolute time would drift by up to one
+        // GOP after every seek. fetchSeekStart falls back to the raw target
+        // if the lookup fails.
+        const startSeconds = restartFileId
+          ? await fetchSeekStart(restartFileId, seconds)
+          : seconds
+
+        // A newer seek superseded this one while the lookup was in flight.
+        if (restartRequestRef.current !== requestId) {
+          return
+        }
+
+        setStartSeconds(startSeconds)
+      })()
+    },
+    [restartFileId]
+  )
+
+  const handleSourceResolved = useCallback(
+    (source: ResolvedSource) => {
+      if (mediaKey === null) {
+        return
+      }
+
+      setResolvedSource({ mediaKey, source })
+    },
+    [mediaKey]
+  )
+
+  const timeline = usePlaybackTimeline({
+    duration: isSourceReady ? (resolvedSource?.source.duration ?? null) : null,
+    isTranscoded: isSourceReady
+      ? (resolvedSource?.source.isTranscoded ?? false)
+      : false,
+    onRestart: handleRestart,
+    player,
+    startSeconds
+  })
+
+  useRestoreProgress({ isSourceReady, mediaKey, savedProgress, timeline })
 
   const {
     dismiss: dismissUpNext,
@@ -155,7 +233,7 @@ export function WatchPage() {
     }
   }, [isPlaying])
 
-  usePlayerHotkeys(player, resetHideTimer)
+  usePlayerHotkeys(player, timeline, resetHideTimer)
 
   // Drop the fade overlay as soon as the new source is actually playing.
   useEffect(() => {
@@ -193,8 +271,8 @@ export function WatchPage() {
 
       if (player && episode) {
         saveProgress({
-          currentTime: player.currentTime() ?? 0,
-          duration: player.duration() ?? 0,
+          currentTime: timeline.currentTime(),
+          duration: timeline.duration(),
           progressUrl: `/api/progress/episode/${episode.id}`
         })
       }
@@ -202,7 +280,7 @@ export function WatchPage() {
       setIsSwapping(true)
       void navigate(`/watch/episode/${selectedEpisode.id}`)
     },
-    [player, episode, navigate, saveProgress]
+    [player, episode, navigate, saveProgress, timeline]
   )
 
   const selectedSeason =
@@ -243,9 +321,11 @@ export function WatchPage() {
     >
       <div className="absolute inset-0">
         <VideoPlayer
-          src={streamUrl}
-          subtitles={subtitles}
           onReady={setPlayer}
+          onSourceResolved={handleSourceResolved}
+          src={streamUrl}
+          startSeconds={startSeconds}
+          subtitles={subtitles}
         />
       </div>
 
@@ -317,6 +397,7 @@ export function WatchPage() {
           showEpisodesButton={isEpisode}
           streamUrl={streamUrl}
           subtitles={subtitles}
+          timeline={timeline}
           onFullscreen={handleFullscreen}
           onNextEpisode={isEpisode && nextEpisode ? goToNextEpisode : undefined}
           onToggleEpisodes={() => setEpisodePanelOpen((open) => !open)}
