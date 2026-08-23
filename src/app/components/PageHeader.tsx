@@ -1,30 +1,17 @@
 import { Search } from 'lucide-react'
-import { useEffect, useState, type ReactElement } from 'react'
+import { type ReactElement } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 
 import { cn } from '@/lib/utils'
 
+import { usePageHeaderScrolled } from '../hooks/usePageHeaderScrolled'
 import { ProfileSwitcher } from './ProfileSwitcher'
 import { ScanIndicator } from './ScanIndicator'
 import { useSearchPalette } from './SearchPaletteProvider'
 
 export function PageHeader(): ReactElement {
-  const [scrollY, setScrollY] = useState(() => window.scrollY)
+  const hasScrolledDown = usePageHeaderScrolled()
   const searchPalette = useSearchPalette()
-
-  useEffect(function updateScrollPosition() {
-    function onScroll() {
-      setScrollY(window.scrollY)
-    }
-
-    window.addEventListener('scroll', onScroll, { passive: true })
-
-    return () => {
-      window.removeEventListener('scroll', onScroll)
-    }
-  }, [])
-
-  const hasScrolledDown = scrollY >= 16
 
   return (
     <header
