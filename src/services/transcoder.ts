@@ -388,11 +388,9 @@ function runTrimmedCopyConversion({
 
       const canDecodeAudio = audioTrack ? await audioTrack.canDecode() : false
       const audioSource = canDecodeAudio
-        ? new AudioSampleSource({
-            bitrate: QUALITY_HIGH,
-            codec: 'aac',
-            numberOfChannels: 2
-          })
+        // The encoded channel count follows the decoded samples -
+        // AudioEncodingConfig has no channel override.
+        ? new AudioSampleSource({ bitrate: QUALITY_HIGH, codec: 'aac' })
         : null
 
       if (audioSource) {

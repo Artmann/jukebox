@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type Player from 'video.js/dist/types/player'
 
 import {
@@ -36,7 +36,19 @@ export function usePlaybackTimeline({
     startSeconds
   })
 
-  stateRef.current = { duration, isTranscoded, onRestart, player, startSeconds }
+  // Refs must not be written during render (React can replay or discard
+  // render work), so the latest values land after every commit instead. The
+  // timeline is only read from event handlers and effects, which always run
+  // after this does.
+  useEffect(() => {
+    stateRef.current = {
+      duration,
+      isTranscoded,
+      onRestart,
+      player,
+      startSeconds
+    }
+  })
 
   return useMemo(() => createPlaybackTimeline(() => stateRef.current), [])
 }
