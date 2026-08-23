@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
 import { Check, X } from 'lucide-react'
+import { useScrollEpisodeIntoView } from '../hooks/useScrollEpisodeIntoView'
 import type { Episode, SeasonWithEpisodes } from '../lib/media'
 import { watchedThreshold } from '../../lib/watched'
 
@@ -33,28 +33,11 @@ export function EpisodePanel({
     (season) => season.seasonNumber === selectedSeason
   )
 
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-  const currentRef = useRef<HTMLButtonElement | null>(null)
-
-  useEffect(() => {
-    const container = scrollRef.current
-    const current = currentRef.current
-
-    if (!container || !current) {
-      return
-    }
-
-    const containerRect = container.getBoundingClientRect()
-    const currentRect = current.getBoundingClientRect()
-    const offsetTop =
-      currentRect.top - containerRect.top + container.scrollTop
-
-    const target =
-      offsetTop - container.clientHeight / 2 + current.clientHeight / 2
-    const max = container.scrollHeight - container.clientHeight
-
-    container.scrollTop = Math.max(0, Math.min(target, max))
-  }, [selectedSeason, currentEpisodeId, activeSeason?.episodes.length])
+  const { currentEpisodeRef, listRef } = useScrollEpisodeIntoView({
+    currentEpisodeId,
+    episodeCount: activeSeason?.episodes.length,
+    selectedSeason
+  })
 
   return (
     <div className="bg-black/95 border-l border-white/10 h-full flex flex-col">
@@ -91,7 +74,7 @@ export function EpisodePanel({
 
       <div
         className="flex-1 overflow-y-auto slim-scrollbar"
-        ref={scrollRef}
+        ref={listRef}
       >
         {activeSeason?.episodes.map((episode) => {
           const isCurrent = episode.id === currentEpisodeId
@@ -107,7 +90,7 @@ export function EpisodePanel({
           return (
             <button
               key={episode.id}
-              ref={isCurrent ? currentRef : undefined}
+              ref={isCurrent ? currentEpisodeRef : undefined}
               className={`w-full text-left px-4 py-3 border-l-2 transition-colors ${
                 isCurrent
                   ? 'bg-white/10 border-red-600'
