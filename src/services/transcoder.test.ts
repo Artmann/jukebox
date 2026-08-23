@@ -38,6 +38,7 @@ describe('startTranscode', () => {
     expect(runConversion).toHaveBeenCalledTimes(1)
     expect(runConversion).toHaveBeenCalledWith({
       filePath: '/tmp/sample.mkv',
+      startSeconds: 0,
       tempDir: session.tempDir
     })
 
@@ -130,6 +131,108 @@ describe('startTranscode', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // Regression tests for seeking past the transcode head. A transcode only
+  // ever produces output forward from where it started, so jumping ahead means
+  // starting the conversion over at the seek position — see
+  // usePlaybackTimeline for the client half.
+  it('trims the conversion to the requested start position', () => {
+    const runConversion = vi.fn(pendingConversion)
+
+    const session = startTranscode({
+      fileId: 'movie-7',
+      filePath: '/tmp/sample.mkv',
+      profileId: 1,
+      runConversion,
+      startSeconds: 90
+    })
+
+    expect(runConversion).toHaveBeenCalledTimes(1)
+    expect(runConversion).toHaveBeenCalledWith({
+      filePath: '/tmp/sample.mkv',
+      startSeconds: 90,
+      tempDir: session.tempDir
+    })
+
+    expect(session.startSeconds).toEqual(90)
+  })
+
+  it('gives each start position its own directory so stale segments are never reused', () => {
+    const runConversion = vi.fn(pendingConversion)
+
+    const fromStart = startTranscode({
+      fileId: 'movie-8',
+      filePath: '/tmp/sample.mkv',
+      profileId: 1,
+      runConversion
+    })
+    const fromStartTempDir = fromStart.tempDir
+
+    const afterSeek = startTranscode({
+      fileId: 'movie-8',
+      filePath: '/tmp/sample.mkv',
+      profileId: 1,
+      runConversion,
+      startSeconds: 90
+    })
+
+    expect(afterSeek.tempDir).not.toEqual(fromStartTempDir)
+  })
+
+  it('cancels the running conversion when the same viewer seeks to a new position', () => {
+    const cancels = [vi.fn(async () => {}), vi.fn(async () => {})]
+    let callIndex = 0
+    const runConversion = vi.fn(() => ({
+      cancel: cancels[callIndex++],
+      promise: new Promise<void>(() => {})
+    }))
+
+    startTranscode({
+      fileId: 'movie-9',
+      filePath: '/tmp/sample.mkv',
+      profileId: 1,
+      runConversion
+    })
+
+    const afterSeek = startTranscode({
+      fileId: 'movie-9',
+      filePath: '/tmp/sample.mkv',
+      profileId: 1,
+      runConversion,
+      startSeconds: 1800
+    })
+
+    expect(runConversion).toHaveBeenCalledTimes(2)
+    expect(cancels[0]).toHaveBeenCalledTimes(1)
+    expect(cancels[1]).not.toHaveBeenCalled()
+
+    // One conversion per viewer and file, not one per seek.
+    expect(_listSessionKeys()).toEqual(['movie-9:1'])
+    expect(afterSeek.startSeconds).toEqual(1800)
+  })
+
+  it('reuses the session when called again with the same start position', () => {
+    const runConversion = vi.fn(pendingConversion)
+
+    const first = startTranscode({
+      fileId: 'movie-10',
+      filePath: '/tmp/sample.mkv',
+      profileId: 1,
+      runConversion,
+      startSeconds: 90
+    })
+
+    const second = startTranscode({
+      fileId: 'movie-10',
+      filePath: '/tmp/sample.mkv',
+      profileId: 1,
+      runConversion,
+      startSeconds: 90
+    })
+
+    expect(second).toEqual(first)
+    expect(runConversion).toHaveBeenCalledTimes(1)
   })
 
   it('cancels the conversion when the session is stopped', () => {

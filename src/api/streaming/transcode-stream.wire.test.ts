@@ -29,6 +29,7 @@ import { eq } from 'drizzle-orm'
 import { Layer } from 'effect'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 
+import { createVideoFixture } from '../../services/test-video-fixture'
 import { createTestDatabase } from '../../database/test-database'
 
 const testDatabase = createTestDatabase()
@@ -80,6 +81,14 @@ function pendingConversion() {
 function getAsset(fileId: string, asset: string) {
   return handler(
     new Request(`http://localhost/api/transcode/${fileId}/${asset}`)
+  )
+}
+
+function getAssetAt(fileId: string, startSeconds: string, asset: string) {
+  return handler(
+    new Request(
+      `http://localhost/api/transcode/${fileId}/at/${startSeconds}/${asset}`
+    )
   )
 }
 
@@ -204,5 +213,197 @@ describe('GET /api/transcode/:fileId/:segment — segment-N.ts', () => {
     // deliver.
     expect(response.headers.get('content-length')).toBeNull()
     expect(await response.text()).toEqual(segmentContent)
+  })
+})
+
+// Regression tests for seeking past the transcode head. A conversion only
+// produces output forward from where it started, so a seek restarts it at the
+// seek position; these routes are how the client asks for that. Without them a
+// click past the buffered part of the trackbar was a silent no-op, because VHS
+// snaps any seek beyond the live playlist's seekable range back to the live
+// edge.
+describe('GET /api/transcode/:fileId/at/:start/...', () => {
+  it('starts the transcode at the requested position and serves its master playlist', async () => {
+    const workingDirectory = mkdtempSync(
+      path.join(tmpdir(), 'jukebox-transcode-seek-')
+    )
+    const filePath = path.join(workingDirectory, 'movie.mkv')
+
+    writeFileSync(filePath, 'fake movie bytes')
+
+    await db.insert(schema.movies).values({
+      id: 901,
+      title: 'Seek Movie',
+      filePath,
+      fileName: 'movie.mkv',
+      createdAt: new Date(0),
+      updatedAt: new Date(0)
+    })
+
+    const runConversion = vi.fn(pendingConversion)
+
+    try {
+      const session = startTranscode({
+        fileId: 'movie-901',
+        filePath,
+        profileId: 0,
+        runConversion,
+        startSeconds: 90
+      })
+
+      const content =
+        '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nmedia.m3u8\n'
+
+      writeFileSync(session.playlistPath, content)
+
+      const response = await getAssetAt('movie-901', '90', 'index.m3u8')
+
+      expect(response.status).toEqual(200)
+      expect(response.headers.get('content-type')).toEqual(
+        'application/vnd.apple.mpegurl'
+      )
+      expect(await response.text()).toEqual(content)
+
+      // The pre-seeded session was reused rather than restarted, which is
+      // what proves the route asked for start=90 and not start=0.
+      expect(runConversion).toHaveBeenCalledTimes(1)
+      expect(runConversion).toHaveBeenCalledWith({
+        filePath,
+        startSeconds: 90,
+        tempDir: session.tempDir
+      })
+    } finally {
+      await db.delete(schema.movies).where(eq(schema.movies.id, 901))
+      rmSync(workingDirectory, { recursive: true, force: true })
+    }
+  })
+
+  it('serves segments of the session started at that position', async () => {
+    const session = startTranscode({
+      fileId: 'seek-segment',
+      filePath: '/tmp/whatever.mkv',
+      profileId: 0,
+      runConversion: pendingConversion,
+      startSeconds: 1800
+    })
+
+    const segmentContent = 'fake segment bytes at 1800'
+
+    writeFileSync(path.join(session.tempDir, 'segment-0.ts'), segmentContent)
+
+    const response = await getAssetAt('seek-segment', '1800', 'segment-0.ts')
+
+    expect(response.status).toEqual(200)
+    expect(response.headers.get('content-type')).toEqual('video/mp2t')
+    expect(await response.text()).toEqual(segmentContent)
+  })
+
+  it('does not serve segments from a session started at a different position', async () => {
+    startTranscode({
+      fileId: 'seek-stale',
+      filePath: '/tmp/whatever.mkv',
+      profileId: 0,
+      runConversion: pendingConversion,
+      startSeconds: 1800
+    })
+
+    const response = await getAssetAt('seek-stale', '90', 'segment-0.ts')
+
+    expect(response.status).toEqual(404)
+  })
+
+  it('rejects a start position that is not a number', async () => {
+    const response = await getAssetAt('movie-902', 'abc', 'index.m3u8')
+
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: {
+        message:
+          "Couldn't start playback at that position. Reload the page and try again."
+      }
+    })
+  })
+
+  it('rejects a negative start position', async () => {
+    const response = await getAssetAt('movie-902', '-5', 'index.m3u8')
+
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: {
+        message:
+          "Couldn't start playback at that position. Reload the page and try again."
+      }
+    })
+  })
+})
+
+describe('GET /api/transcode/:fileId/seek/:time', () => {
+  function getSeekStart(fileId: string, time: string) {
+    return handler(
+      new Request(`http://localhost/api/transcode/${fileId}/seek/${time}`)
+    )
+  }
+
+  // Stream-copied video can only start at a keyframe, so the client asks
+  // this route where a seek will actually land and offsets its timeline by
+  // the answer. The fixture has keyframes at exactly 0, 2, 4, ... — a seek
+  // to 5 snaps back to 4.
+  it('answers with the keyframe position the seek will start at', async () => {
+    const fixture = createVideoFixture()
+
+    await db.insert(schema.movies).values({
+      id: 903,
+      title: 'Seek Start Movie',
+      filePath: fixture.filePath,
+      fileName: 'fixture.mp4',
+      createdAt: new Date(0),
+      updatedAt: new Date(0)
+    })
+
+    try {
+      const response = await getSeekStart('movie-903', '5')
+
+      expect(response.status).toEqual(200)
+
+      const body = (await response.json()) as { startSeconds: number }
+
+      expect(body.startSeconds).toBeCloseTo(4, 1)
+    } finally {
+      await db.delete(schema.movies).where(eq(schema.movies.id, 903))
+      rmSync(fixture.directory, { force: true, recursive: true })
+    }
+  })
+
+  it('rejects an unknown file', async () => {
+    const response = await getSeekStart('movie-999999', '5')
+
+    expect(response.status).toEqual(404)
+    expect(await response.json()).toEqual({
+      error: { message: 'File not found' }
+    })
+  })
+
+  it('rejects a position that is not a number', async () => {
+    const response = await getSeekStart('movie-903', 'abc')
+
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: {
+        message:
+          "Couldn't start playback at that position. Reload the page and try again."
+      }
+    })
+  })
+
+  it('rejects a negative position', async () => {
+    const response = await getSeekStart('movie-903', '-5')
+
+    expect(response.status).toEqual(400)
+    expect(await response.json()).toEqual({
+      error: {
+        message:
+          "Couldn't start playback at that position. Reload the page and try again."
+      }
+    })
   })
 })

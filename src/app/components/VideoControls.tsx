@@ -16,6 +16,7 @@ import type Player from 'video.js/dist/types/player'
 import { cn } from '@/lib/utils'
 
 import type { SubtitleTrack } from '../lib/media'
+import type { PlaybackTimeline } from '../lib/playback-timeline'
 import { formatTime } from '../lib/format'
 import { usePlaybackState } from '../hooks/usePlaybackState'
 import { useProgressAutoSave } from '../hooks/useSaveProgress'
@@ -38,6 +39,7 @@ interface VideoControlsProps {
   showEpisodesButton?: boolean
   streamUrl?: string
   subtitles?: ReadonlyArray<SubtitleTrack>
+  timeline: PlaybackTimeline
 }
 
 const skipSeconds = 10
@@ -52,16 +54,17 @@ export function VideoControls({
   onToggleEpisodes,
   showEpisodesButton,
   streamUrl,
-  subtitles
+  subtitles,
+  timeline
 }: VideoControlsProps) {
-  const { buffered, isPlaying, progress, remainingTime } =
-    usePlaybackState(player)
+  const { buffered, isPlaying, progress, reachable, remainingTime } =
+    usePlaybackState(player, timeline)
   const { activeSubtitleId, selectSubtitle } = useSubtitleSelection(
     player,
     subtitles
   )
 
-  useProgressAutoSave(player, { episodeId, movieId })
+  useProgressAutoSave(player, { episodeId, movieId, timeline })
 
   const supportedSubtitles = (subtitles ?? []).filter(
     (subtitle) => subtitle.isSupported
@@ -84,35 +87,18 @@ export function VideoControls({
     }
   }
 
+  // The timeline clamps to the file's bounds and decides whether a position is
+  // reachable without restarting the transcode, so these just say where to go.
   const handleSkipBackward = () => {
-    if (!player) {
-      return
-    }
-
-    const currentTime = player.currentTime() ?? 0
-
-    player.currentTime(Math.max(0, currentTime - skipSeconds))
+    timeline.seek(timeline.currentTime() - skipSeconds)
   }
 
   const handleSkipForward = () => {
-    if (!player) {
-      return
-    }
-
-    const currentTime = player.currentTime() ?? 0
-    const duration = player.duration() ?? 0
-
-    player.currentTime(Math.min(duration, currentTime + skipSeconds))
+    timeline.seek(timeline.currentTime() + skipSeconds)
   }
 
   const handleSeek = (position: number) => {
-    if (!player) {
-      return
-    }
-
-    const duration = player.duration() ?? 0
-
-    player.currentTime(position * duration)
+    timeline.seek(position * timeline.duration())
   }
 
   return (
@@ -121,8 +107,9 @@ export function VideoControls({
         <div className="flex-1">
           <VideoTrackBar
             buffered={buffered}
-            progress={progress}
             onSeek={handleSeek}
+            progress={progress}
+            reachable={reachable}
           />
         </div>
         <span className="text-white text-xs font-mono whitespace-nowrap">
@@ -174,6 +161,7 @@ export function VideoControls({
               movieId={movieId}
               player={player}
               streamUrl={streamUrl}
+              timeline={timeline}
               title={title}
             />
           )}

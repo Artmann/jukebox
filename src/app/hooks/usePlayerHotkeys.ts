@@ -1,6 +1,8 @@
 import { useHotkeys } from 'react-hotkeys-hook'
 import type Player from 'video.js/dist/types/player'
 
+import type { PlaybackTimeline } from '../lib/playback-timeline'
+
 const skipSeconds = 10
 const volumeStep = 0.05
 
@@ -11,6 +13,7 @@ const volumeStep = 0.05
  */
 export function usePlayerHotkeys(
   player: Player | null,
+  timeline: PlaybackTimeline,
   onActivity: () => void
 ): void {
   // Show controls on any keypress.
@@ -35,34 +38,22 @@ export function usePlayerHotkeys(
     [player]
   )
 
-  // Skip backward/forward with arrow keys.
+  // Skip backward/forward with arrow keys. The timeline clamps to the file's
+  // bounds and restarts the transcode when the position is out of its reach.
   useHotkeys(
     'left',
     () => {
-      if (!player) {
-        return
-      }
-
-      const currentTime = player.currentTime() ?? 0
-
-      player.currentTime(Math.max(0, currentTime - skipSeconds))
+      timeline.seek(timeline.currentTime() - skipSeconds)
     },
-    [player]
+    [timeline]
   )
 
   useHotkeys(
     'right',
     () => {
-      if (!player) {
-        return
-      }
-
-      const currentTime = player.currentTime() ?? 0
-      const duration = player.duration() ?? 0
-
-      player.currentTime(Math.min(duration, currentTime + skipSeconds))
+      timeline.seek(timeline.currentTime() + skipSeconds)
     },
-    [player]
+    [timeline]
   )
 
   // Increase volume with the up arrow.

@@ -11,12 +11,14 @@ import { toast } from 'sonner'
 import type Player from 'video.js/dist/types/player'
 
 import { useSaveProgress } from '../hooks/useSaveProgress'
+import type { PlaybackTimeline } from '../lib/playback-timeline'
 
 interface CastButtonProps {
   episodeId?: number
   movieId?: number
   player: Player | null
   streamUrl: string
+  timeline: PlaybackTimeline
   title: string
 }
 
@@ -127,6 +129,7 @@ export function CastButton({
   movieId,
   player,
   streamUrl,
+  timeline,
   title
 }: CastButtonProps) {
   // If the Cast SDK is already on the page the button can render right away;
@@ -179,8 +182,10 @@ export function CastButton({
     notifyCastingChange()
 
     if (player && !remote.isConnected && remote.currentTime > 0) {
-      // Resume locally from the remote position.
-      player.currentTime(remote.currentTime)
+      // Resume locally from the remote position. The cast device plays the
+      // whole file, so its position is an absolute one — going through the
+      // timeline is what restarts a transcode when it lands past the head.
+      timeline.seek(remote.currentTime)
       void player.play()
     }
   })
@@ -320,7 +325,9 @@ export function CastButton({
         return
       }
 
-      const currentTime = player?.currentTime() ?? 0
+      // Casting always sends the whole file, so it starts from the viewer's
+      // absolute position, not the current transcode session's.
+      const currentTime = timeline.currentTime()
       const absoluteStream = absoluteUrl(streamUrl)
       const mediaInfo = new chrome.cast.media.MediaInfo(
         absoluteStream,

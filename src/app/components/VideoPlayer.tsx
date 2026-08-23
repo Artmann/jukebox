@@ -1,18 +1,41 @@
 import { ALL_FORMATS, Input, UrlSource } from 'mediabunny'
 import { useEffect, useRef, type KeyboardEvent } from 'react'
+import { toast } from 'sonner'
 import videojs from 'video.js'
 import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 
 import { Logger } from '../lib/logger'
 import type { SubtitleTrack } from '../lib/media'
+import { seekRestartFailedMessage } from '../lib/playback-timeline'
 
 interface VideoPlayerProps {
-  src: string
-  poster?: string
-  subtitles?: ReadonlyArray<SubtitleTrack>
   onReady?: (player: Player) => void
+  onSourceResolved?: (source: ResolvedSource) => void
+  poster?: string
+  src: string
+  startSeconds?: number
+  subtitles?: ReadonlyArray<SubtitleTrack>
 }
+
+export interface ResolvedSource {
+  // The probed, full-file duration. Null when the player can read the real
+  // duration itself, or when probing failed.
+  duration: number | null
+  // Set only for transcoded sources — it's what the transcode URLs are built
+  // from, including the ones a seek restarts at.
+  fileId: string | null
+  isTranscoded: boolean
+  src: string
+  type: string
+}
+
+const hlsContentType = 'application/vnd.apple.mpegurl'
+
+// How long a seek is given to produce playback before the viewer is told it
+// didn't take. A restart has to spin up a fresh conversion and write its first
+// segments, so it is much slower than a native seek.
+const restartTimeoutMs = 20000
 
 function isSafari(): boolean {
   if (typeof navigator === 'undefined') {
@@ -62,9 +85,28 @@ async function probeSource(
   }
 }
 
-export async function pickSource(
-  src: string
-): Promise<{ src: string; type: string; duration: number | null }> {
+/**
+ * URL of a transcode session starting at an absolute position. The offset
+ * lives in the path rather than a query string because the playlists reference
+ * their media playlist and segments relatively, and relative resolution drops
+ * the query.
+ */
+export function transcodeUrl(fileId: string, startSeconds: number): string {
+  if (startSeconds <= 0) {
+    return `/api/transcode/${fileId}/index.m3u8`
+  }
+
+  const start = Number(startSeconds.toFixed(3))
+
+  return `/api/transcode/${fileId}/at/${start}/index.m3u8`
+}
+
+/**
+ * Decides how a stream should be played, probing the file once. The result is
+ * cached per source by the player, so restarting a transcode at a seek
+ * position doesn't pay for another probe.
+ */
+export async function resolveSource(src: string): Promise<ResolvedSource> {
   const isMkv = /\.mkv(\?|$)/i.test(src)
 
   // Safari/iOS can't cast an MKV container over AirPlay, regardless of
@@ -74,7 +116,7 @@ export async function pickSource(
     await probeSource(src)
 
   if (needsHlsForCasting || needsHlsForAudio) {
-    // /api/stream/:id or /api/stream/episode/:id -> /api/transcode/<key>/index.m3u8
+    // /api/stream/:id or /api/stream/episode/:id -> /api/transcode/<key>/...
     const match = src.match(/\/api\/stream\/(?:episode\/)?(\d+)/)
 
     if (match) {
@@ -83,16 +125,43 @@ export async function pickSource(
       const fileId = isEpisode ? `episode-${id}` : `movie-${id}`
 
       return {
-        src: `/api/transcode/${fileId}/index.m3u8`,
-        type: 'application/vnd.apple.mpegurl',
-        duration
+        duration,
+        fileId,
+        isTranscoded: true,
+        src: transcodeUrl(fileId, 0),
+        type: hlsContentType
       }
     }
   }
 
-  // Direct-play sources already show the correct duration from the
-  // container itself — no override needed.
-  return { src, type: isMkv ? 'video/x-matroska' : 'video/mp4', duration: null }
+  // Direct-play sources already show the correct duration from the container
+  // itself — no override needed, and the byte-range server lets the browser
+  // seek anywhere on its own.
+  return {
+    duration: null,
+    fileId: null,
+    isTranscoded: false,
+    src,
+    type: isMkv ? 'video/x-matroska' : 'video/mp4'
+  }
+}
+
+/**
+ * The source to hand video.js for a session starting at an absolute position.
+ * Only a transcode has an offset; direct play is always the whole file.
+ */
+export function sourceForStart(
+  resolved: ResolvedSource,
+  startSeconds: number
+): { src: string; type: string } {
+  if (!resolved.isTranscoded || resolved.fileId === null) {
+    return { src: resolved.src, type: resolved.type }
+  }
+
+  return {
+    src: transcodeUrl(resolved.fileId, startSeconds),
+    type: resolved.type
+  }
 }
 
 const logger = new Logger('video-player')
@@ -110,21 +179,32 @@ function handleVideoPlayerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
 }
 
 export function VideoPlayer({
-  src,
+  onReady,
+  onSourceResolved,
   poster,
-  subtitles,
-  onReady
+  src,
+  startSeconds = 0,
+  subtitles
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
   const onReadyRef = useRef(onReady)
-  const initialSrcRef = useRef(src)
+  const onSourceResolvedRef = useRef(onSourceResolved)
   const initialPosterRef = useRef(poster)
   const durationOverrideRef = useRef<number | null>(null)
+  // Probing is a network round-trip, so the result is kept per source prop and
+  // reused for every restart of that source.
+  const resolvedRef = useRef<{
+    promise: Promise<ResolvedSource>
+    src: string
+  } | null>(null)
+  const reportedSrcRef = useRef<string | null>(null)
+  const appliedSrcRef = useRef<string | null>(null)
 
   useEffect(() => {
     onReadyRef.current = onReady
-  }, [onReady])
+    onSourceResolvedRef.current = onSourceResolved
+  }, [onReady, onSourceResolved])
 
   // Create the player once on mount and dispose on unmount. Source/poster
   // changes are handled by the effects below so the same player instance
@@ -187,7 +267,7 @@ export function VideoPlayer({
     })
 
     // Live-HLS transcode playlists never hint their total duration (see
-    // pickSource), so VHS derives it from segments written so far and it
+    // resolveSource), so VHS derives it from segments written so far and it
     // grows wrong until playback ends. Re-assert the real, probed duration
     // every time the tech reports one. player.duration(seconds) only fires
     // this event when the value actually changes, so this settles instead
@@ -200,33 +280,20 @@ export function VideoPlayer({
       }
     })
 
-    // The codec check is async, so the source is set once it resolves
-    // rather than passed to the videojs() constructor above.
-    void pickSource(initialSrcRef.current).then((source) => {
-      if (player.isDisposed()) {
-        logger.warn(
-          'instance',
-          instanceId,
-          'pickSource resolved after dispose, skipping',
-          source
-        )
-        return
-      }
-
-      logger.info('instance', instanceId, 'src ->', source)
-
-      durationOverrideRef.current = source.duration
-      player.src(source)
-    })
-
     return () => {
       logger.info('instance', instanceId, 'disposing')
       player.dispose()
       playerRef.current = null
+      appliedSrcRef.current = null
+      reportedSrcRef.current = null
     }
   }, [])
 
-  // Swap the source in-place on prop change.
+  // Sets the source, both on mount and whenever the stream or the position the
+  // session starts at changes. A changed `startSeconds` with an unchanged
+  // `src` is a seek out of reach of the running transcode: the conversion
+  // restarts at that position, and the player's own timeline starts over at 0
+  // there (see PlaybackTimeline).
   useEffect(() => {
     const player = playerRef.current
 
@@ -234,25 +301,119 @@ export function VideoPlayer({
       return
     }
 
-    if (src === initialSrcRef.current) {
-      return
-    }
+    const isRestart = appliedSrcRef.current === src
 
     let cancelled = false
+    let restartTimer: ReturnType<typeof setTimeout> | null = null
 
-    void pickSource(src).then((source) => {
+    const clearRestartWatch = () => {
+      if (restartTimer !== null) {
+        clearTimeout(restartTimer)
+
+        restartTimer = null
+      }
+    }
+
+    const resolve = () => {
+      const cached = resolvedRef.current
+
+      if (cached && cached.src === src) {
+        return cached.promise
+      }
+
+      const promise = resolveSource(src)
+
+      resolvedRef.current = { promise, src }
+
+      return promise
+    }
+
+    void resolve().then((resolved) => {
       if (cancelled || player.isDisposed()) {
+        logger.warn('source resolved after dispose or cancel, skipping', src)
+
         return
       }
 
-      durationOverrideRef.current = source.duration
+      if (reportedSrcRef.current !== src) {
+        reportedSrcRef.current = src
+
+        onSourceResolvedRef.current?.(resolved)
+      }
+
+      // The override is the length of this session's own timeline, not the
+      // file's, so video.js still reaches the end of the stream exactly when
+      // the file ends.
+      durationOverrideRef.current =
+        resolved.duration === null
+          ? null
+          : Math.max(0, resolved.duration - startSeconds)
+
+      const wasPlaying = isRestart && !player.paused()
+      const source = sourceForStart(resolved, startSeconds)
+
+      logger.info('src ->', source, 'startSeconds', startSeconds)
+
+      appliedSrcRef.current = src
+
       player.src(source)
+
+      if (wasPlaying) {
+        player.one('loadedmetadata', () => {
+          void player.play()
+        })
+      }
+
+      if (!isRestart) {
+        return
+      }
+
+      // A restart spins up a whole new conversion, so it can fail in ways a
+      // native seek can't. Leave the viewer with something actionable instead
+      // of a black frame — clicking the trackbar again retries.
+      const stopRestartWatch = () => {
+        clearRestartWatch()
+
+        if (player.isDisposed()) {
+          return
+        }
+
+        player.off('error', onFailed)
+        player.off('playing', onPlaying)
+      }
+
+      function onPlaying() {
+        stopRestartWatch()
+      }
+
+      function onFailed() {
+        stopRestartWatch()
+
+        if (player.isDisposed()) {
+          return
+        }
+
+        player.pause()
+
+        toast.error(seekRestartFailedMessage)
+      }
+
+      restartTimer = setTimeout(() => {
+        logger.error('restart at', startSeconds, 'never started playing')
+
+        onFailed()
+      }, restartTimeoutMs)
+
+      player.one('playing', onPlaying)
+      player.one('error', onFailed)
     })
 
     return () => {
       cancelled = true
+
+      clearRestartWatch()
     }
-  }, [src])
+  }, [src, startSeconds])
 
   useEffect(() => {
     const player = playerRef.current
