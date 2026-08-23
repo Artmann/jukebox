@@ -1,13 +1,18 @@
-import { ALL_FORMATS, Input, UrlSource } from 'mediabunny'
 import { useEffect, useRef, type KeyboardEvent } from 'react'
 import { toast } from 'sonner'
 import videojs from 'video.js'
 import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 
+import { useSubtitleTracks } from '../hooks/useSubtitleTracks'
 import { Logger } from '../lib/logger'
 import type { SubtitleTrack } from '../lib/media'
 import { seekRestartFailedMessage } from '../lib/playback-timeline'
+import {
+  resolveSource,
+  sourceForStart,
+  type ResolvedSource
+} from '../lib/resolve-source'
 
 interface VideoPlayerProps {
   onReady?: (player: Player) => void
@@ -18,153 +23,12 @@ interface VideoPlayerProps {
   subtitles?: ReadonlyArray<SubtitleTrack>
 }
 
-export interface ResolvedSource {
-  // The probed, full-file duration. Null when the player can read the real
-  // duration itself, or when probing failed.
-  duration: number | null
-  // Set only for transcoded sources — it's what the transcode URLs are built
-  // from, including the ones a seek restarts at.
-  fileId: string | null
-  isTranscoded: boolean
-  src: string
-  type: string
-}
-
-const hlsContentType = 'application/vnd.apple.mpegurl'
+const logger = new Logger('video-player')
 
 // How long a seek is given to produce playback before the viewer is told it
 // didn't take. A restart has to spin up a fresh conversion and write its first
 // segments, so it is much slower than a native seek.
 const restartTimeoutMs = 20000
-
-function isSafari(): boolean {
-  if (typeof navigator === 'undefined') {
-    return false
-  }
-
-  const userAgent = navigator.userAgent
-
-  return /^((?!chrome|android|crios|fxios).)*safari/i.test(userAgent)
-}
-
-function isIos(): boolean {
-  if (typeof navigator === 'undefined') {
-    return false
-  }
-
-  return /iphone|ipad|ipod/i.test(navigator.userAgent)
-}
-
-// Checks whether the current browser can natively decode the source's audio
-// track, and reads the file's real duration from its container metadata.
-// Both come from the same probe so we only pay for one network round-trip.
-// audioRequiresTranscode returns true (needs transcode) whenever we can't
-// positively confirm decodability — a silently unplayable audio track is
-// worse than an unnecessary transcode. duration falls back to null on any
-// probe failure.
-async function probeSource(
-  src: string
-): Promise<{ audioRequiresTranscode: boolean; duration: number | null }> {
-  const input = new Input({ formats: ALL_FORMATS, source: new UrlSource(src) })
-
-  try {
-    const [audioTrack, duration] = await Promise.all([
-      input.getPrimaryAudioTrack(),
-      input.getDurationFromMetadata().catch(() => null)
-    ])
-
-    const audioRequiresTranscode = audioTrack
-      ? !(await audioTrack.canDecode())
-      : false
-
-    return { audioRequiresTranscode, duration }
-  } catch {
-    return { audioRequiresTranscode: true, duration: null }
-  } finally {
-    input.dispose()
-  }
-}
-
-/**
- * URL of a transcode session starting at an absolute position. The offset
- * lives in the path rather than a query string because the playlists reference
- * their media playlist and segments relatively, and relative resolution drops
- * the query.
- */
-export function transcodeUrl(fileId: string, startSeconds: number): string {
-  if (startSeconds <= 0) {
-    return `/api/transcode/${fileId}/index.m3u8`
-  }
-
-  const start = Number(startSeconds.toFixed(3))
-
-  return `/api/transcode/${fileId}/at/${start}/index.m3u8`
-}
-
-/**
- * Decides how a stream should be played, probing the file once. The result is
- * cached per source by the player, so restarting a transcode at a seek
- * position doesn't pay for another probe.
- */
-export async function resolveSource(src: string): Promise<ResolvedSource> {
-  const isMkv = /\.mkv(\?|$)/i.test(src)
-
-  // Safari/iOS can't cast an MKV container over AirPlay, regardless of
-  // whether its audio is otherwise browser-playable.
-  const needsHlsForCasting = isMkv && (isSafari() || isIos())
-  const { audioRequiresTranscode: needsHlsForAudio, duration } =
-    await probeSource(src)
-
-  if (needsHlsForCasting || needsHlsForAudio) {
-    // /api/stream/:id or /api/stream/episode/:id -> /api/transcode/<key>/...
-    const match = src.match(/\/api\/stream\/(?:episode\/)?(\d+)/)
-
-    if (match) {
-      const isEpisode = src.includes('/episode/')
-      const id = match[1]
-      const fileId = isEpisode ? `episode-${id}` : `movie-${id}`
-
-      return {
-        duration,
-        fileId,
-        isTranscoded: true,
-        src: transcodeUrl(fileId, 0),
-        type: hlsContentType
-      }
-    }
-  }
-
-  // Direct-play sources already show the correct duration from the container
-  // itself — no override needed, and the byte-range server lets the browser
-  // seek anywhere on its own.
-  return {
-    duration: null,
-    fileId: null,
-    isTranscoded: false,
-    src,
-    type: isMkv ? 'video/x-matroska' : 'video/mp4'
-  }
-}
-
-/**
- * The source to hand video.js for a session starting at an absolute position.
- * Only a transcode has an offset; direct play is always the whole file.
- */
-export function sourceForStart(
-  resolved: ResolvedSource,
-  startSeconds: number
-): { src: string; type: string } {
-  if (!resolved.isTranscoded || resolved.fileId === null) {
-    return { src: resolved.src, type: resolved.type }
-  }
-
-  return {
-    src: transcodeUrl(resolved.fileId, startSeconds),
-    type: resolved.type
-  }
-}
-
-const logger = new Logger('video-player')
 
 let playerInstanceCounter = 0
 
@@ -295,23 +159,60 @@ export function VideoPlayer({
   // restarts at that position, and the player's own timeline starts over at 0
   // there (see PlaybackTimeline).
   useEffect(() => {
-    const player = playerRef.current
+    const maybePlayer = playerRef.current
 
-    if (!player) {
+    if (!maybePlayer) {
       return
     }
 
+    // Narrowing doesn't flow into the hoisted handler functions below, so
+    // they close over this already-narrowed binding instead.
+    const player = maybePlayer
     const isRestart = appliedSrcRef.current === src
 
     let cancelled = false
     let restartTimer: ReturnType<typeof setTimeout> | null = null
 
-    const clearRestartWatch = () => {
+    const stopRestartWatch = () => {
       if (restartTimer !== null) {
         clearTimeout(restartTimer)
 
         restartTimer = null
       }
+
+      if (!player.isDisposed()) {
+        player.off('error', onFailed)
+        player.off('playing', onPlaying)
+      }
+    }
+
+    function onPlaying() {
+      stopRestartWatch()
+    }
+
+    function onFailed() {
+      stopRestartWatch()
+
+      if (player.isDisposed()) {
+        return
+      }
+
+      player.pause()
+
+      toast.error(seekRestartFailedMessage)
+    }
+
+    // A restart spins up a whole new conversion, so it can fail in ways a
+    // native seek can't. The watchdog starts with the request itself and the
+    // effect cleanup owns it, so it can never outlive this seek - the viewer
+    // gets something actionable instead of a black frame, and clicking the
+    // trackbar again retries.
+    if (isRestart) {
+      restartTimer = setTimeout(() => {
+        logger.error('restart at', startSeconds, 'never started playing')
+
+        onFailed()
+      }, restartTimeoutMs)
     }
 
     const resolve = () => {
@@ -368,42 +269,6 @@ export function VideoPlayer({
         return
       }
 
-      // A restart spins up a whole new conversion, so it can fail in ways a
-      // native seek can't. Leave the viewer with something actionable instead
-      // of a black frame — clicking the trackbar again retries.
-      const stopRestartWatch = () => {
-        clearRestartWatch()
-
-        if (player.isDisposed()) {
-          return
-        }
-
-        player.off('error', onFailed)
-        player.off('playing', onPlaying)
-      }
-
-      function onPlaying() {
-        stopRestartWatch()
-      }
-
-      function onFailed() {
-        stopRestartWatch()
-
-        if (player.isDisposed()) {
-          return
-        }
-
-        player.pause()
-
-        toast.error(seekRestartFailedMessage)
-      }
-
-      restartTimer = setTimeout(() => {
-        logger.error('restart at', startSeconds, 'never started playing')
-
-        onFailed()
-      }, restartTimeoutMs)
-
       player.one('playing', onPlaying)
       player.one('error', onFailed)
     })
@@ -411,7 +276,7 @@ export function VideoPlayer({
     return () => {
       cancelled = true
 
-      clearRestartWatch()
+      stopRestartWatch()
     }
   }, [src, startSeconds])
 
@@ -429,47 +294,7 @@ export function VideoPlayer({
     player.poster(poster)
   }, [poster])
 
-  // Sync remote text tracks (subtitles) with the current `subtitles` prop.
-  // Skipped for unsupported formats (.ass) — those are surfaced in the UI as
-  // disabled menu items but we never actually load them into the player.
-  useEffect(() => {
-    const player = playerRef.current
-
-    if (!player || player.isDisposed()) {
-      return
-    }
-
-    const tracks = subtitles ?? []
-    const supportedTracks = tracks.filter((track) => track.isSupported)
-    const addedElements: unknown[] = []
-
-    for (const track of supportedTracks) {
-      const trackElement = player.addRemoteTextTrack(
-        {
-          src: `/api/subtitles/${track.id}`,
-          srclang: track.language,
-          label: track.displayLanguage,
-          kind: 'subtitles',
-          default: false
-        },
-        false
-      )
-
-      addedElements.push(trackElement)
-    }
-
-    return () => {
-      if (player.isDisposed()) {
-        return
-      }
-
-      for (const element of addedElements) {
-        player.removeRemoteTextTrack(
-          element as Parameters<Player['removeRemoteTextTrack']>[0]
-        )
-      }
-    }
-  }, [subtitles])
+  useSubtitleTracks(playerRef, subtitles)
 
   const handleClick = () => {
     if (!playerRef.current) {

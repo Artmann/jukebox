@@ -49,6 +49,8 @@ jobs:
         with:
           bun-version: latest
       - run: bun install
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: bunx vitest run
 
   test-node:
@@ -63,6 +65,8 @@ jobs:
         with:
           bun-version: latest
       - run: bun install
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: npx vitest run
 
   build-bun:

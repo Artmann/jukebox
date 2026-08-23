@@ -181,12 +181,14 @@ describe('startTranscode', () => {
   })
 
   it('cancels the running conversion when the same viewer seeks to a new position', () => {
-    const cancels = [vi.fn(async () => {}), vi.fn(async () => {})]
-    let callIndex = 0
-    const runConversion = vi.fn(() => ({
-      cancel: cancels[callIndex++],
-      promise: new Promise<void>(() => {})
-    }))
+    const cancels: Array<ReturnType<typeof vi.fn>> = []
+    const runConversion = vi.fn(() => {
+      const cancel = vi.fn(async () => {})
+
+      cancels.push(cancel)
+
+      return { cancel, promise: new Promise<void>(() => {}) }
+    })
 
     startTranscode({
       fileId: 'movie-9',

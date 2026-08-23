@@ -55,7 +55,8 @@ vi.mock('mediabunny', () => ({
   UrlSource: vi.fn()
 }))
 
-import { resolveSource, VideoPlayer } from './VideoPlayer'
+import { resolveSource } from '../lib/resolve-source'
+import { VideoPlayer } from './VideoPlayer'
 
 type EventHandler = () => void
 
@@ -130,7 +131,7 @@ describe('player options', () => {
       expect(videojsMock).toHaveBeenCalled()
     })
 
-    const [, options] = videojsMock.mock.calls[0]
+    const options: unknown = videojsMock.mock.calls[0]?.[1]
 
     expect(options).toEqual({
       autoplay: true,
