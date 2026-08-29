@@ -6,8 +6,8 @@ const videojsMock = vi.hoisted(() => vi.fn())
 vi.mock('video.js', () => ({ default: videojsMock }))
 vi.mock('video.js/dist/video-js.css', () => ({}))
 
-const audioTrackState: { canDecode: boolean; hasTrack: boolean } = {
-  canDecode: true,
+const audioTrackState: { codec: string | null; hasTrack: boolean } = {
+  codec: 'aac',
   hasTrack: true
 }
 
@@ -35,7 +35,7 @@ class FakeInput {
       return null
     }
 
-    return { canDecode: vi.fn(() => audioTrackState.canDecode) }
+    return { getCodec: vi.fn(() => Promise.resolve(audioTrackState.codec)) }
   }
 
   getDurationFromMetadata(): Promise<number | null> {
@@ -103,7 +103,7 @@ const safariUserAgent =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
 
 afterEach(() => {
-  audioTrackState.canDecode = true
+  audioTrackState.codec = 'aac'
   audioTrackState.hasTrack = true
   durationState.shouldReject = false
   durationState.value = 3240
@@ -152,7 +152,7 @@ describe('seeking past the transcode head', () => {
   beforeEach(() => {
     player = createFakePlayer()
     videojsMock.mockImplementation(() => player)
-    audioTrackState.canDecode = false
+    audioTrackState.codec = 'eac3'
   })
 
   it('sources the transcode at the requested position', async () => {
@@ -313,9 +313,9 @@ describe('resolveSource', () => {
     })
   })
 
-  it('routes to HLS transcode when the audio track cannot be decoded', async () => {
+  it('routes to HLS transcode when the audio codec is not direct-playable (eac3)', async () => {
     setUserAgent(chromeUserAgent)
-    audioTrackState.canDecode = false
+    audioTrackState.codec = 'eac3'
 
     const source = await resolveSource('/api/stream/episode/677')
 
@@ -330,7 +330,7 @@ describe('resolveSource', () => {
 
   it('routes movie sources to their transcode key', async () => {
     setUserAgent(chromeUserAgent)
-    audioTrackState.canDecode = false
+    audioTrackState.codec = 'eac3'
 
     const source = await resolveSource('/api/stream/42')
 
@@ -339,6 +339,21 @@ describe('resolveSource', () => {
       fileId: 'movie-42',
       isTranscoded: true,
       src: '/api/transcode/movie-42/index.m3u8',
+      type: 'application/vnd.apple.mpegurl'
+    })
+  })
+
+  it('routes to HLS transcode when the audio codec is unrecognized', async () => {
+    setUserAgent(chromeUserAgent)
+    audioTrackState.codec = null
+
+    const source = await resolveSource('/api/stream/episode/677')
+
+    expect(source).toEqual({
+      duration: 3240,
+      fileId: 'episode-677',
+      isTranscoded: true,
+      src: '/api/transcode/episode-677/index.m3u8',
       type: 'application/vnd.apple.mpegurl'
     })
   })
@@ -389,7 +404,7 @@ describe('resolveSource', () => {
 
   it('falls back to a null duration when the metadata probe fails', async () => {
     setUserAgent(chromeUserAgent)
-    audioTrackState.canDecode = false
+    audioTrackState.codec = 'eac3'
     durationState.shouldReject = true
 
     const source = await resolveSource('/api/stream/episode/677')
