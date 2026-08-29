@@ -1,4 +1,5 @@
 import { ALL_FORMATS, Input, UrlSource } from 'mediabunny'
+import type { AudioCodec } from 'mediabunny'
 
 export interface ResolvedSource {
   // The probed, full-file duration. Null when the player can read the real
@@ -32,13 +33,39 @@ function isIos(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent)
 }
 
-// Checks whether the current browser can natively decode the source's audio
-// track, and reads the file's real duration from its container metadata.
-// Both come from the same probe so we only pay for one network round-trip.
-// audioRequiresTranscode returns true (needs transcode) whenever we can't
-// positively confirm decodability — a silently unplayable audio track is
-// worse than an unnecessary transcode. duration falls back to null on any
-// probe failure.
+// Audio codecs a media element can be trusted to decode during direct play.
+// Safari could additionally direct-play ac3/eac3, but MKV already forces HLS
+// there for AirPlay, so an eac3 MP4 on Safari transcodes unnecessarily — an
+// accepted tradeoff to keep one list for every browser.
+const directPlayableAudioCodecs = new Set<AudioCodec>([
+  'aac',
+  'flac',
+  'mp3',
+  'opus',
+  'vorbis'
+])
+
+// Decided from the codec name alone — not WebCodecs — so it behaves
+// identically in secure and insecure contexts (AudioDecoder doesn't exist
+// over plain HTTP, and WebCodecs support differs from media element support
+// anyway). null means mediabunny saw an audio track it couldn't identify —
+// fail safe to transcoding. ulaw/alaw intentionally transcode: G.711 in
+// MKV/MP4 isn't reliably media-element-playable.
+export function audioCodecRequiresTranscode(codec: AudioCodec | null): boolean {
+  if (codec === null) {
+    return true
+  }
+
+  return !directPlayableAudioCodecs.has(codec) && !codec.startsWith('pcm-')
+}
+
+// Reads the source's audio codec and real duration from its container
+// metadata. Both come from the same probe so we only pay for one network
+// round-trip. audioRequiresTranscode is true whenever the codec isn't
+// positively known to direct-play — a silently unplayable audio track is
+// worse than an unnecessary transcode. A source with no audio track at all
+// direct-plays: there is nothing to decode. duration falls back to null on
+// any probe failure.
 async function probeSource(
   src: string
 ): Promise<{ audioRequiresTranscode: boolean; duration: number | null }> {
@@ -51,7 +78,7 @@ async function probeSource(
     ])
 
     const audioRequiresTranscode = audioTrack
-      ? !(await audioTrack.canDecode())
+      ? audioCodecRequiresTranscode(await audioTrack.getCodec())
       : false
 
     return { audioRequiresTranscode, duration }
