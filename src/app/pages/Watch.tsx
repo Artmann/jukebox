@@ -1,17 +1,21 @@
 import { useCallback, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams
+} from 'react-router-dom'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { EpisodeOverlay } from '../components/EpisodeOverlay'
 import { UpNextOverlay } from '../components/UpNextOverlay'
 import { VideoControls } from '../components/VideoControls'
 import { VideoPlayer } from '../components/VideoPlayer'
 import type { ResolvedSource } from '../lib/resolve-source'
 import { VolumeIndicator } from '../components/VolumeIndicator'
-import { WatchEpisodePanels } from '../components/WatchEpisodePanels'
 import { useControlsAutoHide } from '../hooks/useControlsAutoHide'
 import { useIsPlaying } from '../hooks/useIsPlaying'
-import { useMeasuredHeight } from '../hooks/useMeasuredHeight'
-import { useMediaQuery } from '../hooks/useMediaQuery'
 import { usePlaybackTimeline } from '../hooks/usePlaybackTimeline'
 import { usePlayerHotkeys } from '../hooks/usePlayerHotkeys'
 import { useRestoreProgress } from '../hooks/useRestoreProgress'
@@ -60,11 +64,18 @@ export function WatchPage() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const isEpisode = location.pathname.startsWith('/watch/episode/')
+  // Set by the landing pages' Restart button: ignore the saved position.
+  const startFromBeginning = searchParams.get('start') === 'beginning'
 
   const [player, setPlayer] = useState<Player | null>(null)
-  const [episodePanelOpen, setEpisodePanelOpen] = useState(false)
-  const isMobile = useMediaQuery('(max-width: 639px)')
+  const [episodeOverlayOpen, setEpisodeOverlayOpen] = useState(false)
+  // A state ref rather than useRef, because the episode overlay portals into
+  // this element and needs it during render.
+  const [wrapperElement, setWrapperElement] = useState<HTMLDivElement | null>(
+    null
+  )
   const [seasonSelection, setSeasonSelection] =
     useState<SeasonSelection | null>(null)
   // What the player decided about the current stream: whether it's transcoded,
@@ -80,8 +91,6 @@ export function WatchPage() {
   const [startSecondsMediaKey, setStartSecondsMediaKey] = useState<
     string | null
   >(null)
-  const { height: controlsHeight, ref: controlsRef } = useMeasuredHeight()
-  const wrapperRef = useRef<HTMLDivElement>(null)
 
   const {
     episode,
@@ -174,7 +183,12 @@ export function WatchPage() {
     startSeconds
   })
 
-  useRestoreProgress({ isSourceReady, mediaKey, savedProgress, timeline })
+  useRestoreProgress({
+    isSourceReady,
+    mediaKey,
+    savedProgress: startFromBeginning ? undefined : savedProgress,
+    timeline
+  })
 
   const {
     dismiss: dismissUpNext,
@@ -192,11 +206,14 @@ export function WatchPage() {
     if (document.fullscreenElement) {
       void document.exitFullscreen()
     } else {
-      void wrapperRef.current?.requestFullscreen()
+      void wrapperElement?.requestFullscreen()
     }
-  }, [])
+  }, [wrapperElement])
 
-  usePlayerHotkeys(player, timeline, showControls)
+  usePlayerHotkeys(player, timeline, {
+    enabled: !episodeOverlayOpen,
+    onActivity: showControls
+  })
 
   const goToNextEpisode = useCallback(() => {
     if (!nextEpisode) {
@@ -257,9 +274,16 @@ export function WatchPage() {
       ? `${episodeShow.title} — S${episode.seasonNumber} E${episode.episodeNumber} · ${episode.title}`
       : (movie?.title ?? '')
 
+  const backLink =
+    isEpisode && episodeShow
+      ? { label: episodeShow.title, to: `/shows/${episodeShow.id}` }
+      : movie
+        ? { label: movie.title, to: `/movies/${movie.id}` }
+        : { label: 'home', to: '/' }
+
   return (
     <div
-      ref={wrapperRef}
+      ref={setWrapperElement}
       className={`bg-black w-full h-screen relative ${controlsVisible ? '' : 'cursor-none'}`}
       onMouseMove={showControls}
     >
@@ -306,14 +330,14 @@ export function WatchPage() {
       )}
 
       {isEpisode && show && episode && (
-        <WatchEpisodePanels
-          controlsHeight={controlsHeight}
+        <EpisodeOverlay
+          container={wrapperElement}
           currentEpisodeId={episode.id}
-          isMobile={isMobile}
-          onOpenChange={setEpisodePanelOpen}
+          fallbackImageUrl={show.backdropUrl}
+          onOpenChange={setEpisodeOverlayOpen}
           onSelectEpisode={handleSelectEpisode}
           onSelectSeason={handleSelectSeason}
-          open={episodePanelOpen}
+          open={episodeOverlayOpen}
           progressMap={episodeProgressMap}
           seasons={show.seasons}
           selectedSeason={selectedSeason}
@@ -322,16 +346,15 @@ export function WatchPage() {
       )}
 
       <Link
-        aria-label="Back to home"
+        aria-label={`Back to ${backLink.label}`}
         className={`absolute top-4 left-4 z-30 flex items-center justify-center size-11 text-white/90 hover:text-white transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        to="/"
+        to={backLink.to}
       >
         <ArrowLeft className="size-7" />
       </Link>
 
       <div
         className={`absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-black/80 to-transparent pt-16 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        ref={controlsRef}
       >
         <VideoControls
           title={title}
@@ -344,7 +367,7 @@ export function WatchPage() {
           timeline={timeline}
           onFullscreen={handleFullscreen}
           onNextEpisode={isEpisode && nextEpisode ? goToNextEpisode : undefined}
-          onToggleEpisodes={() => setEpisodePanelOpen((open) => !open)}
+          onToggleEpisodes={() => setEpisodeOverlayOpen((open) => !open)}
         />
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -85,7 +85,7 @@ describe('LibraryGrid', () => {
 
     const links = screen.getAllByLabelText('Jurassic Park')
 
-    expect(links[0]).toHaveAttribute('href', '/watch/1')
+    expect(links[0]).toHaveAttribute('href', '/movies/1')
   })
 
   it('shows year below the poster', () => {
@@ -95,102 +95,16 @@ describe('LibraryGrid', () => {
     expect(screen.getByText('1999')).toBeInTheDocument()
   })
 
-  it('shows more info button with aria-label', () => {
+  it('links the more information button to the movie page', () => {
     renderWithRouter(<LibraryGrid items={mockMovies} />)
 
-    expect(
-      screen.getByLabelText('More information about Jurassic Park')
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByLabelText('More information about The Matrix')
-    ).toBeInTheDocument()
-  })
-
-  it('opens modal when clicking more info button', () => {
-    renderWithRouter(<LibraryGrid items={mockMovies} />)
-
-    const infoButton = screen.getByLabelText(
-      'More information about Jurassic Park'
-    )
-
-    fireEvent.click(infoButton)
-
-    expect(screen.getByText(/pragmatic paleontologist/)).toBeInTheDocument()
-  })
-
-  it('closes modal when clicking close button', () => {
-    renderWithRouter(<LibraryGrid items={mockMovies} />)
-
-    const infoButton = screen.getByLabelText(
-      'More information about Jurassic Park'
-    )
-
-    fireEvent.click(infoButton)
-
-    expect(screen.getByText(/pragmatic paleontologist/)).toBeInTheDocument()
-
-    const modalButtons = document.querySelectorAll('.fixed button')
-    const closeButton = modalButtons[0]
-
-    fireEvent.click(closeButton as Element)
-
-    expect(
-      screen.queryByText(/pragmatic paleontologist/)
-    ).not.toBeInTheDocument()
-  })
-
-  it('closes modal when clicking backdrop', () => {
-    renderWithRouter(<LibraryGrid items={mockMovies} />)
-
-    const infoButton = screen.getByLabelText(
-      'More information about Jurassic Park'
-    )
-
-    fireEvent.click(infoButton)
-
-    expect(screen.getByText(/pragmatic paleontologist/)).toBeInTheDocument()
-
-    const backdrop = document.querySelector('.fixed.inset-0')
-
-    fireEvent.click(backdrop as Element)
-
-    expect(
-      screen.queryByText(/pragmatic paleontologist/)
-    ).not.toBeInTheDocument()
-  })
-
-  it('renders YouTube trailer when trailerUrl exists', () => {
-    renderWithRouter(<LibraryGrid items={mockMovies} />)
-
-    const infoButton = screen.getByLabelText(
-      'More information about Jurassic Park'
-    )
-
-    fireEvent.click(infoButton)
-
-    const iframe = document.querySelector('iframe')
-
-    expect(iframe).toBeInTheDocument()
-    expect(iframe).toHaveAttribute(
-      'src',
-      expect.stringContaining('youtube.com/embed/abc123')
-    )
-  })
-
-  it('shows backdrop image instead of trailer when trailerUrl is null', () => {
-    const movie = mockMovies[1]
-    if (!movie) throw new Error('Missing test data')
-
-    renderWithRouter(<LibraryGrid items={[movie]} />)
-
-    const infoButton = screen.getByLabelText(
-      'More information about The Matrix'
-    )
-
-    fireEvent.click(infoButton)
-
-    expect(screen.getAllByText('1999').length).toBeGreaterThan(0)
-    expect(document.querySelector('iframe')).not.toBeInTheDocument()
+    expect([
+      screen
+        .getByLabelText('More information about Jurassic Park')
+        .getAttribute('href'),
+      screen
+        .getByLabelText('More information about The Matrix')
+        .getAttribute('href')
+    ]).toEqual(['/movies/1', '/movies/2'])
   })
 })

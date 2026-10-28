@@ -18,6 +18,7 @@ import { SetupGuard } from './components/SetupGuard'
 import { installTelemetry } from './lib/telemetry'
 import { HomePage } from './pages/Home'
 import { LoginPage } from './pages/Login'
+import { MovieDetailPage } from './pages/MovieDetail'
 import { MoviesPage } from './pages/Movies'
 import { ObsPage } from './pages/Obs'
 import { ScanPage } from './pages/Scan'
@@ -87,6 +88,10 @@ const app = (
               <Route
                 path="/movies"
                 element={<MoviesPage />}
+              />
+              <Route
+                path="/movies/:id"
+                element={<MovieDetailPage />}
               />
               <Route
                 path="/shows"
