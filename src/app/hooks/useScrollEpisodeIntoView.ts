@@ -1,27 +1,32 @@
 import { useEffect, useRef, type RefObject } from 'react'
 
 interface ScrollEpisodeIntoViewOptions {
-  currentEpisodeId: number
+  // 'horizontal' for the show page's episode row, 'vertical' for the
+  // player's episode grid.
+  axis: 'horizontal' | 'vertical'
+  currentEpisodeId: number | undefined
   episodeCount: number | undefined
-  selectedSeason: number
+  selectedSeason: number | null
 }
 
 interface ScrollEpisodeIntoViewResult {
-  currentEpisodeRef: RefObject<HTMLButtonElement | null>
+  currentEpisodeRef: RefObject<HTMLElement | null>
   listRef: RefObject<HTMLDivElement | null>
 }
 
 /**
- * Centers the currently playing episode in the episode panel's scrollable
- * list whenever the panel opens or the season / episode changes. This has to
- * be an effect because it measures the rendered DOM after commit.
+ * Centers the current episode within its scrollable list whenever the list
+ * appears or the season / episode changes. Only the list scrolls, never the
+ * page, so the show page's hero stays in view. This has to be an effect
+ * because it measures the rendered DOM after commit.
  */
 export function useScrollEpisodeIntoView({
+  axis,
   currentEpisodeId,
   episodeCount,
   selectedSeason
 }: ScrollEpisodeIntoViewOptions): ScrollEpisodeIntoViewResult {
-  const currentEpisodeRef = useRef<HTMLButtonElement | null>(null)
+  const currentEpisodeRef = useRef<HTMLElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -34,14 +39,26 @@ export function useScrollEpisodeIntoView({
 
     const containerRect = container.getBoundingClientRect()
     const currentRect = current.getBoundingClientRect()
-    const offsetTop = currentRect.top - containerRect.top + container.scrollTop
 
+    if (axis === 'horizontal') {
+      const offsetLeft =
+        currentRect.left - containerRect.left + container.scrollLeft
+      const target =
+        offsetLeft - container.clientWidth / 2 + current.clientWidth / 2
+      const max = container.scrollWidth - container.clientWidth
+
+      container.scrollLeft = Math.max(0, Math.min(target, max))
+
+      return
+    }
+
+    const offsetTop = currentRect.top - containerRect.top + container.scrollTop
     const target =
       offsetTop - container.clientHeight / 2 + current.clientHeight / 2
     const max = container.scrollHeight - container.clientHeight
 
     container.scrollTop = Math.max(0, Math.min(target, max))
-  }, [selectedSeason, currentEpisodeId, episodeCount])
+  }, [axis, currentEpisodeId, episodeCount, selectedSeason])
 
   return { currentEpisodeRef, listRef }
 }

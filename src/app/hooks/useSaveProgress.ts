@@ -59,11 +59,13 @@ export function useSaveProgress() {
   return useMutation({
     mutationFn: putProgress,
     onSuccess: () => {
-      // Keep every progress view in sync: the resume position, the episode
-      // panel's per-episode bars, and the home page's Continue Watching row.
+      // Keep every progress view in sync: the resume position, the
+      // per-episode bars, the home page's rows, and the resume-aware links
+      // on posters.
       void queryClient.invalidateQueries({ queryKey: ['progress'] })
       void queryClient.invalidateQueries({ queryKey: ['show-progress'] })
       void queryClient.invalidateQueries({ queryKey: ['continue-watching'] })
+      void queryClient.invalidateQueries({ queryKey: ['up-next'] })
     }
   })
 }

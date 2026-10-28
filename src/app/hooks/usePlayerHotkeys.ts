@@ -6,6 +6,13 @@ import type { PlaybackTimeline } from '../lib/playback-timeline'
 const skipSeconds = 10
 const volumeStep = 0.05
 
+interface PlayerHotkeysOptions {
+  // False while something else owns the keyboard, like the episode overlay,
+  // so arrow keys and space act on it instead of on playback.
+  enabled: boolean
+  onActivity: () => void
+}
+
 /**
  * Global keyboard shortcuts for the watch page: space toggles playback,
  * left/right skip, up/down adjust volume, and any key reports activity so the
@@ -14,10 +21,10 @@ const volumeStep = 0.05
 export function usePlayerHotkeys(
   player: Player | null,
   timeline: PlaybackTimeline,
-  onActivity: () => void
+  { enabled, onActivity }: PlayerHotkeysOptions
 ): void {
   // Show controls on any keypress.
-  useHotkeys('*', () => onActivity())
+  useHotkeys('*', () => onActivity(), { enabled })
 
   // Play/pause with space.
   useHotkeys(
@@ -35,6 +42,7 @@ export function usePlayerHotkeys(
         player.pause()
       }
     },
+    { enabled },
     [player]
   )
 
@@ -45,6 +53,7 @@ export function usePlayerHotkeys(
     () => {
       timeline.seek(timeline.currentTime() - skipSeconds)
     },
+    { enabled },
     [timeline]
   )
 
@@ -53,6 +62,7 @@ export function usePlayerHotkeys(
     () => {
       timeline.seek(timeline.currentTime() + skipSeconds)
     },
+    { enabled },
     [timeline]
   )
 
@@ -75,6 +85,7 @@ export function usePlayerHotkeys(
 
       player.volume(next)
     },
+    { enabled },
     [player]
   )
 
@@ -93,6 +104,7 @@ export function usePlayerHotkeys(
 
       player.volume(next)
     },
+    { enabled },
     [player]
   )
 }

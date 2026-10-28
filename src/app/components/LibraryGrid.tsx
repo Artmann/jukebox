@@ -1,9 +1,9 @@
-import { Info, PlayIcon, X } from 'lucide-react'
-import { memo, useState, type ReactElement } from 'react'
+import { Info, PlayIcon } from 'lucide-react'
+import { memo, type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { Movie } from '../hooks/useMovies'
-import { Button } from '@/components/ui/button'
+import { useTitleLinks } from '../hooks/useTitleLinks'
 import { FavoriteButton } from './FavoriteButton'
 import { PosterImage } from './PosterImage'
 
@@ -12,124 +12,30 @@ export const LibraryGrid = memo(function LibraryGrid({
 }: {
   items: Movie[]
 }): ReactElement {
-  const [showMoreItemId, setShowMoreItemId] = useState<number | null>(null)
-
-  const showMoreItem = items.find((item) => item.id === showMoreItemId) ?? null
+  const linkFor = useTitleLinks()
 
   return (
-    <>
-      {showMoreItem && (
-        <DetailModal
-          item={showMoreItem}
-          onClose={() => setShowMoreItemId(null)}
+    <ul
+      className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1 md:gap-2 p-3 md:p-6"
+      role="list"
+    >
+      {items.map((item) => (
+        <GridItem
+          item={item}
+          key={item.id}
+          link={linkFor({ item, type: 'movie' })}
         />
-      )}
-
-      <ul
-        className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1 md:gap-2 p-3 md:p-6"
-        role="list"
-      >
-        {items.map((item) => (
-          <GridItem
-            key={item.id}
-            item={item}
-            onShowMoreInformation={() => setShowMoreItemId(item.id)}
-          />
-        ))}
-      </ul>
-    </>
+      ))}
+    </ul>
   )
 })
 
-function DetailModal({
-  item,
-  onClose
-}: {
-  item: Movie
-  onClose: () => void
-}): ReactElement {
-  return (
-    <>
-      <button
-        aria-label={`Close details for ${item.title}`}
-        className="fixed inset-0 bg-black/70 z-40 cursor-default"
-        onClick={onClose}
-        type="button"
-      />
-
-      <div className="fixed inset-x-3 top-3 z-50 rounded-md shadow-md bg-card text-foreground overflow-hidden">
-        <button
-          className="absolute top-3 right-3 z-20 p-2 rounded-full bg-black/90 hover:bg-black/80 cursor-pointer"
-          onClick={onClose}
-          type="button"
-        >
-          <X className="size-5 text-white" />
-        </button>
-
-        <div className="relative aspect-video overflow-hidden">
-          {item.trailerUrl ? (
-            <iframe
-              src={getYouTubeEmbedUrl(item.trailerUrl) ?? undefined}
-              className="w-full h-full"
-              title={`${item.title} trailer`}
-              sandbox="allow-scripts allow-presentation allow-popups allow-popups-to-escape-sandbox"
-              allow="autoplay; encrypted-media"
-              allowFullScreen
-            />
-          ) : (
-            <img
-              src={item.backdropUrl ?? undefined}
-              alt={`Backdrop for ${item.title}`}
-              className="w-full h-full object-cover"
-            />
-          )}
-
-          <div className="absolute inset-0 pointer-events-none bg-linear-to-t from-black/80 via-transparent to-transparent" />
-
-          <div className="absolute bottom-0 left-0 right-0 p-6 z-10 flex flex-col gap-3">
-            <div className="font-medium text-2xl text-white">{item.title}</div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                asChild
-                className="bg-white text-black hover:bg-white/90"
-              >
-                <Link
-                  to={`/watch/${item.id}`}
-                  className="flex items-center gap-2"
-                >
-                  <PlayIcon className="size-4" />
-                  Play
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 bg-muted">
-          <div className="text-muted-foreground text-sm mb-2">
-            <div>{item.year}</div>
-          </div>
-
-          <div>{item.overview}</div>
-        </div>
-      </div>
-    </>
-  )
-}
-
-function GridItem({
-  item,
-  onShowMoreInformation
-}: {
-  item: Movie
-  onShowMoreInformation: () => void
-}): ReactElement {
+function GridItem({ item, link }: { item: Movie; link: string }): ReactElement {
   return (
     <li className="group relative">
       <Link
         aria-label={item.title}
-        to={`/watch/${item.id}`}
+        to={link}
       >
         <div className="w-full overflow-hidden rounded-sm transition-transform duration-300 ease-out hover-hover:group-hover:scale-105">
           <PosterImage
@@ -157,7 +63,7 @@ function GridItem({
 
       <div className="mt-1 flex items-center gap-1">
         <Link
-          to={`/watch/${item.id}`}
+          to={link}
           className="flex-1 min-w-0"
         >
           <p className="text-sm text-muted-foreground truncate">{item.title}</p>
@@ -167,29 +73,14 @@ function GridItem({
           )}
         </Link>
 
-        <button
+        <Link
           aria-label={`More information about ${item.title}`}
-          className="shrink-0 p-1 rounded-full text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-          onClick={onShowMoreInformation}
-          type="button"
+          className="shrink-0 p-1 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+          to={`/movies/${item.id}`}
         >
           <Info className="size-4" />
-        </button>
+        </Link>
       </div>
     </li>
   )
-}
-
-function getYouTubeEmbedUrl(url: string | null): string | null {
-  if (!url) {
-    return null
-  }
-
-  const match = url.match(/[?&]v=([^&]+)/)
-
-  if (!match?.[1]) {
-    return null
-  }
-
-  return `https://www.youtube.com/embed/${match[1]}?autoplay=1&mute=0&controls=0&modestbranding=1`
 }

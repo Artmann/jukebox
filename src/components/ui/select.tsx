@@ -68,12 +68,17 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
+  container,
   position = 'popper',
   align = 'center',
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+}: React.ComponentProps<typeof SelectPrimitive.Content> & {
+  // Where to portal the menu. Defaults to document.body; pass the fullscreen
+  // element when the select lives inside one, or the menu won't be visible.
+  container?: HTMLElement | null
+}) {
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={container}>
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(

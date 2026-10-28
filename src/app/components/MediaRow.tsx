@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 
+import { useTitleLinks } from '../hooks/useTitleLinks'
 import type { MediaItem } from '../lib/media'
 import { FavoriteButton } from './FavoriteButton'
 import { PosterImage } from './PosterImage'
@@ -11,6 +12,8 @@ interface MediaRowProps {
 }
 
 export function MediaRow({ items, title }: MediaRowProps): ReactElement | null {
+  const linkFor = useTitleLinks()
+
   if (items.length === 0) {
     return null
   }
@@ -25,10 +28,7 @@ export function MediaRow({ items, title }: MediaRowProps): ReactElement | null {
             mediaItem.type === 'movie'
               ? `movie-${mediaItem.item.id}`
               : `show-${mediaItem.item.id}`
-          const link =
-            mediaItem.type === 'movie'
-              ? `/watch/${mediaItem.item.id}`
-              : `/shows/${mediaItem.item.id}`
+          const link = linkFor(mediaItem)
 
           return (
             <Link
